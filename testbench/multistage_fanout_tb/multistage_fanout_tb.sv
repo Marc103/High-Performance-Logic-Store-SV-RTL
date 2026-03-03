@@ -1,10 +1,14 @@
 ////////////////////////////////////////////////////////////////
+// rtl utilities include and imports
+`include "rtl_utilities_pkg.svh"
+import constant_functions_pkg::*;
+
+////////////////////////////////////////////////////////////////
 // interface include 
-`include "example_inf.svh"
+`include "multistage_fanout_inf.svh"
 
 ////////////////////////////////////////////////////////////////
 // package includes
-`include "rtl_utilities_pkg.sv"
 `include "utilities_pkg.svh"
 `include "drivers_pkg.svh"
 `include "generators_pkg.svh"
@@ -14,7 +18,6 @@
 
 ////////////////////////////////////////////////////////////////
 // imports
-import constant_functions_pkg::*;
 import utilities_pkg::*;
 import drivers_pkg::*;
 import generators_pkg::*;
@@ -23,54 +26,36 @@ import monitors_pkg::*;
 import scoreboards_pkg::*;
 
 ////////////////////////////////////////////////////////////////
-// RTL includes, for this example we will simplify define it here
-// but normally RTL willl be in a separate 'rtl' folder outside of the
-// testbench folder.
-
-//`include "example_adder.sv"
-
-module example_adder #(
-    parameter DATA_WIDTH
-)  (
-    input clk_i,
-    input rst_i,
-
-    input  [DATA_WIDTH - 1 : 0] a_i,
-    input  valid_i,
-
-    output [DATA_WIDTH - 1 : 0] d_o,
-    output valid_o
-); 
-    logic [DATA_WIDTH - 1 : 0] a;
-    logic                      valid;
-
-    always@(posedge clk_i) begin
-        a     <= a_i;
-        valid <= valid_i;
-    end
-
-    assign d_o     = a + 1;
-    assign valid_o = valid;
-
-endmodule
+// RTL includes
+`include "data_movers/io_circuits/multistage_fanout/multistage_fanout.sv"
 
 ////////////////////////////////////////////////////////////////
 // timescale 
 `timescale 1ns / 1ns
 
-module example_tb();
+module multistage_fanout_tb();
 
     ////////////////////////////////////////////////////////////////
     // localparams
     localparam DATA_WIDTH = 8;
+    localparam FANOUT_SIZE = 16;
+    localparam FANOUT_FACTOR = 4;
+    localparam IMMEDIATE_START_FANOUT = 0;
+
     localparam real CLK_PERIOD = 10;
 
-    localparam type T = ExampleClass #(
-        .DATA_WIDTH(DATA_WIDTH)
+    localparam type T = MultistageFanoutClass #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FANOUT_SIZE(FANOUT_SIZE),
+        .FANOUT_FACTOR(FANOUT_FACTOR),
+        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
     );
 
-    localparam type I = virtual example_inf #(
-        .DATA_WIDTH(DATA_WIDTH)
+    localparam type I = virtual multistage_fanout_inf #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FANOUT_SIZE(FANOUT_SIZE),
+        .FANOUT_FACTOR(FANOUT_FACTOR),
+        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
     );
 
     ////////////////////////////////////////////////////////////////
@@ -81,22 +66,27 @@ module example_tb();
 
     ////////////////////////////////////////////////////////////////
     // interface
-    example_inf #(
-        .DATA_WIDTH(DATA_WIDTH)
-    ) bfm (.clk_i(clk), .rst_i(rst)); // bfm, "bus functional model"
+    multistage_fanout_inf #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FANOUT_SIZE(FANOUT_SIZE),
+        .FANOUT_FACTOR(FANOUT_FACTOR),
+        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+    ) bfm (.clk_i(clk)); // bfm, "bus functional model"
     
     ////////////////////////////////////////////////////////////////
     // DUT
-    example_adder #(
-        .DATA_WIDTH(DATA_WIDTH)
+    multistage_fanout #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FANOUT_SIZE(FANOUT_SIZE),
+        .FANOUT_FACTOR(FANOUT_FACTOR),
+        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
     ) dut (
         .clk_i(clk),
-        .rst_i(rst),
 
-        .a_i(bfm.a_i),
+        .data_i(bfm.data_i),
         .valid_i(bfm.valid_i),
 
-        .d_o(bfm.d_o),
+        .data_o(bfm.data_o),
         .valid_o(bfm.valid_o)
     );
 
@@ -104,30 +94,30 @@ module example_tb();
         ////////////////////////////////////////////////////////////////
         // generator
         static TriggerableQueueBroadcaster #(T) generator_out_broadcast = new();
-        static ExampleGenerator #(T) generator = new(generator_out_broadcast);
+        static MultistageFanoutGenerator #(T) generator = new(generator_out_broadcast);
 
         ////////////////////////////////////////////////////////////////
         // driver
         static TriggerableQueue #(T) driver_in_queue = new();
-        static ExampleDriver #(T, I) driver = new(driver_in_queue, bfm);
+        static MultistageFanoutDriver #(T, I) driver = new(driver_in_queue, bfm);
 
         ////////////////////////////////////////////////////////////////
         // golden model
         static TriggerableQueue #(T) golden_in_queue = new();
         static TriggerableQueueBroadcaster #(T) golden_out_broadcast = new();
-        static ExampleModel #(T) golden = new(golden_in_queue, golden_out_broadcast);
+        static MultistageFanoutModel #(T) golden = new(golden_in_queue, golden_out_broadcast);
 
         ////////////////////////////////////////////////////////////////
         // monitor
         static TriggerableQueueBroadcaster #(T) monitor_out_broadcast = new();
-        static ExampleMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
+        static MultistageFanoutMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
 
 
         ////////////////////////////////////////////////////////////////
         // scoreboard
         static TriggerableQueue #(T) scoreboard_in_queue_dut = new();
         static TriggerableQueue #(T) scoreboard_in_queue_golden = new();
-        static ExampleScoreboard #(T) scoreboard = new(scoreboard_in_queue_dut, scoreboard_in_queue_golden);
+        static MultistageFanoutScoreboard #(T) scoreboard = new(scoreboard_in_queue_dut, scoreboard_in_queue_golden);
 
         ////////////////////////////////////////////////////////////////
         // watch dog
@@ -142,7 +132,7 @@ module example_tb();
         ////////////////////////////////////////////////////////////////
         // Set up dump 
         $dumpfile("waves.vcd");
-        $dumpvars(0, example_tb);
+        $dumpvars(0, multistage_fanout_tb);
 
         ////////////////////////////////////////////////////////////////
         // Reset logic

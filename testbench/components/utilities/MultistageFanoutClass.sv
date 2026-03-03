@@ -1,0 +1,35 @@
+/*
+ * Multistage Fanout Class
+ */
+import constant_functions_pkg::*;
+
+class MultistageFanoutClass #(
+    parameter DATA_WIDTH,
+    parameter FANOUT_SIZE,
+    parameter FANOUT_FACTOR,
+    parameter IMMEDIATE_START_FANOUT = 0,
+
+    ////////////////////////////////////////////////////////////////
+    // Local parameters
+    localparam STAGES            = fanout_stages(FANOUT_SIZE, FANOUT_FACTOR),
+    localparam PRE_FANOUT_SIZE   = FANOUT_FACTOR ** STAGES,
+    localparam FINAL_FANOUT_SIZE = FANOUT_FACTOR ** (STAGES + 1)  
+);
+    logic [DATA_WIDTH - 1 : 0] data_i;
+
+    logic [DATA_WIDTH - 1 : 0] data_o [FINAL_FANOUT_SIZE];
+
+    int data_width, fanout_size, fanout_factor, immediate_start_fanout, 
+        stages, pre_fanout_size, final_fanout_size;
+
+
+    function new ();
+        this.data_width             = DATA_WIDTH;
+        this.fanout_size            = FANOUT_SIZE;
+        this.fanout_factor          = FANOUT_FACTOR;
+        this.immediate_start_fanout = IMMEDIATE_START_FANOUT;
+        this.stages                 = STAGES;
+        this.pre_fanout_size        = PRE_FANOUT_SIZE;
+        this.final_fanout_size      = FINAL_FANOUT_SIZE;
+    endfunction
+endclass

@@ -34,12 +34,12 @@ error_highlighter() {
 }
 
 
-vlog $INCLUDE_FLAGS -sv ../multistage_fanout_tb.sv | error_highlighter
+vlog $INCLUDE_FLAGS -sv ../example_tb.sv | error_highlighter
 
 export bindir=""
 
 # -c argument gets name of testbench module.
-vsim -c multistage_fanout_tb -do "run -all; quit" | error_highlighter
+vsim -c example_tb -do "run -all; quit" | error_highlighter
 
 # Using the Modelsim OEM bundled with Diamond on Ubuntu 24.04
 # setting up requires first grabbing a free floating license then debugging missing 
