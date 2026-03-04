@@ -54,5 +54,5 @@ IF ERRORLEVEL 1 (
 REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
-vsim -voptargs=+acc=nprt -c multistage_fanout_tb -do "run -all; quit"
+vsim -voptargs=+acc -c multistage_fanout_tb -do "run -all; quit"
 cd ..

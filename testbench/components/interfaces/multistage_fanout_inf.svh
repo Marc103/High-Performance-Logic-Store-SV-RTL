@@ -8,9 +8,10 @@ interface multistage_fanout_inf #(
 
     ////////////////////////////////////////////////////////////////
     // Local parameters
-    localparam STAGES            = fanout_stages(FANOUT_SIZE, FANOUT_FACTOR),
-    localparam PRE_FANOUT_SIZE   = FANOUT_FACTOR ** STAGES,
-    localparam FINAL_FANOUT_SIZE = FANOUT_FACTOR ** (STAGES + 1) 
+    localparam STAGES            = clog_base(FANOUT_FACTOR, FANOUT_SIZE),
+    localparam PRE_FANOUT_SIZE   = FANOUT_FACTOR ** (STAGES - 1),
+    localparam FINAL_FANOUT_SIZE = FANOUT_FACTOR ** STAGES,
+    localparam LATENCY = (IMMEDIATE_START_FANOUT == 1) ? STAGES - 1 : STAGES 
 ) (
     input clk_i
 );

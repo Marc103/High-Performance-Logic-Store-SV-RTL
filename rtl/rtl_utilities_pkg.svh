@@ -1,17 +1,17 @@
 package constant_functions_pkg;
-    function automatic int fanout_stages(int fanout_size, int fanout_factor);
-        int size = fanout_factor;
-        int stages = 0;
+    function automatic int clog_base(int base, int value);
+        int exponent = 0;
+        int acc = 1;
 
         // Some sanity checks to prevent forever loop
-        if(fanout_factor < 0) $fatal("Fanout factor is zero or negative: %d", fanout_factor);
-        if(fanout_size < 0)   $fatal("Fanout size is zero or negative: %d", fanout_size);
+        if(base <= 0)  $fatal("base is zero or negative: %d", base);
+        if(value <= 0) $fatal("value is zero or negative: %d", value);
 
-        while(size < fanout_size) begin
-            size = size * fanout_factor;
-            stages++;
+        while(acc < value) begin
+            acc = acc * base;
+            exponent++;
         end
 
-        return stages;
+        return exponent;
     endfunction
 endpackage
