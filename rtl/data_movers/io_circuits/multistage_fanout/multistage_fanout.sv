@@ -10,6 +10,7 @@
  * 
  * localparam LATENCY is provided as the standard to how to calculate the total latency.
  */
+import constant_functions_pkg::*; 
 
 module multistage_fanout #(
     parameter DATA_WIDTH,
