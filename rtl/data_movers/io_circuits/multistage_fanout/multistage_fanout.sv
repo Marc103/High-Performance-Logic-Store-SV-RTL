@@ -1,29 +1,39 @@
-/* Multistage Fanout
- * Accepts an input, exponential grows it by some 'FANOUT_FACTOR' until 
- * the desired number of outputs, 'FANOUT_SIZE' is reached. This is to deal with
- * fanout load on the wires. The latency is calculated as:
- *
- * if(IMMEDIATE_START_FANOUT == 1)
- *     STAGES - 1
- * else
- *     STAGES
- * 
- * localparam LATENCY is provided as the standard to how to calculate the total latency.
- */
+/* 
+Multistage Fanout
+Accepts an input, exponential grows it by some 'FANOUT_FACTOR' until 
+the desired number of outputs, 'FANOUT_SIZE' is reached. This is to deal with
+fanout load on the wires. The latency is calculated as:
+
+DATA_WIDTH:
+- Data width.
+
+FANOUT_SIZE:
+- How large do you want the input signal to fanout to. This is then used to find
+  the nearest exponential ceiling and determined by FINAL_FANOUT_SIZE. I.e 
+  if FANOUT_SIZE = 10 and FANOUT_FACTOR = 4, then FINAL_FANOUT_SIZE = 16 (ceiling of 10 -> 16) 
+  available outputs.
+
+FANOUT_FACTOR:
+- Factor of exponential growth for the signal to grow by at each stage.
+
+IMMEDIATE_START_FANOUT [0, 1]:
+- If 1, the input is fanouted immediately
+  else, inputs are first registered, increasing latency by 1 cycle.
+*/
 import constant_functions_pkg::*; 
 
 module multistage_fanout #(
     parameter DATA_WIDTH,
     parameter FANOUT_SIZE,
     parameter FANOUT_FACTOR,
-    parameter IMMEDIATE_START_FANOUT = 0,
+    parameter IMMEDIATE_START_FANOUT,
 
     ////////////////////////////////////////////////////////////////
-    // Local parameters
-    localparam STAGES            = clog_base(FANOUT_FACTOR, FANOUT_SIZE),
-    localparam PRE_FANOUT_SIZE   = FANOUT_FACTOR ** (STAGES - 1),
-    localparam FINAL_FANOUT_SIZE = FANOUT_FACTOR ** STAGES,
-    localparam LATENCY = (IMMEDIATE_START_FANOUT == 1) ? STAGES - 1 : STAGES  
+    // Globally Defined Locally Set Parameters
+    localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
+    localparam PRE_FANOUT_SIZE   = multistage_fanout_PRE_FANOUT_SIZE  (FANOUT_FACTOR, STAGES),
+    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
+    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
 ) (
     input clk_i,
 
@@ -34,10 +44,10 @@ module multistage_fanout #(
     output                      valid_o [FINAL_FANOUT_SIZE]
 );
     logic [DATA_WIDTH - 1 : 0] data_stages [STAGES][PRE_FANOUT_SIZE];
-    logic [DATA_WIDTH - 1 : 0] data_reg_o              [FINAL_FANOUT_SIZE];
+    logic [DATA_WIDTH - 1 : 0] data_reg_o          [FINAL_FANOUT_SIZE];
 
     logic [DATA_WIDTH - 1 : 0] valid_stages [STAGES][PRE_FANOUT_SIZE];
-    logic                      valid_reg_o              [FINAL_FANOUT_SIZE];
+    logic                      valid_reg_o          [FINAL_FANOUT_SIZE];
 
     always@(posedge clk_i) begin
         // entry

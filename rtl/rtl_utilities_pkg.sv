@@ -6,7 +6,7 @@ package constant_functions_pkg;
 
 
     ////////////////////////////////////////////////////////////////
-    //          Non-module specific utility functions             //
+    //          Non-module specific constant functions            //
     //////////////////////////////////////////////////////////////// 
 
 
@@ -27,7 +27,7 @@ package constant_functions_pkg;
     endfunction
 
     ////////////////////////////////////////////////////////////////
-    //           Module specific utility functions                //
+    //           Module specific constant functions               //
     ////////////////////////////////////////////////////////////////
 
 
@@ -52,6 +52,31 @@ package constant_functions_pkg;
     function automatic int bram_dual_port_simple_LATENCY(int REGISTERED_IN);
         return bram_single_port_LATENCY(REGISTERED_IN);
     endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // multistage_fanout
+    function automatic int multistage_fanout_STAGES(int FANOUT_FACTOR, int FANOUT_SIZE);
+        return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
+    endfunction
+
+    function automatic int multistage_fanout_PRE_FANOUT_SIZE(int FANOUT_FACTOR, int STAGES);
+        return (FANOUT_FACTOR ** (STAGES - 1));
+    endfunction
+
+    function automatic int multistage_fanout_FINAL_FANOUT_SIZE(int FANOUT_FACTOR, int STAGES);
+        return (FANOUT_FACTOR ** STAGES);
+    endfunction
+
+    function automatic int multistage_fanout_LATENCY(int IMMEDIATE_START_FANOUT, int STAGES);
+        if(IMMEDIATE_START_FANOUT == 1) begin
+            return (STAGES - 1);
+        end else begin
+            return STAGES;
+        end
+    endfunction
+
+
+
 
 
 

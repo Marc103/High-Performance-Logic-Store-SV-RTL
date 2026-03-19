@@ -13,6 +13,7 @@ REGISTERED_IN [0,1]:
 - If 1, inputs are first registered, increasing the latency by 1 cycle,
   else, inputs are direct.
 */
+import constant_functions_pkg::*; 
 
 module bram_dual_port_simple #(
     parameter ADDR_WIDTH,

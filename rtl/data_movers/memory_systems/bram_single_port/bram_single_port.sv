@@ -1,5 +1,5 @@
 /* 
-Single port BRAM with NO_CHANGE behavior
+Single port BRAM with NO_CHANGE behavior.
 
 ADDR_WIDTH:
 - Sets the address width, also determines the data depth of the BRAM.
@@ -11,6 +11,7 @@ REGISTERED_IN [0,1]:
 - If 1, inputs are first registered, increasing the latency by 1 cycle,
   else, inputs are direct.
 */
+import constant_functions_pkg::*; 
  
 module bram_single_port #(
     parameter ADDR_WIDTH,
