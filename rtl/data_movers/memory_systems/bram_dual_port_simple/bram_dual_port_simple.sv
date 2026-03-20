@@ -1,5 +1,5 @@
 /* 
-Simple dual port BRAM.
+Simple dual port BRAM
 Simultaneous read and write to same address is undefined behavior.
 '0' is the write port, '1' is the read port.
 
@@ -84,6 +84,8 @@ module bram_dual_port_simple #(
     // read port
     logic                      en_1;
     logic [ADDR_WIDTH - 1 : 0] rd_addr;
+
+    logic [DATA_WIDTH - 1 : 0] rd_data;
 
     always@(posedge clk_1_i) begin
         en_1    <= en_1_i;
