@@ -40,14 +40,14 @@ module multistage_fanout #(
     input  [DATA_WIDTH - 1 : 0] data_i,
     input                       valid_i,
 
-    output [DATA_WIDTH - 1 : 0] data_o  [FINAL_FANOUT_SIZE],
-    output                      valid_o [FINAL_FANOUT_SIZE]
+    output [FINAL_FANOUT_SIZE][DATA_WIDTH - 1 : 0] data_o,
+    output [FINAL_FANOUT_SIZE][0:0]                valid_o 
 );
-    logic [DATA_WIDTH - 1 : 0] data_stages [STAGES][PRE_FANOUT_SIZE];
-    logic [DATA_WIDTH - 1 : 0] data_reg_o          [FINAL_FANOUT_SIZE];
+    logic [STAGES][PRE_FANOUT_SIZE]  [DATA_WIDTH - 1 : 0] data_stages;
+    logic         [FINAL_FANOUT_SIZE][DATA_WIDTH - 1 : 0] data_reg_o;
 
-    logic [DATA_WIDTH - 1 : 0] valid_stages [STAGES][PRE_FANOUT_SIZE];
-    logic                      valid_reg_o          [FINAL_FANOUT_SIZE];
+    logic [STAGES][PRE_FANOUT_SIZE]  [0:0] valid_stages;
+    logic         [FINAL_FANOUT_SIZE][0:0]  valid_reg_o;
 
     always@(posedge clk_i) begin
         // entry

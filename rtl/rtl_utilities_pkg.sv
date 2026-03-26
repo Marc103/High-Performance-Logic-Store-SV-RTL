@@ -1,10 +1,17 @@
 package constant_functions_pkg;
-    import shared_upper_bound_packed_dimensions::*;
     ////////////////////////////////////////////////////////////////
     //          Max-bounding localparams for packed arrays        //
-    //////////////////////////////////////////////////////////////// 
-
-
+    ////////////////////////////////////////////////////////////////
+    localparam ONE       = 1;
+    localparam TINY      = 8;
+    localparam SMALL     = 16;
+    localparam MEDIUM    = 32;
+    localparam LARGE     = 64;
+    localparam MASSIVE   = 128;
+    localparam PLANETARY = 256;
+    localparam SOLAR     = 512;
+    localparam GALACTIC  = 1024;
+    
 
     ////////////////////////////////////////////////////////////////
     //          Non-module specific constant functions            //
@@ -26,6 +33,45 @@ package constant_functions_pkg;
 
         return exponent;
     endfunction
+
+    ////////////////////////////////////////////////////////////////
+    //            Module specific oversized structs               //
+    //////////////////////////////////////////////////////////////// 
+
+    typedef struct packed {
+        logic clk_i;
+
+        logic                   en_i;
+        logic                   wr_en_i;
+        logic [SMALL - 1 : 0]   addr_i;
+        logic [MASSIVE - 1 : 0] wr_data_i;
+
+        logic [MASSIVE - 1 : 0] rd_data_o;
+    } bram_single_port_t;
+
+    typedef struct packed {
+        logic                   clk_0_i;
+        logic                   en_0_i;
+        logic                   wr_en_i;
+        logic [SMALL - 1 : 0]   wr_addr_i;
+        logic [MASSIVE - 1 : 0] wr_data_i;
+
+        logic                 clk_1_i;
+        logic                 en_1_i;
+        logic [SMALL - 1 : 0] rd_addr_i;
+        
+        logic [MASSIVE - 1 : 0] rd_data_o;
+    } bram_dual_port_simple_t;
+
+    typedef struct packed {
+        logic clk_i;
+
+        logic [GALACTIC - 1 : 0] data_i;
+        logic                    valid_i;
+
+        logic [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_o;
+        logic [SOLAR - 1 : 0]             [0:0] valid_o;
+    } multistage_fanout_t;
 
     ////////////////////////////////////////////////////////////////
     //           Module specific constant functions               //

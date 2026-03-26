@@ -18,7 +18,7 @@ class MultistageFanoutClass #(
 );
     logic [DATA_WIDTH - 1 : 0] data_i;
 
-    logic [DATA_WIDTH - 1 : 0] data_o [FINAL_FANOUT_SIZE];
+    logic [FINAL_FANOUT_SIZE][DATA_WIDTH - 1 : 0] data_o;
 
     int data_width, fanout_size, fanout_factor, immediate_start_fanout, 
         stages, pre_fanout_size, final_fanout_size;

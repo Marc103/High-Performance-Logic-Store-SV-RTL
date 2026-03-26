@@ -18,7 +18,7 @@ interface multistage_fanout_inf #(
     logic [DATA_WIDTH - 1 : 0] data_i;
     logic                      valid_i;
 
-    logic [DATA_WIDTH - 1 : 0] data_o [FINAL_FANOUT_SIZE];
-    logic                      valid_o [FINAL_FANOUT_SIZE];
+    logic [FINAL_FANOUT_SIZE][DATA_WIDTH - 1 : 0] data_o;
+    logic [FINAL_FANOUT_SIZE][0:0]                valid_o;
 endinterface
 `endif 
