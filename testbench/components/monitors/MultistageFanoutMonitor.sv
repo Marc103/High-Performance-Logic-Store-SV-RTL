@@ -1,4 +1,5 @@
 import utilities_pkg::*;
+import constant_functions_pkg::*;
 
 class MultistageFanoutMonitor #(type T, type I);
     TriggerableQueueBroadcaster #(T) out_broadcaster;
@@ -13,6 +14,7 @@ class MultistageFanoutMonitor #(type T, type I);
     task automatic run();
         T dut_data_obj;
         logic valid;
+
         forever begin
             /*
              * The convention I follow is to push data on posedge and to read data on negedge. Attempting
@@ -23,13 +25,14 @@ class MultistageFanoutMonitor #(type T, type I);
              */
             @(negedge inf.clk_i);
             
-            if(inf.valid_o[0]) begin // valid o is an array, all values should become 1
-                dut_data_obj = new();
-                valid = 0;
-                for(int i = 0; i < dut_data_obj.final_fanout_size; i++) begin
-                    valid = inf.valid_o[i] | valid;
+            if(inf.data_o[0][T::DATA_WIDTH - 1]) begin // valid o is an array, all values should become 1
+                valid = inf.data_o[0][T::DATA_WIDTH - 1];
+                for(int i = 0; i < T::FINAL_FANOUT_SIZE; i++) begin
+                    valid = inf.data_o[i][T::DATA_WIDTH - 1] & valid;
                 end
+
                 if(valid) begin
+                    dut_data_obj = new();
                     dut_data_obj.data_o = inf.data_o;
                     out_broadcaster.push(dut_data_obj);
                 end

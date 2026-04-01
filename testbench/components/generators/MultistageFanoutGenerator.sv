@@ -1,6 +1,8 @@
 import utilities_pkg::*;
+import constant_functions_pkg::*;
 
 class MultistageFanoutGenerator #(type T);
+
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
     function new(TriggerableQueueBroadcaster #(T) out_broadcaster);

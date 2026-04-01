@@ -37,10 +37,10 @@ module multistage_fanout_tb();
 
     ////////////////////////////////////////////////////////////////
     // localparams
-    localparam DATA_WIDTH = 8;
+    localparam DATA_WIDTH = 1;
     localparam FANOUT_SIZE = 16;            // 16, 15, 17, 3 , 11, 11
     localparam FANOUT_FACTOR = 4;           // 4,  4,  4,  10, 10, 10
-    localparam IMMEDIATE_START_FANOUT = 0;  // 0,  1,  0,  1 , 1, 0
+    localparam IMMEDIATE_START_FANOUT = 1;  // 0,  1,  0,  1 , 1, 0
 
     localparam real CLK_PERIOD = 10;
 
@@ -84,10 +84,8 @@ module multistage_fanout_tb();
         .clk_i(clk),
 
         .data_i(bfm.data_i),
-        .valid_i(bfm.valid_i),
 
-        .data_o(bfm.data_o),
-        .valid_o(bfm.valid_o)
+        .data_o(bfm.data_o)
     );
 
     initial begin
@@ -99,7 +97,7 @@ module multistage_fanout_tb();
         ////////////////////////////////////////////////////////////////
         // driver
         static TriggerableQueue #(T) driver_in_queue = new();
-        static MultistageFanoutDriver #(T, I) driver = new(driver_in_queue, bfm);
+        static MultistageFanoutDriver #(T,I) driver = new(driver_in_queue, bfm);
 
         ////////////////////////////////////////////////////////////////
         // golden model
@@ -111,7 +109,6 @@ module multistage_fanout_tb();
         // monitor
         static TriggerableQueueBroadcaster #(T) monitor_out_broadcast = new();
         static MultistageFanoutMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
-
 
         ////////////////////////////////////////////////////////////////
         // scoreboard
@@ -136,7 +133,7 @@ module multistage_fanout_tb();
 
         ////////////////////////////////////////////////////////////////
         // Reset logic
-        bfm.valid_i <= 0;
+        bfm.data_i[DATA_WIDTH - 1 : 0] <= 0;
         rst <= 0;
         repeat(5) @(posedge clk)
         rst <= 1;

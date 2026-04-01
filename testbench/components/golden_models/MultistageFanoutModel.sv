@@ -1,6 +1,8 @@
 import utilities_pkg::*;
+import constant_functions_pkg::*;
 
 class MultistageFanoutModel #(type T);
+
     TriggerableQueue #(T) in_queue;
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
@@ -20,8 +22,9 @@ class MultistageFanoutModel #(type T);
             in_queue.pop(data_obj);
 
             model_data_obj = new();
-            for(int i = 0; i < model_data_obj.final_fanout_size; i++) begin
+            for(int i = 0; i < T::FINAL_FANOUT_SIZE; i++) begin
                 model_data_obj.data_o[i] = data_obj.data_i;
+                model_data_obj.data_o[i][T::DATA_WIDTH - 1] = 1;
             end
             
             out_broadcaster.push(model_data_obj);

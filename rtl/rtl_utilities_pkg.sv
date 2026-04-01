@@ -11,6 +11,15 @@ package constant_functions_pkg;
     localparam PLANETARY = 256;
     localparam SOLAR     = 512;
     localparam GALACTIC  = 1024;
+
+    ////////////////////////////////////////////////////////////////
+    //                       Module IDs                           //
+    ////////////////////////////////////////////////////////////////
+    typedef enum int {
+        BRAM_SINGLE_PORT,
+        BRAM_DUAL_PORT_SIMPLE,
+        MULTISTAGE_FANOUT
+    } module_id_e;
     
 
     ////////////////////////////////////////////////////////////////
@@ -38,6 +47,14 @@ package constant_functions_pkg;
     //            Module specific oversized structs               //
     //////////////////////////////////////////////////////////////// 
 
+    ////////////////////////////////////////////////////////////////
+    // bram_single_port
+    typedef struct packed {
+        int ADDR_WIDTH;
+        int DATA_WIDTH;
+        int REGISTERED_IN;
+    } bram_single_port_pt;
+
     typedef struct packed {
         logic clk_i;
 
@@ -48,6 +65,14 @@ package constant_functions_pkg;
 
         logic [MASSIVE - 1 : 0] rd_data_o;
     } bram_single_port_t;
+
+    ////////////////////////////////////////////////////////////////
+    // bram_dual_port_simple
+    typedef struct packed {
+        int ADDR_WIDTH;
+        int DATA_WIDTH;
+        int REGISTERED_IN;
+    } bram_dual_port_simple_pt;
 
     typedef struct packed {
         logic                   clk_0_i;
@@ -63,6 +88,15 @@ package constant_functions_pkg;
         logic [MASSIVE - 1 : 0] rd_data_o;
     } bram_dual_port_simple_t;
 
+    ////////////////////////////////////////////////////////////////
+    // multistage_fanout
+    typedef struct packed {
+        int DATA_WIDTH;
+        int FANOUT_SIZE;
+        int FANOUT_FACTOR;
+        int IMMEDIATE_START_FANOUT;
+    } multistage_fanout_pt;
+
     typedef struct packed {
         logic clk_i;
 
@@ -70,7 +104,7 @@ package constant_functions_pkg;
         logic                    valid_i;
 
         logic [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_o;
-        logic [SOLAR - 1 : 0]             [0:0] valid_o;
+        logic [SOLAR - 1 : 0]                   valid_o;
     } multistage_fanout_t;
 
     ////////////////////////////////////////////////////////////////

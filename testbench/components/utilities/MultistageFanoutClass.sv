@@ -16,21 +16,11 @@ class MultistageFanoutClass #(
     localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
     localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
 );
-    logic [DATA_WIDTH - 1 : 0] data_i;
+    logic [DATA_WIDTH : 0] data_i;
 
-    logic [FINAL_FANOUT_SIZE][DATA_WIDTH - 1 : 0] data_o;
-
-    int data_width, fanout_size, fanout_factor, immediate_start_fanout, 
-        stages, pre_fanout_size, final_fanout_size;
-
+    logic [FINAL_FANOUT_SIZE][DATA_WIDTH : 0] data_o;
 
     function new ();
-        this.data_width             = DATA_WIDTH;
-        this.fanout_size            = FANOUT_SIZE;
-        this.fanout_factor          = FANOUT_FACTOR;
-        this.immediate_start_fanout = IMMEDIATE_START_FANOUT;
-        this.stages                 = STAGES;
-        this.pre_fanout_size        = PRE_FANOUT_SIZE;
-        this.final_fanout_size      = FINAL_FANOUT_SIZE;
+
     endfunction
 endclass
