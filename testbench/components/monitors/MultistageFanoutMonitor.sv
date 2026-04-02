@@ -27,7 +27,7 @@ class MultistageFanoutMonitor #(type T, type I);
             
             if(inf.data_o[0][T::DATA_WIDTH - 1]) begin // valid o is an array, all values should become 1
                 valid = inf.data_o[0][T::DATA_WIDTH - 1];
-                for(int i = 0; i < T::FINAL_FANOUT_SIZE; i++) begin
+                for(int i = 1; i < T::FINAL_FANOUT_SIZE; i++) begin
                     valid = inf.data_o[i][T::DATA_WIDTH - 1] & valid;
                 end
 

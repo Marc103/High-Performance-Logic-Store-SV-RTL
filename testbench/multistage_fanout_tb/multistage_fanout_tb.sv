@@ -37,10 +37,10 @@ module multistage_fanout_tb();
 
     ////////////////////////////////////////////////////////////////
     // localparams
-    localparam DATA_WIDTH = 1;
+    localparam DATA_WIDTH = 8;
     localparam FANOUT_SIZE = 16;            // 16, 15, 17, 3 , 11, 11
     localparam FANOUT_FACTOR = 4;           // 4,  4,  4,  10, 10, 10
-    localparam IMMEDIATE_START_FANOUT = 1;  // 0,  1,  0,  1 , 1, 0
+    localparam IMMEDIATE_START_FANOUT = 0;  // 0,  1,  0,  1 , 1, 0
 
     localparam real CLK_PERIOD = 10;
 

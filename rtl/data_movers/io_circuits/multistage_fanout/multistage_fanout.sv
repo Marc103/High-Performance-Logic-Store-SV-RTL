@@ -37,16 +37,16 @@ module multistage_fanout #(
 ) (
     input clk_i,
 
-    input  [DATA_WIDTH : 0] data_i,
+    input  [DATA_WIDTH - 1 : 0] data_i,
 
-    output [FINAL_FANOUT_SIZE : 0][DATA_WIDTH : 0] data_o
+    output [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o
 );
-    logic [STAGES : 0][PRE_FANOUT_SIZE : 0]  [DATA_WIDTH : 0] data_stages;
-    logic             [FINAL_FANOUT_SIZE : 0][DATA_WIDTH : 0] data_reg_o;
+    logic [STAGES - 1 : 0][PRE_FANOUT_SIZE - 1 : 0]  [DATA_WIDTH - 1 : 0] data_stages;
+    logic                 [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_reg_o;
 
     always@(posedge clk_i) begin
         // entry
-        data_stages[0][0][DATA_WIDTH - 1 : 0] <= data_i[DATA_WIDTH - 1 : 0];
+        data_stages[0][0] <= data_i;
 
         // fanout tree
         for(int stage = 0; stage < (STAGES - 1); stage++) begin
@@ -54,9 +54,9 @@ module multistage_fanout #(
                 for(int fanout = 0; fanout < FANOUT_FACTOR; fanout++) begin
                     // condition for immediate fanout if enabled
                     if((stage == 0) && (IMMEDIATE_START_FANOUT == 1)) begin
-                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout][DATA_WIDTH - 1 : 0] <= data_i[DATA_WIDTH - 1 : 0];
+                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_i;
                     end else begin
-                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout][DATA_WIDTH - 1 : 0] <= data_stages[stage][idx][DATA_WIDTH - 1 : 0];
+                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_stages[stage][idx];
                     end
                 end
             end
@@ -68,9 +68,9 @@ module multistage_fanout #(
         for(int idx = 0; idx < PRE_FANOUT_SIZE; idx++) begin
             for(int fanout = 0; fanout < FANOUT_FACTOR; fanout++) begin
                 if((IMMEDIATE_START_FANOUT == 1) && (STAGES == 1)) begin
-                    data_reg_o[(idx * FANOUT_FACTOR) + fanout][DATA_WIDTH - 1 : 0]  = data_i[DATA_WIDTH - 1 : 0];
+                    data_reg_o[(idx * FANOUT_FACTOR) + fanout] = data_i;
                 end else begin
-                    data_reg_o[(idx * FANOUT_FACTOR) + fanout][DATA_WIDTH - 1 : 0]  = data_stages[STAGES-1][idx][DATA_WIDTH - 1 : 0];
+                    data_reg_o[(idx * FANOUT_FACTOR) + fanout] = data_stages[STAGES-1][idx];
                 end
             end
         end

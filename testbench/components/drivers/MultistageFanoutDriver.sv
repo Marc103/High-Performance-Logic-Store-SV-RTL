@@ -15,12 +15,7 @@ class MultistageFanoutDriver #(type T, type I);
     endfunction
 
     task automatic drive(T data_obj);
-        if(T::DATA_WIDTH > 1) begin
-            inf.data_i  <= data_obj.data_i;
-        end
-        // MSB is implicitly used as valid signal
-        inf.data_i[T::DATA_WIDTH-1] <= 1;
-
+        inf.data_i  <= data_obj.data_i;
         // wait for posedge, set valid false to prevent false valids afterwards
         // (purposefully blocking assignment)
         @(posedge inf.clk_i);
@@ -28,7 +23,7 @@ class MultistageFanoutDriver #(type T, type I);
     endtask;
 
     task automatic invalidate();
-        inf.data_i[T::DATA_WIDTH-1] <= 0;
+        inf.data_i[T::DATA_WIDTH-1] = 0;
     endtask;
 
     task automatic run();

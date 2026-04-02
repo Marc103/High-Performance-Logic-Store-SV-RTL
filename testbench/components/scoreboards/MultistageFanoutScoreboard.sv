@@ -27,13 +27,10 @@ class MultistageFanoutScoreboard #(type T);
             in_queue_golden.pop(model_data_obj);
             received++;
             
-            for(int i = 0; i < T::FINAL_FANOUT_SIZE; i++) begin
-                $display("iteration %d", i);
-                if(dut_data_obj.data_o[i][T::DATA_WIDTH - 1 : 0] == model_data_obj.data_o[i][T::DATA_WIDTH - 1 : 0]) begin
-                    $display("Assertion passed: dut:%b matches expected model:%b", dut_data_obj.data_o[i][T::DATA_WIDTH-1:0], model_data_obj.data_o[i][T::DATA_WIDTH-1:0]);
-                end else begin
-                    $error("Assertion failed: dut:%b but expected model:%b", dut_data_obj.data_o[i][T::DATA_WIDTH-1:0], model_data_obj.data_o[i][T::DATA_WIDTH-1:0]);
-                end
+            if(dut_data_obj.data_o == model_data_obj.data_o) begin
+                $display("Assertion passed: dut:%p matches expected model:%p", dut_data_obj.data_o, model_data_obj.data_o);
+            end else begin
+                $error("Assertion failed: dut:%p but expected model:%b", dut_data_obj.data_o, model_data_obj.data_o);
             end
 
             #1000;

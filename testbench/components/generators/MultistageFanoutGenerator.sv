@@ -20,6 +20,8 @@ class MultistageFanoutGenerator #(type T);
         for(int i = 0; i < 10; i++) begin
             data_obj = new();
             data_obj.data_i = $urandom(); // commonly, instead of generating random
+            // MSB is implicitly used as valid signal
+            data_obj.data_i[T::DATA_WIDTH - 1] = 1;
             // data, we read from some test file.
             out_broadcaster.push(data_obj);
         end
