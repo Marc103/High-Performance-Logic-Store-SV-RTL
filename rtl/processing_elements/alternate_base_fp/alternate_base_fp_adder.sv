@@ -81,6 +81,7 @@ module alternate_base_fp_adder #(
     output [DATA_WIDTH - 1 : 0] sum_o
 );
     // this is just a placeholder for now, will implement the actual adder later
+    //
     assign sum_o = a_i + b_i;
 
 endmodule
