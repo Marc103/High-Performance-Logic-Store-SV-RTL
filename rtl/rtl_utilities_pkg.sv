@@ -18,7 +18,9 @@ package constant_functions_pkg;
     typedef enum int {
         BRAM_SINGLE_PORT,
         BRAM_DUAL_PORT_SIMPLE,
-        MULTISTAGE_FANOUT
+        MULTISTAGE_FANOUT,
+        ALTERNATE_BASE_FP_ADDER,
+        QUEUE
     } module_id_e;
     
 
@@ -170,5 +172,39 @@ package constant_functions_pkg;
 
     endfunction
 
+    ////////////////////////////////////////////////////////////////
+    // alternate_base_fp_adder
+    function automatic int alternate_base_fp_adder_(int EXP_WIDTH, int MANT_WIDTH);
+        return (1 + EXP_WIDTH + MANT_WIDTH);
+    endfunction
+
+    function automatic int alternate_base_fp_adder_LATENCY(int PIPE_REG_0, int PIPE_REG_1, int PIPE_REG_2, int PIPE_REG_3);
+        int a = 0;
+        if(PIPE_REG_0 == 1) a += 1;
+        if(PIPE_REG_1 == 1) a += 1;
+        if(PIPE_REG_2 == 1) a += 1;
+        if(PIPE_REG_3 == 1) a += 1;
+        return a;
+    endfunction
+
+    function automatic int alternate_base_fp_DATA_WIDTH(int EXP_WIDTH, int MANT_WIDTH);
+        return (1 + EXP_WIDTH + MANT_WIDTH);
+    endfunction
+
+    function automatic int alternate_base_fp_BASE_WIDTH(int BASE);
+        return clog_base(2, BASE);
+    endfunction
+
+    function automatic int alternate_base_fp_STICKY_WIDTH(int MANT_WIDTH, int BASE_WIDTH);
+        return (MANT_WIDTH - BASE_WIDTH - 1);
+    endfunction
+
+    function automatic int alternate_base_fp_DATA_WIDTH_EXT_0(int EXP_WIDTH, int MANT_WIDTH, int BASE_WIDTH, int STICKY_WIDTH);
+        return (1 + EXP_WIDTH + MANT_WIDTH + BASE_WIDTH + 1 + STICKY_WIDTH);
+    endfunction
+
+    function automatic int alternate_base_fp_DATA_WIDTH_EXT_1(int EXP_WIDTH, int MANT_WIDTH, int BASE_WIDTH);
+        return (1 + EXP_WIDTH + MANT_WIDTH + BASE_WIDTH + 1 + 1);
+    endfunction
 
 endpackage
