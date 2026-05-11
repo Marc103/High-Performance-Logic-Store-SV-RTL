@@ -69,13 +69,15 @@
     - On to High Level Synthesis (HLS)
         - Wouldn't it be nice if we didn't have to manually populate the 2D MAP, FROM, TO, PARAMS arrays?... I think you get the idea.
     
-## Manual Verification
+## Manual Verification with AI Assistance
 - having a simple to moderately complex testbench clears out about 95% bugs
 - the issue is creating very complex testbench takes exponentially more time and just to clear out the remaining 5%. It really isn't scalable and for small (or solo) dev teams just takes too much time
 - my solution is to use 'manual verification'. It is text file where each line or block of code is explained in a verbose manner and then proof read several times by the author and others.
     - it's sort of like trying to mathematically prove something. Statements are made then stand on axioms or other trusted proofs. The only real way to know if it is correct is if many people take a look at it and agree.
     - in the case where just the author is available, the best to do is verify it several times on different days,
     each time reading it as if for the first time.
+- then after completing the manual verification, feed it into AI with the rtl and
+  ask to look at it. Review it's response.
 
 ## File Checklist Work Flow
 - to be performed in this order but not strictly
@@ -98,7 +100,7 @@
     - Non-module specific constant functions 
     - Module specific oversized structs
     - Module specific constant functions
-3.  Manual Verify : rtl/.../module_name/manual_verify_xxx.txt 
+3.  Manual Verify : rtl/.../module_name/manual_verify_xxx.mv 
 ------------------------------------------------------------------------------
 4.  Interface      : testbench/components/interfaces/module_name_inf.svh
 ------------------------------------------------------------------------------
