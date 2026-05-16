@@ -5,7 +5,7 @@
 "(2 ** ADDR_WIDTH);"
 - valid for ADDR_WIDTH > 0, which is not guarded 
 - otherwise correct, 2 ** ADDR_WIDTH is the DATA_DEPTH
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "localparam LATENCY    = bram_dual_port_simple_LATENCY   (REGISTERED_IN)"
 - defined as 
@@ -17,7 +17,7 @@ if(REGISTERED_IN == 1) latency = 2;
 return latency;
 "
 - which is correct, the latency is 1, and increases to 2 if REGISTERED_IN == 1
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     // write port
@@ -31,7 +31,7 @@ return latency;
 - bit widths are correct for each signal
 - directions are correct 
 - default net type is wire, default signdness is unsigned, which is correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     // read port
@@ -45,7 +45,7 @@ return latency;
 - bit widths are correct for each signal
 - directions are correct 
 - default net type is wire, default signdness is unsigned, which is correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH];
@@ -53,7 +53,7 @@ return latency;
 - type logic is correct
 - packed bit width correct
 - unpacked bit width correct, DATA_DEPTH verified above
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     // write port
@@ -65,7 +65,7 @@ return latency;
 - signals present, correct
 - types are correct
 - bit widths are correct for each signal
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     always@(posedge clk_0_i) begin
@@ -79,7 +79,7 @@ return latency;
 - right hand signals are present, correct
 - no type mismatch, correct
 - clk_0_i for posedge is correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     logic                      en_0_g;
@@ -90,7 +90,7 @@ return latency;
 - signals present, correct
 - types are correct
 - bit widths are correct for each signal
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     generate
@@ -114,7 +114,7 @@ return latency;
     - left hand signals represent registered inputs
     - else left hand signals represent immediate inputs
     - which is correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     always@(posedge clk_0_i) begin
@@ -132,7 +132,7 @@ return latency;
 - wr_addr_g, verified above, correct signal for write address
 - bram[wr_addr_g], verified above, correct location to receive write data and non-blocking
 - wr_data_g, verified above, correct signal for write data
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     // read port
@@ -144,7 +144,7 @@ return latency;
 - signals present, correct
 - types are correct
 - bit widths are correct for each signal
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     always@(posedge clk_1_i) begin
@@ -156,7 +156,7 @@ return latency;
 - left hand signals are present, correct
 - right hand signals are present, correct
 - no type mismatch, correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     logic                      en_1_g;
@@ -165,7 +165,7 @@ return latency;
 - signals present, correct
 - types are correct
 - bit widths are correct for each signal
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     generate 
@@ -185,7 +185,7 @@ return latency;
     - left hand signals represent registered inputs
     - else left hand signals represent immediate inputs
     - which is correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     always@(posedge clk_1_i) begin
@@ -201,11 +201,11 @@ return latency;
 - if en_1_g, correct condition
     - rd_data, verified above, correct location to receive read data and non-blocking
     - else, rd_data, verified above, correct location to maintain existing registered read data and non-blocking
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
     assign rd_data_o = rd_data;
 "
 - all output wires in port list have been assigned, correct
 - no type mismatch, correct
-[Marc103 - 05/10/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26]

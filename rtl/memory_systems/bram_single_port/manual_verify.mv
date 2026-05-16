@@ -1,0 +1,143 @@
+"
+    localparam DATA_DEPTH = bram_single_port_DATA_DEPTH(ADDR_WIDTH),
+"
+- defined as
+"
+        return (2 ** ADDR_WIDTH);
+"
+- valid for ADDR_WIDTH > 0, not guarded
+[Marc103 - 05/15/26]
+
+"
+    localparam LATENCY    = bram_single_port_LATENCY   (REGISTERED_IN)
+"
+- defined as
+"
+        int latency = 1;
+        if(REGISTERED_IN == 1) latency = 2;
+        return latency;
+"
+- which is correct, the latency is 1, and increases to 2 if REGISTERED_IN == 1
+[Marc103 - 05/15/26]
+
+"
+    input                       clk_i,
+
+    input                       en_i,
+    input                       wr_en_i,
+    input  [ADDR_WIDTH - 1 : 0] addr_i,
+    input  [DATA_WIDTH - 1 : 0] wr_data_i,
+
+    output [DATA_WIDTH - 1 : 0] rd_data_o
+"
+- signals present, correct
+- bit widths are correct for each signal
+- directions are correct 
+- default net type is wire, default signdness is unsigned, which is correct
+[Marc103 - 05/15/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH];
+"
+- type logic is correct
+- packed bit width correct
+- unpacked bit width correct, DATA_DEPTH verified above
+[Marc103 - 05/15/26]
+
+"
+    logic                      en;
+    logic                      wr_en;
+    logic [ADDR_WIDTH - 1 : 0] addr;
+    logic [DATA_WIDTH - 1 : 0] wr_data;
+
+    logic [DATA_WIDTH - 1 : 0] rd_data;
+"
+- signals present, correct
+- types are correct
+- bit widths are correct for each signal
+[Marc103 - 05/15/26]
+
+"
+    always@(posedge clk_i) begin
+        en      <= en_i;
+        wr_en   <= wr_en_i;
+        addr    <= addr_i;
+        wr_data <= wr_data_i;
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- clk_i for posedge is correct
+[Marc103 - 05/15/26]
+
+"
+    logic                      en_g;
+    logic                      wr_en_g;
+    logic [ADDR_WIDTH - 1 : 0] addr_g;
+    logic [DATA_WIDTH - 1 : 0] wr_data_g;
+"
+- signals present, correct
+- types are correct
+- bit widths are correct for each signal
+[Marc103 - 05/15/26]
+
+"
+    generate
+        if(REGISTERED_IN == 1) begin
+            assign en_g      = en;
+            assign wr_en_g   = wr_en;
+            assign addr_g    = addr;
+            assign wr_data_g = wr_data;
+        end else begin
+            assign en_g      = en_i;
+            assign wr_en_g   = wr_en_i;
+            assign addr_g    = addr_i;
+            assign wr_data_g = wr_data_i;
+        end 
+    endgenerate
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- logic of if condition "REGISTERED_IN == 1"
+    - left hand signals represent registered inputs
+    - else left hand signals represent immediate inputs
+    - which is correct
+[Marc103 - 05/15/26]
+
+"
+    always@(posedge clk_i) begin
+        if(en_g) begin
+            if(wr_en_g) begin
+                bram[addr_g] <= wr_data_g;
+                rd_data      <= rd_data;
+            end else begin
+                rd_data <= bram[addr_g];
+            end
+        end else begin
+            rd_data <= rd_data;
+        end
+    end
+"
+- clk_i for posedge, is correct
+- en_g, verified above, correct signal for enable and condition
+- wr_en_g, verified above, correct signal for write enable and condition
+- addr_g, verified above, correct signal for read or write address
+- rd_data, verified above, correct register to place read out
+- bram[addr_g], verified above, correct location to receive write data and non-blocking
+  and to write data to
+- if statement condition logic
+    - if enabled
+        - if write enable, update bram with write data at the address, maintain read data register
+        - else it is a read, update read data register with read data at the address
+    - else
+        - maintain read data register  
+[Marc103 - 05/15/26]
+
+"
+    assign rd_data_o = rd_data;
+"
+- all output wires in port list have been assigned, correct
+- no type mismatch, correct
+[Marc103 - 05/15/26]
