@@ -1,10 +1,10 @@
 /* 
 Queue (aka FIFO). ADDR_WIDTH X DATA_WIDTH of instantiated memory  
 should fit within a single bram for best performance. Without READ_THEN_WRITE
-enabled, simultaneous push/pop when there is one element left on the queue
-behavior is undefined. Behavior of pushing to a full queue or popping from an
-empty one is considered as undefined and will throw the control state into
-unknown territory.
+enabled, simultaneous push/pop when there is one element left on the queue or
+the queue is full is behavior is undefined. Behavior of pushing to a full queue 
+or popping from an empty one is considered as undefined and will throw the 
+control state into unknown territory.
 
 Since the control state update has to happen in one latency cycle from the time the push/pop
 is ushered, the read/write address _next values are calculated using the immediate 
