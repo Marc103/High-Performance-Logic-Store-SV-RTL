@@ -1,15 +1,11 @@
 "localparam DATA_DEPTH = bram_dual_port_simple_DATA_DEPTH(ADDR_WIDTH),"
 - defined as 
-"bram_single_port_DATA_DEPTH(ADDR_WIDTH);" 
-- defined as 
-"(2 ** ADDR_WIDTH);"
+"       return (2 ** ADDR_WIDTH);"
 - valid for ADDR_WIDTH > 0, which is not guarded 
 - otherwise correct, 2 ** ADDR_WIDTH is the DATA_DEPTH
-[Marc103 - 05/10/26][Marc103 - 05/15/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26][Marc103 - 05/21/26]
 
 "localparam LATENCY    = bram_dual_port_simple_LATENCY   (REGISTERED_IN)"
-- defined as 
-"bram_single_port_LATENCY(REGISTERED_IN);"
 - defined as 
 "
 int latency = 1;
@@ -17,7 +13,7 @@ if(REGISTERED_IN == 1) latency = 2;
 return latency;
 "
 - which is correct, the latency is 1, and increases to 2 if REGISTERED_IN == 1
-[Marc103 - 05/10/26][Marc103 - 05/15/26]
+[Marc103 - 05/10/26][Marc103 - 05/15/26][Marc103 - 05/21/26]
 
 "
     // write port
