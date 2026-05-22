@@ -1,15 +1,17 @@
 /* 
-Queue (aka FIFO). ADDR_WIDTH X DATA_WIDTH of instantiated memory  
-should fit within a single bram for best performance. Without READ_THEN_WRITE
-enabled, simultaneous push/pop when there is one element left on the queue or
-the queue is full is behavior is undefined. Behavior of pushing to a full queue 
-or popping from an empty one is considered as undefined and will throw the 
-control state into unknown territory.
+Queue (aka FIFO). 
+- ADDR_WIDTH X DATA_WIDTH of instantiated memory  
+  should fit within a single bram for best performance. Without READ_THEN_WRITE
+enabled, simultaneous push/pop when the queue is full is undefined behavior. 
+- Simultaneous push/pop to an empty is undefined behavior. An implementation would have to create forwarding
+  logic to handle this theoretical 'WRITE_THEN_READ' scenario 
+- Behavior of pushing to a full queue or popping from an empty one is undefined and will throw the control state into 
+  unknown territory
 
 Since the control state update has to happen in one latency cycle from the time the push/pop
 is ushered, the read/write address _next values are calculated using the immediate 
 push/pop signals even if REGISTERED_IN is enabled. Meaning ideally the push/pull signals 
-should be free of any logic in higher modules. 
+should be free of any logic in higher modules. Same with the rst_i signal. 
 
 The more_than and less_than signals have the same issue since they are 
 immediate, but enabling REGISTERED_IN will pipeline the logic (at the cost
@@ -79,8 +81,6 @@ module queue #(
 );
 
     // read/write port setting for REGISTERED_IN
-    logic rst;
-
     logic                                                push;
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
     logic                                                pop;
@@ -88,10 +88,7 @@ module queue #(
     logic [ADDR_WIDTH : 0] less_than;
     logic [ADDR_WIDTH : 0] more_than;
 
-
     always@(posedge clk_i) begin
-        rst      <= rst_i;
-
         push     <= push_i;
         wr_data  <= wr_data_i;
         pop      <= pop_i;
@@ -99,8 +96,6 @@ module queue #(
         less_than <= less_than_i;
         more_than <= more_than_i;
     end
-
-    logic rst_g;
 
     logic                                                push_g;
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_g;
@@ -111,8 +106,6 @@ module queue #(
 
     generate
         if(REGISTERED_IN == 1) begin
-            assign rst_g = rst;
-
             assign push_g     = push;
             assign wr_data_g  = wr_data;
             assign pop_g      = pop;
@@ -120,8 +113,6 @@ module queue #(
             assign less_than_g = less_than;
             assign more_than_g = more_than;
         end else begin
-            assign rst_g = rst_i;
-
             assign push_g     = push_i;
             assign wr_data_g  = wr_data_i;
             assign pop_g      = pop_i;
@@ -163,19 +154,15 @@ module queue #(
         // write update
         wr_addr       <= wr_addr_next;
 
-        if(READ_THEN_WRITE == 1) begin
-            en_0_delay    <= en_0;
-            wr_en_delay   <= wr_en;
-            wr_addr_delay <= wr_addr;
-            wr_data_delay <= wr_data;
-        end
+        en_0_delay    <= en_0;
+        wr_en_delay   <= wr_en;
+        wr_addr_delay <= wr_addr;
+        wr_data_delay <= wr_data;
 
         // read update
         rd_addr       <= rd_addr_next;
 
-        if(READ_THEN_WRITE == 1) begin
-            rd_data_delay <= rd_data;
-        end
+        rd_data_delay <= rd_data;
 
         // control state update
         if(element_count_ce) begin
@@ -206,8 +193,8 @@ module queue #(
         end
         
         // control state
-        if (rst_g) begin               
-            element_count_next = element_count - element_count;
+        if (rst_i) begin               
+            element_count_next = 0;
         end else if (push_i) begin      // push
             element_count_next = element_count + 1;
         end else begin                  // else, assume pop (see CE condition for element_count just below)
@@ -215,12 +202,12 @@ module queue #(
         end 
 
         // CE condition for element_count update
-        element_count_ce = (push_i ^ pop_i) & (!rst_g);
+        element_count_ce = (push_i ^ pop_i) | rst_i;
 
-        // LUT4(push_i, pop_i, rst_g, element_count[i]) -> fast carry path -> element_count[i] if CE.
-        // (push ^ pop) & (!rst_g) -> CE.
+        // LUT4(push_i, pop_i, rst_i, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push_i ^ pop_i) | rst_i -> CE.
 
-        if(rst_g) begin
+        if(rst_i) begin
             wr_addr_next       = 0;
             rd_addr_next       = 0;
         end

@@ -80,6 +80,18 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 "
 - type logic is correct
 - packed bit width correct
+- redefined as (per 'rst_g vs rst_i')
+"
+    // read/write port setting for REGISTERED_IN
+    logic                                                push;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
+    logic                                                pop;
+
+    logic [ADDR_WIDTH : 0] less_than;
+    logic [ADDR_WIDTH : 0] more_than;
+"
+- type logic is correct
+- packed bit width correct
 []
 
 "
@@ -98,6 +110,22 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - right hand signals are present, correct
 - no type mismatch, correct
 - clk_i for posedge is correct
+- redefined as (per 'rst_g vs rst_i')
+"
+    always@(posedge clk_i) begin
+        push     <= push_i;
+        wr_data  <= wr_data_i;
+        pop      <= pop_i;
+
+        less_than <= less_than_i;
+        more_than <= more_than_i;
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- clk_i for posedge is correct
+[]
 
 "
     logic                                                push_g;
@@ -109,6 +137,15 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 "
 - type logic is correct
 - packed bit width correct
+- redefined as (per 'rst_g vs rst_i')
+"
+    logic                                                push_g;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_g;
+    logic                                                pop_g;
+
+    logic [ADDR_WIDTH : 0] less_than_g;
+    logic [ADDR_WIDTH : 0] more_than_g;
+"
 []
 
 "
@@ -125,6 +162,33 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
         end else begin
             assign rst_g = rst_i;
 
+            assign push_g     = push_i;
+            assign wr_data_g  = wr_data_i;
+            assign pop_g      = pop_i;
+
+            assign less_than_g = less_than_i;
+            assign more_than_g = more_than_i;
+        end
+    endgenerate
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- logic of if condition "REGISTERED_IN == 1"
+    - left hand signals represent registered inputs
+    - else left hand signals represent immediate inputs
+    - which is correct
+- redefined as (per 'rst_g vs rst_i')
+"
+    generate
+        if(REGISTERED_IN == 1) begin
+            assign push_g     = push;
+            assign wr_data_g  = wr_data;
+            assign pop_g      = pop;
+
+            assign less_than_g = less_than;
+            assign more_than_g = more_than;
+        end else begin
             assign push_g     = push_i;
             assign wr_data_g  = wr_data_i;
             assign pop_g      = pop_i;
@@ -202,3 +266,360 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
         end
     end
 "
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- clk_i for posedge is correct
+- if(READ_THEN_WRITE == 1) condition makes sense
+    - only if enabled, should the *_delay registers be considered
+    - although, a synthesis tool should simply trim this logic away anyway
+    - I think the conclusion I've come to is it's better to let the synthesis
+      tool take care of it instead of explicitly guarding it because in general
+      from a design perspective it's more complicated and certain that synthesis 
+      tools are 100% perfect at handling simple dependancy graphs for trimming
+      unused logic (that's like the most basic form of optimization, right??)
+- redefined as
+"
+    always@(posedge clk_i) begin
+        // write update
+        wr_addr       <= wr_addr_next;
+
+        en_0_delay    <= en_0;
+        wr_en_delay   <= wr_en;
+        wr_addr_delay <= wr_addr;
+        wr_data_delay <= wr_data;
+
+        // read update
+        rd_addr       <= rd_addr_next;
+
+        rd_data_delay <= rd_data;
+
+        // control state update
+        if(element_count_ce) begin
+            element_count <= element_count_next;
+        end else begin
+            element_count <= element_count;
+        end
+    end
+"
+- clk_i for posedge is correct
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'if(element_count_ce)' update logic is correct
+    - maintain if false, update with 'element_count_ce' if true
+    - 'element_count_ce' to be verified
+[]
+
+"
+    always_comb begin
+        // push (write) logic
+        en_0  = push_g;
+        wr_en = push_g;
+        if(push_g) begin
+            wr_addr_next = wr_addr + 1;
+        end else begin
+            wr_addr_next = wr_addr;
+        end
+
+        wr_data = wr_data_g;
+
+        // pop (read) logic
+        en_1 = pop_g;
+        if(pop_g) begin
+            rd_addr_next = rd_addr + 1;
+        end else begin
+            rd_addr_next = rd_addr;
+        end
+        
+        // control state
+        if (rst_g) begin               
+            element_count_next = element_count - element_count;
+        end else if (push_i) begin      // push
+            element_count_next = element_count + 1;
+        end else begin                  // else, assume pop (see CE condition for element_count just below)
+            element_count_next = element_count - 1;
+        end 
+
+        // CE condition for element_count update
+        element_count_ce = (push_i ^ pop_i) & (!rst_g);
+
+        // LUT4(push_i, pop_i, rst_g, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push ^ pop) & (!rst_g) -> CE.
+
+        if(rst_g) begin
+            wr_addr_next       = 0;
+            rd_addr_next       = 0;
+        end
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'push (write) logic'
+    - 'en_0' and 'wr_en' should be enabled as according to 'push_g', correct
+    - 'wr_addr_next' should increment if 'push_g', else it should maintain, correct
+    - 'wr_data' is simply assigned 'wr_data_g'. It is sort of a confusing because 
+      'wr_data_g' is effectively being renamed 'wr_data'. Noting this here should 
+      suffice however.
+- 'pop (read)' 
+    - 'en_1' should be enabled according to 'pop_g', correct
+    - 'rd_addr_next' should increment if 'pop_g', else it should maintain, correct
+- 'control state'
+    - 'if(rst_g)'
+        - 'element_count - element_count;' should be simplified to '0', but, there was
+          some specific reason about maintaining the form 'element_count +/- *some expression' so
+          that it's guaranteed to map nicely, but I think this is unecessary.
+        - The bigger issue is usage of 'rst_g' instead of 'rst_i'
+            - using 'rst_g' if REGISTERED_IN, means that a reset would require 2 cycles. I.e a reset
+              followed by a push signal wouldn't work properly, as the push signal would be ignored.
+            - since control state is updated within a cycle, this too should be consistent aswell.
+        - redfinition name is 'rst_g vs rst_i'
+- redefined as (per 'rst_g vs rst_i')
+"
+    always_comb begin
+        // push (write) logic
+        en_0  = push_g;
+        wr_en = push_g;
+        if(push_g) begin
+            wr_addr_next = wr_addr + 1;
+        end else begin
+            wr_addr_next = wr_addr;
+        end
+
+        wr_data = wr_data_g;
+
+        // pop (read) logic
+        en_1 = pop_g;
+        if(pop_g) begin
+            rd_addr_next = rd_addr + 1;
+        end else begin
+            rd_addr_next = rd_addr;
+        end
+        
+        // control state
+        if (rst_i) begin               
+            element_count_next = 0;
+        end else if (push_i) begin      // push
+            element_count_next = element_count + 1;
+        end else begin                  // else, assume pop (see CE condition for element_count just below)
+            element_count_next = element_count - 1;
+        end 
+
+        // CE condition for element_count update
+        element_count_ce = (push_i ^ pop_i) & (!rst_i);
+
+        // LUT4(push_i, pop_i, rst_i, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push_i ^ pop_i) & (!rst_i) -> CE.
+
+        if(rst_i) begin
+            wr_addr_next       = 0;
+            rd_addr_next       = 0;
+        end
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'push (write) logic'
+    - 'en_0' and 'wr_en' should be enabled as according to 'push_g', correct
+    - 'wr_addr_next' should increment if 'push_g', else it should maintain, correct
+    - 'wr_data' is simply assigned 'wr_data_g'. It is sort of a confusing because 
+      'wr_data_g' is effectively being renamed 'wr_data'. Noting this here should 
+      suffice however.
+- 'pop (read)' 
+    - 'en_1' should be enabled according to 'pop_g', correct
+    - 'rd_addr_next' should increment if 'pop_g', else it should maintain, correct
+- 'control state'
+    - 'if(rst_i)' then element_count should be reset to 0, correct
+    - 'else if(push_i)' then element count should be incremented, assuming no pop
+    - 'else' then element count be decremented, assuming pop and no push
+    - this works because 'element_count_ce' is only enabled when exclusively push_i or pop_i
+      and when rst_i is false.
+      - in the case that both push and pop are high, element_count should not change, as it 
+        is both being incremented and decremented
+    ' CE condition'
+        - this should be enabled in two cases
+            1. xor push and pop : if both push and pop enabled, then no change should take place
+            or
+            2. rst, in which case it should be enabled to allow rst value to register
+        - the problem is the condition is currently 'element_count_ce = (push_i ^ pop_i) & (!rst_i);',
+          where previously the idea was that element_count should only change under xor push pop but not under
+          rst. That is incorrect and should be 'element_count_ce = (push_i ^ pop_i) | rst_i;
+    - redefinition name is 'element_count_ce condition'
+- redefined as (per 'element_count_ce condition')
+"
+    always_comb begin
+        // push (write) logic
+        en_0  = push_g;
+        wr_en = push_g;
+        if(push_g) begin
+            wr_addr_next = wr_addr + 1;
+        end else begin
+            wr_addr_next = wr_addr;
+        end
+
+        wr_data = wr_data_g;
+
+        // pop (read) logic
+        en_1 = pop_g;
+        if(pop_g) begin
+            rd_addr_next = rd_addr + 1;
+        end else begin
+            rd_addr_next = rd_addr;
+        end
+        
+        // control state
+        if (rst_i) begin               
+            element_count_next = 0;
+        end else if (push_i) begin      // push
+            element_count_next = element_count + 1;
+        end else begin                  // else, assume pop (see CE condition for element_count just below)
+            element_count_next = element_count - 1;
+        end 
+
+        // CE condition for element_count update
+        element_count_ce = (push_i ^ pop_i) | rst_i;
+
+        // LUT4(push_i, pop_i, rst_i, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push_i ^ pop_i) | rst_i -> CE.
+
+        if(rst_i) begin
+            wr_addr_next       = 0;
+            rd_addr_next       = 0;
+        end
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'push (write) logic'
+    - 'en_0' and 'wr_en' should be enabled as according to 'push_g', correct
+    - 'wr_addr_next' should increment if 'push_g', else it should maintain, correct
+    - 'wr_data' is simply assigned 'wr_data_g'. It is sort of a confusing because 
+      'wr_data_g' is effectively being renamed 'wr_data'. Noting this here should 
+      suffice however.
+- 'pop (read)' 
+    - 'en_1' should be enabled according to 'pop_g', correct
+    - 'rd_addr_next' should increment if 'pop_g', else it should maintain, correct
+- 'control state'
+    - 'if(rst_i)' then element_count should be reset to 0, correct
+    - 'else if(push_i)' then element count should be incremented, assuming no pop
+    - 'else' then element count be decremented, assuming pop and no push
+    - this works because 'element_count_ce' is only enabled when exclusively push_i or pop_i
+      or when rst_i is true.
+      - in the case that both push and pop are high, element_count should not change, as it 
+        is both being incremented and decremented
+    ' CE condition'
+        - this should be enabled in two cases
+            1. xor push and pop : if both push and pop enabled, then no change should take place
+            or
+            2. rst, in which case it should be enabled to allow rst value to register
+            hence 'element_count_ce = (push_i ^ pop_i) | rst_i;' is correct.
+    'if(rst_i)' both 'wr_addr_next' and 'rd_addr_next' should be reset to 0, correct
+[ ]
+
+"
+    // Queue BRAM instantiations.
+    generate
+        for(genvar i = 0; i < NUMBER_OF_QUEUES; i++) begin
+            if(READ_THEN_WRITE == 1) begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0_delay),
+                    .wr_en_i  (wr_en_delay),
+                    .wr_addr_i(wr_addr_delay),
+                    .wr_data_i(wr_data_delay[i]),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end else begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0),
+                    .wr_en_i  (wr_en),
+                    .wr_addr_i(wr_addr),
+                    .wr_data_i(wr_data),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end
+        end
+    endgenerate
+"
+- generate condition i from 0 to NUMBER_OF_QUEUES - 1, increment by 1 each step, is correct as
+- if(READ_THEN_WRITE == 1)
+    - parameters passed into bram_dual_port_simple are correct
+    - signals are correct for each port
+        - where only wr_data_delay[i]  and rd_data[i] is correct and everything else (control state) is shared
+- else
+    - parameters passed into bram_dual_port_simple are correct
+    - signals are correct for each port
+    - where only wr_data_delay[i]  and rd_data[i] is correct and everything else (control state) is shared
+[ ]
+
+"
+    logic unsigned [ADDR_WIDTH : 0] more_than_g_u;
+    logic unsigned [ADDR_WIDTH : 0] less_than_g_u;
+"
+- types are correct
+- bit widths are correct for each signal
+    - in particular, using 'ADDR_WIDTH : 0' instead of 'ADDR_WIDTH - 1 : 0' is intentional
+    - declaring as unsigned is explicity
+[ ]
+
+"
+    // essentially type casting to unsigned to avoid signed comparison in the output logic since element_count is unsigned.
+    assign more_than_g_u = more_than_g[ADDR_WIDTH : 0];
+    assign less_than_g_u = less_than_g[ADDR_WIDTH : 0];
+
+    assign full_o  = $unsigned(DATA_DEPTH - 1) < element_count;
+    assign empty_o = element_count             < $unsigned(1);
+
+    assign less_than_o = element_count < less_than_g_u;
+    assign more_than_o = more_than_g_u < element_count;
+
+    assign rd_data_o = (READ_THEN_WRITE == 1) ? rd_data_delay : rd_data;
+"
+- 'more_than_g_u' and 'less_than_g_u' assigns and bit select are correct
+- 'full_o' condition, happens whens DATA_DEPTH - 1 becomes smaller than 'elemen_count', correct
+    - comparor operator is correct, both values are explicitly unsigned
+- 'empty_o' condition, happens when 'element_count' is smaller than 1. Why not compare to 0 instead?
+    - 'element_count == 0' requires all bits to be '|element_count == 0'. Although still cheap, any bit width greater
+      than 6 for lut6 or 4 for lut4 would require more than 1 logic level depth to calculate.
+      'element_count < $unsigned(1)' translates to 'element_count - 1' utilizes the fast carry path, 
+      where the MSB carry of the result directly tells us the sign of the result and thus if it is true.
+    - in general, the 'a > b' of unsigned values maps naturally into adders 
+- 'less_than_o' condition, 'element_count' smaller than 'less_than_g_u', is correct
+- 'more_than_o' condition, 'more_than_g_u' smaller than 'element_count', is correct
+- 'rd_data_o' assign condition true is correct since rd_data will be piped on cycle and false condition is correct.
+    - this is correct, but there is a greater issue here. The read and write latency is maintained to be the same this way 
+      however, I couldn't think of a draw back of allowing the read latency to be shorter than the write latency. Yes it is
+      a little bit more complicated from a design perpective to have asymmetric latency, but saving a pipeline register is worth
+      it.
+    - this will required redifining the 'LATENCY' parameter to two different ones 'READ_LATENCY' and 'WRITE_LATENCY' and
+      make the respective changes
+- redefition name is 'read/write latency'
+

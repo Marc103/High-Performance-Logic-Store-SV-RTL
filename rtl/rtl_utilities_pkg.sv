@@ -164,15 +164,14 @@ package constant_functions_pkg;
     ////////////////////////////////////////////////////////////////
     // queue
     function automatic int queue_DATA_DEPTH(int ADDR_WIDTH);
-        return bram_dual_port_simple_DATA_DEPTH(ADDR_WIDTH);
+        return (2 ** ADDR_WIDTH);
     endfunction
 
     function automatic int queue_LATENCY(int REGISTERED_IN, int REGISTERED_IN_BRAM, int READ_THEN_WRITE);
-        int a = 0;
-        if(REGISTERED_IN)    a += 1;
-        if(READ_THEN_WRITE)  a += 1;
-        return (a + bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM));
-
+        int latency = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);
+        if(REGISTERED_IN == 1)    latency += 1;
+        if(READ_THEN_WRITE == 1)  latency += 1;
+        return latency;
     endfunction
 
     ////////////////////////////////////////////////////////////////
