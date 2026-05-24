@@ -7,7 +7,7 @@ localparam DATA_DEPTH = queue_DATA_DEPTH(ADDR_WIDTH),
 "
 - valid for ADDR_WIDTH > 0, which is not guarded 
 - otherwise correct, 2 ** ADDR_WIDTH is the DATA_DEPTH
-[]
+[Marc103 05/23/26]
 
 "
 localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
@@ -34,7 +34,38 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
   the base latency.
 - enabling either REGISTERED_IN or READ_THEN_WRITE adds a cycle of latency, hence if
   statements are correct.
-[]
+- redefined as (per 'read/write latency')
+"
+    localparam READ_LATENCY  = queue_READ_LATENCY  (REGISTERED_IN, REGISTERED_IN_BRAM),
+    localparam WRITE_LATENCY = queue_WRITE_LATENCY (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
+"
+- defined as
+"
+        int latency = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);
+        if(REGISTERED_IN == 1)    latency += 1;
+        return latency;
+"
+and
+"
+        int latency = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);
+        if(REGISTERED_IN == 1)    latency += 1;
+        if(READ_THEN_WRITE == 1)  latency += 1;
+        return latency;
+"
+respectively.
+- 'READ_LATENCY'
+    - order of arguments passed in is correct
+    - starting 'int a = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);' is correct as that is
+      the base latency.
+    - enabling REGISTERED_IN adds a cycle of latency but enabling READ_THEN_WRITE has no effect, hence if
+      statements are correct.
+- 'WRITE_LATENCY'
+    - order of arguments passed in is correct
+    - starting 'int a = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);' is correct as that is
+      the base latency.
+    - enabling either REGISTERED_IN or READ_THEN_WRITE adds a cycle of latency each, hence if
+      statements are correct.
+[Marc103 05/23/26]
 
 "
     input clk_i,
@@ -64,8 +95,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - 'less_than_i' and 'more_than_i' have the intentional bit width of "ADDR_WIDTH : 0"
   instead of "ADDR_WIDTH - 1 : 0" 
 - default net type is wire, default signdness is unsigned, which is correct
-[]
-
+[Marc103 05/23/26]
 
 "
     // read/write port setting for REGISTERED_IN
@@ -92,7 +122,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 "
 - type logic is correct
 - packed bit width correct
-[]
+[Marc103 05/23/26]
 
 "
     always@(posedge clk_i) begin
@@ -125,7 +155,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - right hand signals are present, correct
 - no type mismatch, correct
 - clk_i for posedge is correct
-[]
+[Marc103 05/23/26]
 
 "
     logic                                                push_g;
@@ -137,16 +167,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 "
 - type logic is correct
 - packed bit width correct
-- redefined as (per 'rst_g vs rst_i')
-"
-    logic                                                push_g;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_g;
-    logic                                                pop_g;
-
-    logic [ADDR_WIDTH : 0] less_than_g;
-    logic [ADDR_WIDTH : 0] more_than_g;
-"
-[]
+[Marc103 05/23/26]
 
 "
     generate
@@ -205,7 +226,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
     - left hand signals represent registered inputs
     - else left hand signals represent immediate inputs
     - which is correct
-[]
+[Marc103 05/23/26]
 
 "
 // write state
@@ -237,7 +258,37 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 "
 - type logic is correct
 - packed bit width correct
-[]
+- redefined as (per 'read/write latency')
+"
+    // write state
+    logic                                                en_0;
+    logic                                                wr_en,
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
+
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr_next;
+
+    logic                                                en_0_delay;
+    logic                                                wr_en_delay,
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr_delay;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_delay;
+
+    // read state
+    logic                                                en_1;
+    logic [ADDR_WIDTH - 1 : 0]                           rd_addr;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data;
+
+    logic [ADDR_WIDTH - 1 : 0]                           rd_addr_next;
+
+    // control state
+    logic unsigned [ADDR_WIDTH : 0] element_count;
+    logic unsigned [ADDR_WIDTH : 0] element_count_next;
+    logic                           element_count_ce;
+    
+"
+- type logic is correct
+- packed bit width correct
+[Marc103 05/23/26]
 
 "
     always@(posedge clk_i) begin
@@ -309,7 +360,36 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - 'if(element_count_ce)' update logic is correct
     - maintain if false, update with 'element_count_ce' if true
     - 'element_count_ce' to be verified
-[]
+- redefined as (per 'read/write latency')
+"
+    always@(posedge clk_i) begin
+        // write update
+        wr_addr       <= wr_addr_next;
+
+        en_0_delay    <= en_0;
+        wr_en_delay   <= wr_en;
+        wr_addr_delay <= wr_addr;
+        wr_data_delay <= wr_data;
+
+        // read update
+        rd_addr       <= rd_addr_next;
+
+        // control state update
+        if(element_count_ce) begin
+            element_count <= element_count_next;
+        end else begin
+            element_count <= element_count;
+        end
+    end
+"
+- clk_i for posedge is correct
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'if(element_count_ce)' update logic is correct
+    - maintain if false, update with 'element_count_next' if true
+    - 'element_count_ce' to be verified below
+[Marc103 05/23/26]
 
 "
     always_comb begin
@@ -573,12 +653,12 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - if(READ_THEN_WRITE == 1)
     - parameters passed into bram_dual_port_simple are correct
     - signals are correct for each port
-        - where only wr_data_delay[i]  and rd_data[i] is correct and everything else (control state) is shared
+        - where the the delayed write signals are used  and rd_data[i] is correct and everything else (control state) is shared
 - else
     - parameters passed into bram_dual_port_simple are correct
     - signals are correct for each port
-    - where only wr_data_delay[i]  and rd_data[i] is correct and everything else (control state) is shared
-[ ]
+    - where only the regular write signals and rd_data[i] is correct and everything else (control state) is shared
+[Marc103 05/23/26]
 
 "
     logic unsigned [ADDR_WIDTH : 0] more_than_g_u;
@@ -588,7 +668,7 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
 - bit widths are correct for each signal
     - in particular, using 'ADDR_WIDTH : 0' instead of 'ADDR_WIDTH - 1 : 0' is intentional
     - declaring as unsigned is explicity
-[ ]
+[Marc103 05/23/26]
 
 "
     // essentially type casting to unsigned to avoid signed comparison in the output logic since element_count is unsigned.
@@ -622,4 +702,33 @@ localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ
     - this will required redifining the 'LATENCY' parameter to two different ones 'READ_LATENCY' and 'WRITE_LATENCY' and
       make the respective changes
 - redefition name is 'read/write latency'
+- redefined as (per 'read/write latency')
+"
+    // essentially type casting to unsigned to avoid signed comparison in the output logic since element_count is unsigned.
+    assign more_than_g_u = more_than_g[ADDR_WIDTH : 0];
+    assign less_than_g_u = less_than_g[ADDR_WIDTH : 0];
+
+    assign full_o  = $unsigned(DATA_DEPTH - 1) < element_count;
+    assign empty_o = element_count             < $unsigned(1);
+
+    assign less_than_o = element_count < less_than_g_u;
+    assign more_than_o = more_than_g_u < element_count;
+
+    assign rd_data_o = rd_data;
+"
+- 'more_than_g_u' and 'less_than_g_u' assigns and bit select are correct
+- 'full_o' condition, happens whens DATA_DEPTH - 1 becomes smaller than 'elemen_count', correct
+    - comparor operator is correct, both values are explicitly unsigned
+- 'empty_o' condition, happens when 'element_count' is smaller than 1. Why not compare to 0 instead?
+    - 'element_count == 0' requires all bits to be '|element_count == 0'. Although still cheap, any bit width greater
+      than 6 for lut6 or 4 for lut4 would require more than 1 logic level depth to calculate.
+      'element_count < $unsigned(1)' translates to 'element_count - 1' utilizes the fast carry path, 
+      where the MSB carry of the result directly tells us the sign of the result and thus if it is true.
+    - in general, the 'a < b' of unsigned values maps naturally into adders 
+- 'less_than_o' condition, 'element_count' smaller than 'less_than_g_u', is correct
+- 'more_than_o' condition, 'more_than_g_u' smaller than 'element_count', is correct
+- 'rd_data_o' assign to 'rd_data' is correct
+- no output ports are left unassigned
+[Marc103 05/23/26]
+
 

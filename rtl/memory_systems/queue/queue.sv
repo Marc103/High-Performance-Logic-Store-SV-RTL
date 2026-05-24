@@ -55,8 +55,9 @@ module queue #(
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH = queue_DATA_DEPTH(ADDR_WIDTH),
-    localparam LATENCY    = queue_LATENCY   (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
+    localparam DATA_DEPTH    = queue_DATA_DEPTH    (ADDR_WIDTH),
+    localparam READ_LATENCY  = queue_READ_LATENCY  (REGISTERED_IN, REGISTERED_IN_BRAM),
+    localparam WRITE_LATENCY = queue_WRITE_LATENCY (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
 ) (
     input clk_i,
     input rst_i,
@@ -143,8 +144,6 @@ module queue #(
 
     logic [ADDR_WIDTH - 1 : 0]                           rd_addr_next;
 
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data_delay;
-
     // control state
     logic unsigned [ADDR_WIDTH : 0] element_count;
     logic unsigned [ADDR_WIDTH : 0] element_count_next;
@@ -161,8 +160,6 @@ module queue #(
 
         // read update
         rd_addr       <= rd_addr_next;
-
-        rd_data_delay <= rd_data;
 
         // control state update
         if(element_count_ce) begin
@@ -275,5 +272,5 @@ module queue #(
     assign less_than_o = element_count < less_than_g_u;
     assign more_than_o = more_than_g_u < element_count;
 
-    assign rd_data_o = (READ_THEN_WRITE == 1) ? rd_data_delay : rd_data;
+    assign rd_data_o = rd_data;
 endmodule;
