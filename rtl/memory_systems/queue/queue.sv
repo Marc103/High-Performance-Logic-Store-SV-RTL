@@ -33,13 +33,14 @@ REGISTERED_IN_BRAM [0, 1]:
 
 READ_THEN_WRITE [0, 1]:
 - If 1, read happens first then write on a separate cycle, allowing for simultaneous push/pop
-  when there is one element left in the queue, at the cost of additional cycle of latency.
+  when the queue is full, at the cost of additional cycle of latency. This does not guard against
+  simultaneous push/pop to an empty queue.
 
 NUMBER_OF_QUEUES [1,..]:
 - Specify how many queues to run in parallel. If > 1, allows for pushing to multiple queues that 
   share the same control state. Hence multiple corresponding read/write ports for push/pop. This
   assumes that fanout isn't an issue, otherwise its best to instantiate multiple queue modules with 
-  separate control states or keep the number low.
+  separate control states or keep the number of queues low.
 
 */
 

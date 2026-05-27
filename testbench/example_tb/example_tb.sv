@@ -1,10 +1,15 @@
 ////////////////////////////////////////////////////////////////
+// rtl utilities include and imports
+`include "rtl_utilities_pkg.sv"
+import constant_functions_pkg::*;
+
+////////////////////////////////////////////////////////////////
 // interface include 
 `include "example_inf.svh"
 
 ////////////////////////////////////////////////////////////////
 // package includes
-`include "rtl_utilities_pkg.sv"
+`include "io_pkg.svh"
 `include "utilities_pkg.svh"
 `include "drivers_pkg.svh"
 `include "generators_pkg.svh"
@@ -14,8 +19,8 @@
 
 ////////////////////////////////////////////////////////////////
 // imports
-import constant_functions_pkg::*;
 import utilities_pkg::*;
+import io_pkg::*;
 import drivers_pkg::*;
 import generators_pkg::*;
 import golden_models_pkg::*;

@@ -104,7 +104,7 @@
 ------------------------------------------------------------------------------
 4.  Interface      : testbench/components/interfaces/module_name_inf.svh
 ------------------------------------------------------------------------------
-5.  Main Class     : testbench/components/utilities/ModuleNameClass.sv
+5.  IO             : testbench/components/io/ModuleNameIO.sv
 ------------------------------------------------------------------------------
 6.  Golden Model   : testbench/components/golden_models/ModuleNameModel.sv 
 ------------------------------------------------------------------------------
@@ -113,20 +113,48 @@
 9.  Monitor        : testbench/components/monitors/ModuleNameMonitor.sv
 10. Scoreboard     : testbench/components/scoreboards/ModuleNameScoreboard.sv
 ------------------------------------------------------------------------------
-11. Utilities  pkg : testbench/package_manager/drivers_pkg.svh
-12. Generator  pkg : testbench/package_manager/generators_pkg.svh
-13. Driver     pkg : testbench/package_manager/drivers_pkg.svh
-14. Monitor    pkg : testbench/package_manager/monitors_pkg.svh
-15. Scoreboard pkg : testbench/package_manager/scoreboads_pkg.svh
-16. Utilites   pkg : testbench/package_manager/utilities_pkg.svh
+11. Generator  pkg : testbench/package_manager/generators_pkg.svh
+12. Driver     pkg : testbench/package_manager/drivers_pkg.svh
+13. Monitor    pkg : testbench/package_manager/monitors_pkg.svh
+14. Scoreboard pkg : testbench/package_manager/scoreboads_pkg.svh
+15. IO         pkg : testbench/package_manager/io_pkg.svh
 ------------------------------------------------------------------------------
-17. Testbench      : testbench/module_name_tb/module_name_tb.sv
-18. Simulate       : testbench/module_name_tb/simulate.bat or simulate.sh (or both)
+16. Testbench      : testbench/module_name_tb/module_name_tb.sv
+17. Simulate       : testbench/module_name_tb/simulate.bat or simulate.sh (or both)
 
 - in summary
     - writing the RTL code requires at least 3 files 
-    - writing the testbench requires at least 15 files
+    - writing the testbench requires at least 14 files
 - many of the testbench files have a similar structure as the example files and hence are
 copies of modified versions of them
 - maybe one day i'll write some python script that autogens these files with the base template
 and module name...
+
+## File Checklist Work Flow: More in depth details
+### Interface
+
+### IO 
+- represents input stimulus and output data format, with a 'io' input to 'new()' where
+- the input stimulus also includes sequencing information so that the generator is more capable
+and the driver knows how to drive it
+- the output data should carefully be populated by the monitor
+
+### Generator
+- Generate input stimulus, using the data formats (nominally ports and sequencing capability) provided by the IO class.
+
+### Driver
+- drive input stimulus, using whatever information provided by the IO class.
+
+### Golden Model
+- represents the state the golden model and all functions that operate on it (like classical OOP)
+- it too receives the same input stimulus and modifies its own state to model the computation
+- produces the output IO objects and populates 
+
+### Monitor
+- Monitors IO, to produce output IO objects
+
+### Scoreboard
+- compares outputs from golden model to monitor
+- the emphasis is to indirectly confirm that the initial, intermediary and
+  final states are equal, but not necessarily at a cycle by cycle accuracy.
+- trying to do everything will raise the complexity of the testbench too much which (as discussed before) is not efficient. Instead, we use different forms of verification (hence manual verification)

@@ -1,4 +1,3 @@
-import utilities_pkg::*;
 import constant_functions_pkg::*;
 
 class MultistageFanoutMonitor #(type T, type I);

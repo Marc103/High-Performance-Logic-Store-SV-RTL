@@ -10,6 +10,7 @@ import constant_functions_pkg::*;
 ////////////////////////////////////////////////////////////////
 // package includes
 `include "utilities_pkg.svh"
+`include "io_pkg.svh"
 `include "drivers_pkg.svh"
 `include "generators_pkg.svh"
 `include "golden_models_pkg.svh"
@@ -19,6 +20,7 @@ import constant_functions_pkg::*;
 ////////////////////////////////////////////////////////////////
 // imports
 import utilities_pkg::*;
+import io_pkg::*;
 import drivers_pkg::*;
 import generators_pkg::*;
 import golden_models_pkg::*;
@@ -27,7 +29,7 @@ import scoreboards_pkg::*;
 
 ////////////////////////////////////////////////////////////////
 // RTL includes
-`include "data_movers/io_circuits/multistage_fanout/multistage_fanout.sv"
+`include "io_circuits/multistage_fanout/multistage_fanout.sv"
 
 ////////////////////////////////////////////////////////////////
 // timescale 

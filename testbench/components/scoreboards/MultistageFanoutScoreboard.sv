@@ -1,4 +1,3 @@
-import utilities_pkg::*;
 import constant_functions_pkg::*;
 
 class MultistageFanoutScoreboard #(type T);

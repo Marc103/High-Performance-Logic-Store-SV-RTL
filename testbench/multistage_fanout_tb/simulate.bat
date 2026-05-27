@@ -38,6 +38,7 @@ set INCLUDE_FLAGS=^
 -incdir %CT_DIR%\monitors ^
 -incdir %CT_DIR%\package_manager ^
 -incdir %CT_DIR%\scoreboards ^
+-incdir %CT_DIR%\io ^
 -incdir %CT_DIR%\utilities
 
 REM -------------------------------------------------
