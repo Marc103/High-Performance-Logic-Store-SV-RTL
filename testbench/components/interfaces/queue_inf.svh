@@ -14,9 +14,10 @@ interface queue_inf #(
     localparam READ_LATENCY  = queue_READ_LATENCY  (REGISTERED_IN, REGISTERED_IN_BRAM),
     localparam WRITE_LATENCY = queue_WRITE_LATENCY (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
 ) (
-    input clk_i,
-    input rst_i
+    input clk_i
 );
+    logic                                                 rst_i;
+    
     // write port
     logic                                                 push_i;
     logic  [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_i;

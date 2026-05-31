@@ -1,0 +1,58 @@
+import constant_functions_pkg::*;
+
+class QueueDriver #(type T, type I);
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH),
+    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM),
+    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE)
+
+    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
+
+    TriggerableQueue #(T) in_queue;
+    I inf;
+
+    function new(
+        TriggerableQueue #(T) in_queue,
+        I inf
+    );
+        this.in_queue = in_queue;
+        this.inf = inf;
+    endfunction
+
+    task automatic drive(T io_obj);
+        queue_io_in_t queue_io_in;
+
+        while(io_obj.queue_io_in_q.size() > 0) begin
+            queue_io_in = io_obj.pop_front();
+            
+            if(io_obj.ignore.pop_front()) begin
+                inf.rst_i  <= 0;
+                inf.push_i <= 0;
+                inf.pop_i  <= 0;
+            end else begin
+                inf.rst_i       <= queue_io_in.rst_i;
+                inf.push_i      <= queue_io_in.push_i;
+                inf.wr_data_i   <= queue_io_in.wr_data_i;
+                inf.pop_i       <= queue_io_in.pop_i;
+                inf.less_than_i <= queue_io_in.less_than_i;
+                inf.more_than_i <= queue_io_in.more_than_i;
+            end
+            @(posedge inf.clk_i);
+        end
+
+        inf.rst_i  = 0;
+        inf.push_i = 0;
+        inf.pop_i  = 0;
+    endtask;
+
+
+    task automatic run();
+        T io_obj;
+        forever begin
+            in_queue.pop(io_obj);
+            drive(io_obj);
+        end
+    endtask
+
+endclass

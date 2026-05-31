@@ -111,6 +111,71 @@ package constant_functions_pkg;
     } multistage_fanout_t;
 
     ////////////////////////////////////////////////////////////////
+    // queue
+    typedef struct packed {
+        int ADDR_WIDTH;
+        int DATA_WIDTH;
+        int REGISTERED_IN;
+        int REGISTERED_IN_BRAM;
+        int READ_THEN_WRITE;
+        int NUMBER_OF_QUEUES;
+    } queue_pt;
+
+    typedef struct packed {
+        logic clk_i;
+        logic rst_i;
+
+        // write port
+        logic                                      push_i;
+        logic  [MEDIUM - 1 : 0][PLANETARY - 1 : 0] wr_data_i;
+
+        // read port
+        logic                                     pop_i;
+        logic [MEDIUM - 1 : 0][PLANETARY - 1 : 0] rd_data_o;
+
+        // conditions
+        logic                      full_o;
+        logic                      empty_o;
+
+        logic  [MEDIUM : 0]    less_than_i; 
+        logic                  less_than_o; // less than 'less_than_i' elements on queue
+
+        logic  [MEDIUM : 0]    more_than_i;
+        logic                  more_than_o; // more than 'more_than_i' elements on the queue
+    } queue_t;
+
+    `define QUEUE_IO_IN_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        \
+        /* write port */ \
+        logic push_i; \
+        logic [NUMBER_OF_QUEUES-1:0][DATA_WIDTH-1:0] wr_data_i; \
+        \
+        /* read port */ \
+        logic pop_i; \
+        \
+        /* conditions */ \
+        logic [ADDR_WIDTH:0] less_than_i; \
+        logic [ADDR_WIDTH:0] more_than_i; \
+    } queue_io_in_t;
+
+    `define QUEUE_IO_OUT_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        /* read port */ \
+        logic [NUMBER_OF_QUEUES-1:0][DATA_WIDTH-1:0] rd_data_o; \
+        \
+        /* conditions */ \
+        logic full_o; \
+        logic empty_o; \
+        \
+        logic                 less_than_o; \
+        logic                 more_than_o; \
+    } queue_io_out_t;
+
+
+
+    ////////////////////////////////////////////////////////////////
     //           Module specific constant functions               //
     ////////////////////////////////////////////////////////////////
 
