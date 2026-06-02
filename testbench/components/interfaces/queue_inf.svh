@@ -35,5 +35,10 @@ interface queue_inf #(
 
     logic  [ADDR_WIDTH : 0]    more_than_i;
     logic                      more_than_o; // more than 'more_than_i' elements on the queue
+
+    // testbench sequencing signals
+    logic start_sequence;
+    logic end_sequence;
+    logic end_last_sequence;
 endinterface
 `endif 

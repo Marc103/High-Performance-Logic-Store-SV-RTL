@@ -288,7 +288,38 @@ respectively.
 "
 - type logic is correct
 - packed bit width correct
+- wr_data needs to be removed as it conflicts with earlier declaration
+    - redefinition name is "wr_data conflict"
 [Marc103 05/23/26]
+- redefined as (per "wr_data conflict")
+"
+    // write state
+    logic                                                en_0;
+    logic                                                wr_en;
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr;
+
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr_next;
+
+    logic                                                en_0_delay;
+    logic                                                wr_en_delay,
+    logic [ADDR_WIDTH - 1 : 0]                           wr_addr_delay;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_delay;
+
+    // read state
+    logic                                                en_1;
+    logic [ADDR_WIDTH - 1 : 0]                           rd_addr;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data;
+
+    logic [ADDR_WIDTH - 1 : 0]                           rd_addr_next;
+
+    // control state
+    logic unsigned [ADDR_WIDTH : 0] element_count;
+    logic unsigned [ADDR_WIDTH : 0] element_count_next;
+    logic                           element_count_ce;
+"
+- type logic is correct
+- packed bit width correct
+[Marc103 06/01/26]
 
 "
     always@(posedge clk_i) begin
@@ -390,6 +421,38 @@ respectively.
     - maintain if false, update with 'element_count_next' if true
     - 'element_count_ce' to be verified below
 [Marc103 05/23/26]
+- need to remove wr_data and replace with wr_data_g
+- redefined as (per "wr_data conflict")
+
+"
+    always@(posedge clk_i) begin
+        // write update
+        wr_addr       <= wr_addr_next;
+
+        en_0_delay    <= en_0;
+        wr_en_delay   <= wr_en;
+        wr_addr_delay <= wr_addr;
+        wr_data_delay <= wr_data_g;
+
+        // read update
+        rd_addr       <= rd_addr_next;
+
+        // control state update
+        if(element_count_ce) begin
+            element_count <= element_count_next;
+        end else begin
+            element_count <= element_count;
+        end
+    end
+"
+- clk_i for posedge is correct
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'if(element_count_ce)' update logic is correct
+    - maintain if false, update with 'element_count_next' if true
+    - 'element_count_ce' to be verified below
+[Marc103 06/01/26]
 
 "
     always_comb begin
@@ -597,7 +660,75 @@ respectively.
             2. rst, in which case it should be enabled to allow rst value to register
             hence 'element_count_ce = (push_i ^ pop_i) | rst_i;' is correct.
     'if(rst_i)' both 'wr_addr_next' and 'rd_addr_next' should be reset to 0, correct
-[ ]
+[Marc103 05/23/26]
+- but wr_data needs to be removed
+- redefined as (per "wr_data conflict")
+"
+    always_comb begin
+        // push (write) logic
+        en_0  = push_g;
+        wr_en = push_g;
+        if(push_g) begin
+            wr_addr_next = wr_addr + 1;
+        end else begin
+            wr_addr_next = wr_addr;
+        end
+
+        // pop (read) logic
+        en_1 = pop_g;
+        if(pop_g) begin
+            rd_addr_next = rd_addr + 1;
+        end else begin
+            rd_addr_next = rd_addr;
+        end
+        
+        // control state
+        if (rst_i) begin               
+            element_count_next = 0;
+        end else if (push_i) begin      // push
+            element_count_next = element_count + 1;
+        end else begin                  // else, assume pop (see CE condition for element_count just below)
+            element_count_next = element_count - 1;
+        end 
+
+        // CE condition for element_count update
+        element_count_ce = (push_i ^ pop_i) | rst_i;
+
+        // LUT4(push_i, pop_i, rst_i, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push_i ^ pop_i) | rst_i -> CE.
+
+        if(rst_i) begin
+            wr_addr_next       = 0;
+            rd_addr_next       = 0;
+        end
+    end
+"
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- 'push (write) logic'
+    - 'en_0' and 'wr_en' should be enabled as according to 'push_g', correct
+    - 'wr_addr_next' should increment if 'push_g', else it should maintain, correct
+    - 'wr_data_g' is used as it maps directly
+- 'pop (read)' 
+    - 'en_1' should be enabled according to 'pop_g', correct
+    - 'rd_addr_next' should increment if 'pop_g', else it should maintain, correct
+- 'control state'
+    - 'if(rst_i)' then element_count should be reset to 0, correct
+    - 'else if(push_i)' then element count should be incremented, assuming no pop
+    - 'else' then element count be decremented, assuming pop and no push
+    - this works because 'element_count_ce' is only enabled when exclusively push_i or pop_i
+      or when rst_i is true.
+      - in the case that both push and pop are high, element_count should not change, as it 
+        is both being incremented and decremented
+    ' CE condition'
+        - this should be enabled in two cases
+            1. xor push and pop : if both push and pop enabled, then no change should take place
+            or
+            2. rst, in which case it should be enabled to allow rst value to register
+            hence 'element_count_ce = (push_i ^ pop_i) | rst_i;' is correct.
+    'if(rst_i)' both 'wr_addr_next' and 'rd_addr_next' should be reset to 0, correct
+[Marc103 06/01/26]
 
 "
     // Queue BRAM instantiations.
@@ -659,6 +790,121 @@ respectively.
     - signals are correct for each port
     - where only the regular write signals and rd_data[i] is correct and everything else (control state) is shared
 [Marc103 05/23/26]
+- wr_data needs to be replaced with wr_data_g
+- redefined as (per "wr_data conflict")
+"
+    // Queue BRAM instantiations.
+    generate
+        for(genvar i = 0; i < NUMBER_OF_QUEUES; i++) begin
+            if(READ_THEN_WRITE == 1) begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0_delay),
+                    .wr_en_i  (wr_en_delay),
+                    .wr_addr_i(wr_addr_delay),
+                    .wr_data_i(wr_data_delay[i]),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end else begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0),
+                    .wr_en_i  (wr_en),
+                    .wr_addr_i(wr_addr),
+                    .wr_data_i(wr_data_g),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end
+        end
+    endgenerate
+"
+- generate condition i from 0 to NUMBER_OF_QUEUES - 1, increment by 1 each step, is correct as
+- if(READ_THEN_WRITE == 1)
+    - parameters passed into bram_dual_port_simple are correct
+    - signals are correct for each port
+        - where the the delayed write signals are used  and rd_data[i] is correct and everything else (control state) is shared
+- else
+    - parameters passed into bram_dual_port_simple are correct
+    - signals are correct for each port
+    - where only the regular write signals, wr_data_g is correct, and rd_data[i] is correct and everything else (control state) is shared
+[Marc103 06/01/26]
+- mistake found in simulation, redefition name is "wr_data_g not indexed"
+- redefined as 
+"
+    // Queue BRAM instantiations.
+    generate
+        for(genvar i = 0; i < NUMBER_OF_QUEUES; i++) begin
+            if(READ_THEN_WRITE == 1) begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0_delay),
+                    .wr_en_i  (wr_en_delay),
+                    .wr_addr_i(wr_addr_delay),
+                    .wr_data_i(wr_data_delay[i]),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end else begin
+                bram_dual_port_simple #(
+                    .ADDR_WIDTH(ADDR_WIDTH),
+                    .DATA_WIDTH(DATA_WIDTH),
+                    .REGISTERED_IN(REGISTERED_IN_BRAM)
+                ) queue_memory (
+                    // write port
+                    .clk_0_i  (clk_i),
+            
+                    .en_0_i   (en_0),
+                    .wr_en_i  (wr_en),
+                    .wr_addr_i(wr_addr),
+                    .wr_data_i(wr_data_g[i]),
+
+                    // read port
+                    .clk_1_i(clk_i),
+
+                    .en_1_i   (en_1),
+                    .rd_addr_i(rd_addr),
+                    .rd_data_o(rd_data[i])
+                );
+            end
+        end
+    endgenerate
+"
+[ ]
 
 "
     logic unsigned [ADDR_WIDTH : 0] more_than_g_u;

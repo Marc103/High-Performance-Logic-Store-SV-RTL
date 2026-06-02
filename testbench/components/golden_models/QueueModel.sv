@@ -3,9 +3,9 @@ import constant_functions_pkg::*;
 class QueueModel #(type T);
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH),
-    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM),
-    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE)
+    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH);
+    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
+    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE);
 
     `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
     `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
@@ -33,7 +33,7 @@ class QueueModel #(type T);
         this.element_max = 0;
         this.element_max[T::ADDR_WIDTH] = 1'b1;
         this.less_than = 'x;
-        this.more_than = 'x
+        this.more_than = 'x;
         this.error_state = 0;
     endfunction
 
@@ -55,19 +55,19 @@ class QueueModel #(type T);
                 end         
 
                 // pop and push 
-                if(queue_io_in.push && queue_io_in.pop) begin
-                    this.pop_push(queue.io_obj_in.wr_data_i);
+                if(queue_io_in.push_i && queue_io_in.pop_i) begin
+                    queue_io_out.rd_data_o = this.pop_push(queue_io_in.wr_data_i);
                 end else
 
                 // push
-                if(queue_io_in.push && (!queue_io_in.pop)) begin
-                    this.push();
+                if(queue_io_in.push_i && (!queue_io_in.pop_i)) begin
+                    queue_io_out.rd_data_o = this.peek();
+                    this.push(queue_io_in.wr_data_i);
                 end
 
                 // pop
-                if((!queue_io_in.push) && queue_io_in.pop) begin
-                    queue_io_out.rd_data_o = this.pop();
-
+                if((!queue_io_in.push_i) && queue_io_in.pop_i) begin
+                    queue_io_out.rd_data_o = this.peek();
                 end
 
                 // set less than / more than
@@ -77,6 +77,7 @@ class QueueModel #(type T);
                 // reset
                 if(queue_io_in.rst_i) begin
                     this.reset();
+                    queue_io_out.rd_data_o = this.peek();
                 end 
 
                 // populate rest of io_out
@@ -109,7 +110,7 @@ class QueueModel #(type T);
     function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] pop();
         logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] rd_data;
         if(element_count > $unsigned(0)) begin
-            rd_data = this.queue.pop_front()
+            rd_data = this.queue.pop_front();
             this.element_count--;
         end else begin
             rd_data = 'x;
@@ -118,19 +119,29 @@ class QueueModel #(type T);
         return rd_data;
     endfunction
 
-    function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] pop_push();
+    function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] pop_push(logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] wr_data);
         logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] rd_data;
         if((element_count == 0) || 
            ((element_count == $unsigned(1)) && (T::READ_THEN_WRITE == 0))) begin
             rd_data = 'x;
             this.error_state = 30;    
         end else begin
-            rd_data = this.queue.pop_front();    
+            rd_data = this.queue.pop_front();
+            this.queue.push_back(wr_data);    
         end
         return rd_data;
     endfunction
 
-    function automatic logic reset();
+    function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] peek();
+        if(this.queue.size() > 0) begin
+            return this.queue[this.queue.size() - 1];
+        end else begin
+            return 'x;
+        end
+
+    endfunction
+
+    function automatic void reset();
         this.queue.delete();
         this.element_count = 0;
     endfunction
@@ -138,9 +149,9 @@ class QueueModel #(type T);
     ////////////////////////////////////////////////////////////////
     // Set and Get Functions
 
-    function automatic void set_less_than(logic [ADDR_WIDTH : 0] less_than);
+    function automatic void set_less_than(logic [T::ADDR_WIDTH : 0] less_than);
         this.less_than   = less_than;
-        this.less_than_u = this.less_than[ADDR_WIDTH : 0];
+        this.less_than_u = this.less_than[T::ADDR_WIDTH : 0];
     endfunction
 
     function automatic logic get_less_than();
@@ -149,9 +160,9 @@ class QueueModel #(type T);
         return 0;
     endfunction
 
-    function automatic void set_more_than(logic [ADDR_WIDTH : 0] more_than);
-        this.more_than   = more_than
-        this.more_than_u = this.more_than[ADDR_WIDTH : 0];
+    function automatic void set_more_than(logic [T::ADDR_WIDTH : 0] more_than);
+        this.more_than   = more_than;
+        this.more_than_u = this.more_than[T::ADDR_WIDTH : 0];
     endfunction
 
     function automatic logic get_more_than();
@@ -161,11 +172,13 @@ class QueueModel #(type T);
     endfunction
 
     function automatic logic get_full();
-        if(this.element_count >= this.element_max_count) return 1;
+        if(this.element_count >= this.element_max) return 1;
         return 0;
     endfunction
 
     function automatic logic get_empty();
+        $display("get empty called");
+        $display(element_count);
         if(this.element_count == 0) return 1;
         return 0;
     endfunction

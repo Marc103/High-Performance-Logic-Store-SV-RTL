@@ -79,7 +79,7 @@ module queue #(
     output                      less_than_o, // less than 'less_than_i' elements on queue
 
     input  [ADDR_WIDTH : 0]     more_than_i,
-    output                      more_than_o, // more than 'more_than_i' elements on the queue
+    output                      more_than_o  // more than 'more_than_i' elements on the queue
 );
 
     // read/write port setting for REGISTERED_IN
@@ -127,14 +127,13 @@ module queue #(
 
     // write state
     logic                                                en_0;
-    logic                                                wr_en,
+    logic                                                wr_en;
     logic [ADDR_WIDTH - 1 : 0]                           wr_addr;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
 
     logic [ADDR_WIDTH - 1 : 0]                           wr_addr_next;
 
     logic                                                en_0_delay;
-    logic                                                wr_en_delay,
+    logic                                                wr_en_delay;
     logic [ADDR_WIDTH - 1 : 0]                           wr_addr_delay;
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_delay;
 
@@ -157,7 +156,7 @@ module queue #(
         en_0_delay    <= en_0;
         wr_en_delay   <= wr_en;
         wr_addr_delay <= wr_addr;
-        wr_data_delay <= wr_data;
+        wr_data_delay <= wr_data_g;
 
         // read update
         rd_addr       <= rd_addr_next;
@@ -179,8 +178,6 @@ module queue #(
         end else begin
             wr_addr_next = wr_addr;
         end
-
-        wr_data = wr_data_g;
 
         // pop (read) logic
         en_1 = pop_g;
@@ -247,7 +244,7 @@ module queue #(
                     .en_0_i   (en_0),
                     .wr_en_i  (wr_en),
                     .wr_addr_i(wr_addr),
-                    .wr_data_i(wr_data),
+                    .wr_data_i(wr_data_g[i]),
 
                     // read port
                     .clk_1_i(clk_i),
@@ -274,4 +271,4 @@ module queue #(
     assign more_than_o = more_than_g_u < element_count;
 
     assign rd_data_o = rd_data;
-endmodule;
+endmodule

@@ -3,25 +3,49 @@ import constant_functions_pkg::*;
 class QueueGenerator #(type T);
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH),
-    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM),
-    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE)
-
+    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH);
+    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
+    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE);
     `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
+    int seed;
+
     function new(TriggerableQueueBroadcaster #(T) out_broadcaster);
         this.out_broadcaster = out_broadcaster;
+        seed = 23;
+        //void'($urandom(seed)); // seed the generator once
     endfunction
+
+    task automatic add_io(
+        ref T io_obj,
+        input logic rst,
+        input logic push,
+        input logic pop,
+        input logic ignore,
+        input logic [T::ADDR_WIDTH:0] less_than_i,
+        input logic [T::ADDR_WIDTH:0] more_than_i
+    );
+        queue_io_in_t queue_io_in;
+
+        queue_io_in.rst_i       = rst;
+        queue_io_in.push_i      = push;
+        queue_io_in.wr_data_i   = this.seed;
+        queue_io_in.pop_i       = pop;
+        queue_io_in.less_than_i = less_than_i;
+        queue_io_in.more_than_i = more_than_i;
+        seed++;
+        io_obj.queue_io_in_q.push_back(queue_io_in);
+        io_obj.ignore.push_back(ignore);
+    endtask
     
+
     task automatic run();
         T io_obj;
-        queue_io_in_t queue_io_in;
         int element_max;
-        logic [ADDR_WIDTH:0] less_than_i; 
-        logic [ADDR_WIDTH:0] more_than_i;
-        
+        logic [T::ADDR_WIDTH:0] less_than_i; 
+        logic [T::ADDR_WIDTH:0] more_than_i;
 
         io_obj = new();
         element_max = 2 ** T::ADDR_WIDTH;
@@ -29,179 +53,69 @@ class QueueGenerator #(type T);
         more_than_i = (element_max * 2) / 3;
 
         // reset start
-        queue_io_in.rst_i = 1;
-        queue_io_in.push_i = 0;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);
+        add_io(io_obj, 1, 0, 0, 0, less_than_i, more_than_i);
 
         // push
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0); 
+        add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
 
         // pop
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 0;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 1;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);  
+        add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
 
         // push
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);  
+        add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
 
         // push / pop
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 1;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);   
+        add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
 
         // push / pop
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 1;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);  
+        add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
 
         // pop
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);  
+        add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
 
         // throw in an ignore
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(1);  
+        add_io(io_obj, 0, 1, 0, 1, less_than_i, more_than_i);
 
         // push till full
-        for(int i = 0; i < element_max; i++) begin
-            queue_io_in.rst_i = 0;
-            queue_io_in.push_i = 1;
-            queue_io_in.wr_data_i = $urandom();
-            queue_io_in.pop_i = 0;
-            queue_io_in.less_than_i = less_than_i;
-            queue_io_in.more_than_i = more_than_i;
-            io_obj.queue_io_in_q.push_back(queue_io_in);
-            io_obj.ignore.push_back(0);  
+        for (int i = 0; i < element_max; i++) begin
+            add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
         end
 
         // push / pop - only if READ_THEN_WRITE enabled
-        if(T::READ_THEN_WRITE == 1) begin
-            queue_io_in.rst_i = 0;
-            queue_io_in.push_i = 1;
-            queue_io_in.wr_data_i = $urandom();
-            queue_io_in.pop_i = 1;
-            queue_io_in.less_than_i = less_than_i;
-            queue_io_in.more_than_i = more_than_i;
-            io_obj.queue_io_in_q.push_back(queue_io_in);
-            io_obj.ignore.push_back(0);
-            
-        end 
+        if (T::READ_THEN_WRITE == 1) begin
+            add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
+        end
 
         // push / pop - only if READ_THEN_WRITE enabled
-        if(T::READ_THEN_WRITE == 1) begin
-            queue_io_in.rst_i = 0;
-            queue_io_in.push_i = 1;
-            queue_io_in.wr_data_i = $urandom();
-            queue_io_in.pop_i = 1;
-            queue_io_in.less_than_i = less_than_i;
-            queue_io_in.more_than_i = more_than_i;
-            io_obj.queue_io_in_q.push_back(queue_io_in);
-            io_obj.ignore.push_back(0);
-        end  
+        if (T::READ_THEN_WRITE == 1) begin
+            add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
+        end
 
         // pop - only if READ_THEN_WRITE disabled
-        if(T::READ_THEN_WRITE == 0) begin
-            queue_io_in.rst_i = 0;
-            queue_io_in.push_i = 0;
-            queue_io_in.wr_data_i = $urandom();
-            queue_io_in.pop_i = 1;
-            queue_io_in.less_than_i = less_than_i;
-            queue_io_in.more_than_i = more_than_i;
-            io_obj.queue_io_in_q.push_back(queue_io_in);
-            io_obj.ignore.push_back(0);  
+        if (T::READ_THEN_WRITE == 0) begin
+            add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
         end
 
         // push - only if READ_THEN_WRITE disabled
-        if(T::READ_THEN_WRITE == 0) begin
-            queue_io_in.rst_i = 0;
-            queue_io_in.push_i = 1;
-            queue_io_in.wr_data_i = $urandom();
-            queue_io_in.pop_i = 0;
-            queue_io_in.less_than_i = less_than_i;
-            queue_io_in.more_than_i = more_than_i;
-            io_obj.queue_io_in_q.push_back(queue_io_in);
-            io_obj.ignore.push_back(0);  
+        if (T::READ_THEN_WRITE == 0) begin
+            add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
         end
 
         // reset
-        queue_io_in.rst_i = 1;
-        queue_io_in.push_i = 0;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);
+        add_io(io_obj, 1, 0, 0, 0, less_than_i, more_than_i);
 
         // push
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 1;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 0;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0); 
+        add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
 
         // pop
-        queue_io_in.rst_i = 0;
-        queue_io_in.push_i = 0;
-        queue_io_in.wr_data_i = $urandom();
-        queue_io_in.pop_i = 1;
-        queue_io_in.less_than_i = less_than_i;
-        queue_io_in.more_than_i = more_than_i;
-        io_obj.queue_io_in_q.push_back(queue_io_in);
-        io_obj.ignore.push_back(0);
+        add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
 
         // finished sequence.
+        io_obj.end_last_sequence = 1;
 
         // broadcast
-        out_broadcaster.push(io_obj); 
+        out_broadcaster.push(io_obj);
     endtask
+
+    
 endclass

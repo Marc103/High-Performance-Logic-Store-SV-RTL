@@ -118,13 +118,14 @@
 13. Monitor    pkg : testbench/package_manager/monitors_pkg.svh
 14. Scoreboard pkg : testbench/package_manager/scoreboads_pkg.svh
 15. IO         pkg : testbench/package_manager/io_pkg.svh
+16. Models     pkg : testbench/package_manager/golden_models.svh
 ------------------------------------------------------------------------------
-16. Testbench      : testbench/module_name_tb/module_name_tb.sv
-17. Simulate       : testbench/module_name_tb/simulate.bat or simulate.sh (or both)
+17. Testbench      : testbench/module_name_tb/module_name_tb.sv
+18. Simulate       : testbench/module_name_tb/simulate.bat or simulate.sh (or both)
 
 - in summary
     - writing the RTL code requires at least 3 files 
-    - writing the testbench requires at least 14 files
+    - writing the testbench requires at least 15 files
 - many of the testbench files have a similar structure as the example files and hence are
 copies of modified versions of them
 - maybe one day i'll write some python script that autogens these files with the base template

@@ -17,8 +17,8 @@ class QueueIO #(
     localparam READ_LATENCY  = queue_READ_LATENCY  (REGISTERED_IN, REGISTERED_IN_BRAM),
     localparam WRITE_LATENCY = queue_WRITE_LATENCY (REGISTERED_IN, REGISTERED_IN_BRAM, READ_THEN_WRITE)
 );
-    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
-    `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH)
+    `QUEUE_IO_IN_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH) 
+    `QUEUE_IO_OUT_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH)
 
     queue_io_in_t queue_io_in_q[$];
     queue_io_out_t queue_io_out_q[$];
@@ -26,7 +26,7 @@ class QueueIO #(
     // Sequencing Info
     bit ignore [$];
     logic unsigned [7:0] error_state[$];
-
+    logic end_last_sequence = 0;
 
     function new ();
     endfunction
