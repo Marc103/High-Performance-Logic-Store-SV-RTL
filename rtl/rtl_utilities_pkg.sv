@@ -248,16 +248,17 @@ package constant_functions_pkg;
         return (2 ** ADDR_WIDTH);
     endfunction
 
-    function automatic int queue_READ_LATENCY(int REGISTERED_IN, int REGISTERED_IN_BRAM);
-        int latency = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);
-        if(REGISTERED_IN == 1)    latency += 1;
+    function automatic int queue_READ_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+        int latency = bram_dual_port_simple_READ_LATENCY(REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+        if(CONFLICT_PROOF == 1) latency++;
+        if(REGISTERED_IN == 1)  latency++;
         return latency;
     endfunction
 
-    function automatic int queue_WRITE_LATENCY(int REGISTERED_IN, int REGISTERED_IN_BRAM, int READ_THEN_WRITE);
-        int latency = bram_dual_port_simple_LATENCY(REGISTERED_IN_BRAM);
-        if(REGISTERED_IN == 1)    latency += 1;
-        if(READ_THEN_WRITE == 1)  latency += 1;
+    function automatic int queue_WRITE_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, REGISTERED_IN_BRAM);
+        int latency = bram_dual_port_simple_WRITE_LATENCY(REGISTERED_IN_BRAM);
+        if(CONLFICT_PROOF == 1) latency++;
+        if(REGISTERED_IN == 1)  latency++;
         return latency;
     endfunction
 

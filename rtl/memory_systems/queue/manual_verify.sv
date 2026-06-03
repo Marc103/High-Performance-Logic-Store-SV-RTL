@@ -1,12 +1,253 @@
 ////////////////////////////////////////////////////////////////
 // Trial 2
+"
+    localparam DATA_DEPTH        = queue_DATA_DEPTH                  (ADDR_WIDTH),
+"
+- defined as
+"
+        return (2 ** ADDR_WIDTH);
+"
+- valid for ADDR_WIDTH > 0, which is not guarded 
+- otherwise correct, 2 ** ADDR_WIDTH is the DATA_DEPTH
+[Marc103 - 06/03/26]
 
+"
+    localparam READ_LATENCY      = queue_READ_LATENCY                (CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM),
+"
+- defined as 
+"
+        int latency = bram_dual_port_simple_READ_LATENCY(REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+        if(CONFLICT_PROOF == 1) latency++;
+        if(REGISTERED_IN == 1)  latency++;
+        return latency;
+"
+- correct arguments
+- logic makes sense, we start with the bram dual port read latency, +1 for conflict proof, +1 for REGISTERED_IN
+[Marc103 - 06/03/26]
 
+"
+    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (CONLFICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM),
+"
+- defined as 
+"
+        int latency = bram_dual_port_simple_WRITE_LATENCY(REGISTERED_IN_BRAM);
+        if(CONLFICT_PROOF == 1) latency++;
+        if(REGISTERED_IN == 1)  latency++;
+"
+- correct arguments,
+- logic makes sense, we start with the bram dual port write latency, +1 for conlfict proof, +1 for REGISTERED_READ
+[Marc103 - 06/03/26]
 
+"
+    localparam READ_LATENCY_BRAM = bram_dual_port_simple_READ_LATENCY(REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM)
+"
+- called with correct arguments
+[Marc103 - 06/03/26]
 
-push to full is undefined
-pop from empty is undefined
+"
+    input clk_i,
+    input rst_i,
 
+    // write port
+    input                                                 push_i,
+    input  [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_i,
+
+    // read port
+    input                                                 pop_i,
+    output [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data_o,
+
+    // conditions
+    output                      full_o,
+    output                      empty_o,
+
+    input  [ADDR_WIDTH : 0]     less_than_i, 
+    output                      less_than_o, // less than 'less_than_i' elements on queue
+
+    input  [ADDR_WIDTH : 0]     more_than_i,
+    output                      more_than_o  // more than 'more_than_i' elements on the queue
+"
+- signals present, correct
+- bit widths and packed dimensions are correct for each signal 
+- directions are correct
+- 'less_than_i' and 'more_than_i' have the intentional bit width of "ADDR_WIDTH : 0"
+  instead of "ADDR_WIDTH - 1 : 0" 
+- default net type is wire, default signdness is unsigned, which is correct
+[Marc103 - 06/03/26]
+
+"
+    // read/write port setting for REGISTERED_IN
+    logic                                                push;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
+    logic                                                pop;
+    logic                                                full;
+    logic                                                empty;
+
+    always@(posedge clk_i) begin
+        push     <= push_i;
+        wr_data  <= wr_data_i;
+        pop      <= pop_i;
+        full     <= full_o;
+        empty    <= empty_o;
+    end
+"
+- type logic is correct
+- packed bit width correct
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- clk_i for posedge is correct
+[Marc103 - 06/03/26]
+
+"
+    logic                                                push_g;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_g;
+    logic                                                pop_g;
+    logic                                                full_g;
+    logic                                                empty_g;
+
+    generate
+        if(REGISTERED_IN == 1) begin
+            assign push_g     = push;
+            assign wr_data_g  = wr_data;
+            assign pop_g      = pop;
+            assign full_g     = full;
+            assign empty_g    = empty;
+
+        end else begin
+            assign push_g     = push_i;
+            assign wr_data_g  = wr_data_i;
+            assign pop_g      = pop_i;
+            assign full_g     = full_o;
+            assign empty_g    = empty_o;
+        end
+    endgenerate
+"
+- type logic is correct
+- packed bit width correct
+- left hand signals are present, correct
+- right hand signals are present, correct
+- no type mismatch, correct
+- logic of if condition "REGISTERED_IN == 1"
+    - left hand signals represent registered inputs
+    - else left hand signals represent immediate inputs
+    - which is correct
+[Marc103 - 06/03/26]
+
+"
+    // write state
+    logic                                                bram_forward_en_0;
+    logic                                                bram_forward_wr_en;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_wr_addr;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_wr_addr_next;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_forward_wr_data;
+
+    logic                                                bram_normal_en_0;
+    logic                                                bram_normal_wr_en;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_normal_wr_addr;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_normal_wr_data;
+
+    logic                                                bram_mux_en_0;
+    logic                                                bram_mux_wr_en;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_mux_wr_addr;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_mux_wr_data;
+
+    // read state
+    logic                                                bram_forward_en_1;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr_next;
+
+    logic                                                bram_normal_en_1;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_normal_rd_addr;
+
+    logic                                                bram_mux_en_1;
+    logic                           [ADDR_WIDTH - 1 : 0] bram_mux_rd_addr;
+
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_normal_rd_data;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_backward_rd_data;
+    
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0]        bram_mux_rd_data;
+    logic                           [READ_LATENCY_BRAM - 1 : 0] bram_backward_rd_data_valid;
+
+    // control state
+    logic unsigned [ADDR_WIDTH : 0] element_count;
+    logic unsigned [ADDR_WIDTH : 0] element_count_next;
+    logic                           element_count_ce;
+"
+- type logic is correct
+- packed bit width correct
+[Marc103 - 06/03/26]
+
+"
+    always@(posedge clk_i) begin
+        // write address update
+        bram_forward_wr_addr <= bram_forward_wr_addr_next;
+
+        // read address update
+        bram_forward_rd_addr <= bram_forward_rd_addr_next;
+
+        // control state update
+        if(element_count_ce) begin
+            element_count <= element_count_next;
+        end else begin
+            element_count <= element_count;
+        end
+
+        // set forwards to normal downstream register
+        // where enables are voided in the case of forwarding
+
+        // write forwarding condition: push/pop on empty 
+        if(CONFLICT_PROOF == 1) begin
+            if(empty_g & push_g & pop_g) begin
+                bram_normal_en_0    <= 0;
+                bram_normal_wr_en   <= 0;
+            end else begin
+                bram_normal_en_0    <= bram_forward_en_0;
+                bram_normal_wr_en   <= bram_forward_wr_en;
+            end
+        end else begin
+            bram_normal_en_0    <= bram_forward_en_0;
+            bram_normal_wr_en   <= bram_forward_wr_en;
+        end
+        bram_normal_wr_addr <= bram_forward_wr_addr;
+        bram_normal_wr_data <= bram_forward_wr_data;
+
+        // read forwarding condition: push/pop on full
+        if(CONFLICT_PROOF == 1) begin
+            if(full_g & push_g & pop_g) begin
+                bram_normal_en_1    <= 0;
+            end else begin
+                bram_normal_en_1    <= bram_forward_en_1;
+            end
+        end else begin
+            bram_normal_en_1    <= bram_forward_en_1;
+        end
+        bram_normal_rd_addr <= bram_forward_rd_addr;
+
+        // set backwards for just read output and accompanying valid pipeline
+        bram_backward_rd_data          <= bram_normal_rd_data;
+        bram_backward_rd_data_valid[0] <= bram_mux_en_1;
+        for(int i = 1; i < READ_LATENCY_BRAM; i++) begin
+            bram_backward_rd_data_valid[i] <= bram_backward_rd_data_valid[i-1];
+        end
+
+        // read out mux
+        if(CONFLICT_PROOF == 1) begin
+            if(bram_backward_rd_data_valid[READ_LATENCY_BRAM - 1]) begin
+                bram_mux_rd_data = bram_backward_rd_data;
+            end else begin
+                bram_mux_rd_data = bram_normal_rd_data;
+            end
+        end else begin
+            bram_mux_rd_data = bram_normal_rd_data;
+        end
+    end
+"
+- write address update, correct
+- read address update, correct
+- control state update, correct
+...
+
+Logic proof for CONFLICT_PROOF and backwarding :
 There are only 2 situations, empty and full, in which we consider what happens in simultaneously push/pop:
 1. empty state push/pop performs write then read via write forwarding
 2. full state pop/push performs read then write via read forwarding
@@ -34,8 +275,151 @@ Read forwarding during a push/pop on a full state could conflict with previous r
 	1. a prior push means read forwarding will not conflict, since no pop means no prior read.
 	2. a prior pop/push on a full state means the prior read was forwarded, hence the current forwarded read won't conflict
 
+But this leads to variable read and write latency. The write latency being variable is not important; it does not change functionality 
+from the user point of view. The read latency being variable is problematic as that would complicate what otherwise would have been simple 
+latency determinstic pipelines. 
 
+Hence we implement 'backwarding' for forwarded reads on the read output by muxing the read out with an additional pipelined register or
+direct output; where the output will point to the additional pipelined register for forwarded reads and the direct output for normal reads.
+This will also require a pipelined forwarded_valid signal to travel along the reads.
 
+- forwarded read followed by forwarded read will not conflict, as both outputs will be backwarded
+- forwarded read followed by normal read will not conflict, as the normal read is two cycles behind the forwarded, hence backwarding the forwarded read output brings the normal read 1 cycle behind the forwarded read. 
+
+- trial 1 covers the rest
+[Marc103 - 06/03/26]
+
+"
+    always_comb begin
+        // push (write) logic and wiring
+        bram_forward_en_0  = push_g;
+        bram_forward_wr_en = push_g;
+        if(push_g) begin
+            bram_forward_wr_addr_next = bram_forward_wr_addr + 1;
+        end else begin
+            bram_forward_wr_addr_next = bram_forward_wr_addr;
+        end
+        bram_forward_wr_data = wr_data_g;
+
+        // push (write) forwarding mux logic wiring
+        if(CONFLICT_PROOF == 1) begin
+            // write forwarding condition: push/pop on empty 
+            if(empty_g & push_g & pop_g) begin
+                bram_mux_en_0    = bram_forward_en_0;
+                bram_mux_wr_en   = bram_forward_wr_en;
+                bram_mux_wr_addr = bram_forward_wr_addr;
+                bram_mux_wr_data = bram_forward_wr_data;
+            end else begin
+                bram_mux_en_0    = bram_normal_en_0;
+                bram_mux_wr_en   = bram_normal_wr_en;
+                bram_mux_wr_addr = bram_normal_wr_addr;
+                bram_mux_wr_data = bram_normal_wr_data;
+            end
+        end else begin
+            bram_mux_en_0    = bram_forward_en_0;
+            bram_mux_wr_en   = bram_forward_wr_en;
+            bram_mux_wr_addr = bram_forward_wr_addr;
+            bram_mux_wr_data = bram_forward_wr_data;
+        end
+
+        // pop (read) logic
+        bram_forward_en_1 = pop_g;
+        if(pop_g) begin
+            bram_forward_rd_addr_next = bram_forward_rd_addr + 1;
+        end else begin
+            bram_forward_rd_addr_next = bram_forward_rd_addr;
+        end
+
+        // pop (read) forwarding mux logic wiring
+        if(CONFLICT_PROOF == 1) begin
+            // read forwarding condition: push/pop on full
+            if(full_g & push_g & pop_g) begin
+                bram_mux_en_1    = bram_forward_en_1;
+                bram_mux_rd_addr = bram_forward_rd_addr;
+            end else begin
+                bram_mux_en_1    = bram_normal_en_1;
+                bram_mux_rd_addr = bram_normal_rd_addr;
+            end
+        end else begin
+            bram_mux_en_1    = bram_forward_en_1;
+            bram_mux_rd_addr = bram_forward_rd_addr;
+        end
+        
+        // control state
+        if (rst_i) begin               
+            element_count_next = 0;
+        end else if (push_i) begin      // push
+            element_count_next = element_count + 1;
+        end else begin                  // else, assume pop (see CE condition for element_count just below)
+            element_count_next = element_count - 1;
+        end 
+
+        // CE condition for element_count update
+        element_count_ce = (push_i ^ pop_i) | rst_i;
+
+        // LUT4(push_i, pop_i, rst_i, element_count[i]) -> fast carry path -> element_count[i] if CE.
+        // (push_i ^ pop_i) | rst_i -> CE.
+
+        if(rst_i) begin
+            bram_forward_wr_addr_next = 0;
+            bram_forward_rd_addr_next = 0;
+        end
+    end
+"
+- check mux logic, ensure *_g values are used for any forwarding logic
+- trial 1 covers the rest
+[Marc103 - 06/03/26]
+
+"
+    // Queue BRAM instantiations.
+    generate
+        for(genvar i = 0; i < NUMBER_OF_QUEUES; i++) begin
+            bram_dual_port_simple #(
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .DATA_WIDTH(DATA_WIDTH),
+                .REGISTERED_IN(REGISTERED_IN_BRAM),
+                .REGISTERED_OUT(REGISTERED_OUT_BRAM)
+            ) queue_memory (
+                // write port
+                .clk_0_i  (clk_i),
+            
+                .en_0_i   (bram_mux_en_0),
+                .wr_en_i  (bram_mux_wr_en),
+                .wr_addr_i(bram_mux_wr_addr),
+                .wr_data_i(bram_mux_wr_data[i]),
+
+                // read port
+                .clk_1_i(clk_i),
+
+                .en_1_i   (bram_mux_en_1),
+                .rd_addr_i(bram_mux_rd_addr),
+                .rd_data_o(bram_normal_rd_data[i])
+            );
+        end
+    endgenerate
+"
+- check all ports
+- check appropriate indexing for packed dimensions types
+[Marc103 - 06/03/26]
+
+"
+    logic unsigned [ADDR_WIDTH : 0] more_than_g_u;
+    logic unsigned [ADDR_WIDTH : 0] less_than_g_u;
+
+    // essentially type casting to unsigned to avoid signed comparison in the output logic since element_count is unsigned.
+    assign more_than_g_u = more_than_i[ADDR_WIDTH : 0];
+    assign less_than_g_u = less_than_i[ADDR_WIDTH : 0];
+
+    assign full_o  = $unsigned(DATA_DEPTH - 1) < element_count;
+    assign empty_o = element_count             < $unsigned(1);
+
+    assign less_than_o = element_count < less_than_g_u;
+    assign more_than_o = more_than_g_u < element_count;
+
+    assign rd_data_o = bram_mux_rd_data;
+"
+- covered with the changes of use more_than_i and less_than_i and rd_data_o going to bram_mux_rd_data instead
+[Marc103 - 06/03/26]
 
 
 ////////////////////////////////////////////////////////////////
