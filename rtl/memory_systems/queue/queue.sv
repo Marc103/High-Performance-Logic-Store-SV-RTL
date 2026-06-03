@@ -1,12 +1,17 @@
 /* 
 Queue (aka FIFO). 
-- ADDR_WIDTH X DATA_WIDTH of instantiated memory  
-  should fit within a single bram for best performance. Without READ_THEN_WRITE
-enabled, simultaneous push/pop when the queue is full is undefined behavior. 
-- Simultaneous push/pop to an empty is undefined behavior. An implementation would have to create forwarding
-  logic to handle this theoretical 'WRITE_THEN_READ' scenario 
-- Behavior of pushing to a full queue or popping from an empty one is undefined and will throw the control state into 
-  unknown territory
+
+With CONFLICT_PROOF enabled, simultaneous push/pop behavior is: 
+    1. empty state push/pop performs write then read via write forwarding
+    2. full state pop/push performs read then write via read forwarding
+
+but this means that the latency can vary, hence, we have MIN/MAX_READ/WRITE_LATENCY
+parameters.
+
+With CONFLICT_PROOF disabled, simultaneous push/pop behavior to full/empty queue is
+undefined. Latency is fixed to MAX_READ/WRITE_LATENCY.
+
+As usual, behavior to pushing to full queue or popping from empty queue is undefined.
 
 Since the control state update has to happen in one latency cycle from the time the push/pop
 is ushered, the read/write address _next values are calculated using the immediate 

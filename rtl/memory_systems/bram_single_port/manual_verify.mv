@@ -1,3 +1,84 @@
+////////////////////////////////////////////////////////////////
+// Trial 2, parts which were changed are shown 
+"
+    localparam DATA_DEPTH    = bram_single_port_DATA_DEPTH   (ADDR_WIDTH),
+"
+- defined as 
+"       
+        return (2 ** ADDR_WIDTH);
+"
+- valid for ADDR_WIDTH > 0, which is not guarded 
+- otherwise correct, 2 ** ADDR_WIDTH is the DATA_DEPTH
+[Marc103 - 06/02/26]
+
+"
+    localparam READ_LATENCY  = bram_single_port_READ_LATENCY (REGISTERED_IN, REGISTERED_OUT),
+"
+- defined as 
+"
+        int latency = 1;
+        if(REGISTERED_IN == 1)  latency++;
+        if(REGISTERED_OUT == 1) latency++;
+        return latency;
+"
+- for read, latency starts at 1, each component, REGISTERED_IN and REGISTERED_OUT, enabled should add a cycle of latency, correct
+[Marc103 - 06/02/26]
+
+
+"
+    localparam WRITE_LATENCY = bram_single_port_WRITE_LATENCY(REGISTERED_IN)
+"
+- defined as
+"
+        int latency = 1;
+        if(REGISTERED_IN == 1)  latency++;
+        return latency;
+"
+- for write, latency starts at 1, only REGISTERED_IN, enabled should add a cycle of latency, correct
+[Marc103 - 06/02/26]
+
+...
+
+"
+    logic                      en;
+    logic                      wr_en;
+    logic [ADDR_WIDTH - 1 : 0] addr;
+    logic [DATA_WIDTH - 1 : 0] wr_data;
+
+    logic [DATA_WIDTH - 1 : 0] rd_data;
+    logic [DATA_WIDTH - 1 : 0] rd_data_clb_fabric;
+"
+- signals present, correct
+- types are correct
+- bit widths are correct for each signal
+- addition of rd_data_clb_fabric
+- 
+[Marc103 - 05/15/26]
+
+"
+    always@(posedge clk_i) begin
+        if(en_g) begin
+            if(wr_en_g) begin
+                bram[addr_g] <= wr_data_g;
+            end else begin
+                rd_data <= bram[addr_g];
+            end
+        end
+
+        rd_data_clb_fabric <= rd_data;
+    end
+
+    assign rd_data_o = (REGISTERED_OUT == 1) ? rd_data_clb_fabric : rd_data;
+"
+- check logic  
+- check condition of output
+[Marc103 - 05/15/26]
+
+////////////////////////////////////////////////////////////////
+// Trial 1, revised due to:
+// - reworking of logic to include additional output register
+// - needing to separate read and write latency definiions
+
 "
     localparam DATA_DEPTH = bram_single_port_DATA_DEPTH(ADDR_WIDTH),
 "

@@ -1,3 +1,48 @@
+////////////////////////////////////////////////////////////////
+// Trial 2
+
+
+
+
+push to full is undefined
+pop from empty is undefined
+
+There are only 2 situations, empty and full, in which we consider what happens in simultaneously push/pop:
+1. empty state push/pop performs write then read via write forwarding
+2. full state pop/push performs read then write via read forwarding
+
+
+Write forwarding during a push/pop on an empty state could conflict with previous writes. Here's why that isn't the case:
+- empty state can only be reached by:
+	1. prior pop 
+        2. prior push/pop on an empty state
+        3. power on empty state
+        4. reset 
+- why they won't conflict:
+	1. a prior pop means write forwarding will not conflict, since no push means no prior write.
+	2. a prior push/pop on an empty state means the prior write was forwarded, hence the current forwarded write won't conflict
+	3. starting on the power on empty state means no prior write happened, therefore no conflict
+	4. getting to the empty state via reset will cause no conflict, so long as the prior push/pop signals accompanying the reset signal
+          are explicitly voided (this is expected behavior of resetting anyway, but previous implementation could get away with only
+          resetting the control state, so this is worth stating)
+
+Read forwarding during a push/pop on a full state could conflict with previous reads. Here's why that isn't the case:
+- full state can only be reached by:
+	1. prior push
+        2. prior pop/push on a full state
+- why they won't conflict:
+	1. a prior push means read forwarding will not conflict, since no pop means no prior read.
+	2. a prior pop/push on a full state means the prior read was forwarded, hence the current forwarded read won't conflict
+
+
+
+
+
+////////////////////////////////////////////////////////////////
+// Trial 1, failed due to:
+// - reworking of logic to handle simultaneously push/pop in
+// empty and full scenarios. Issues were highlighted by simulation
+// testing.
 "
 localparam DATA_DEPTH = queue_DATA_DEPTH(ADDR_WIDTH),
 "
@@ -904,7 +949,7 @@ respectively.
         end
     endgenerate
 "
-[ ]
+[X]
 
 "
     logic unsigned [ADDR_WIDTH : 0] more_than_g_u;
@@ -976,5 +1021,7 @@ respectively.
 - 'rd_data_o' assign to 'rd_data' is correct
 - no output ports are left unassigned
 [Marc103 05/23/26]
+
+
 
 

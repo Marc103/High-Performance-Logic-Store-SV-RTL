@@ -10,6 +10,10 @@ DATA_WIDTH:
 REGISTERED_IN [0,1]:
 - If 1, inputs are first registered, increasing the latency by 1 cycle,
   else, inputs are direct.
+
+REGISTERED_OUT [0, 1]:
+- if 1, an additional set of output registers are pipelined, greatly reducing
+  routing pressure from the BRAM to fabric logic. Increases latency by 1 cycle.
 */
 import constant_functions_pkg::*; 
  
@@ -17,12 +21,13 @@ module bram_single_port #(
     parameter ADDR_WIDTH,
     parameter DATA_WIDTH,
     parameter REGISTERED_IN, // [0, 1]
+    parameter REGISTERED_OUT, // [0, 1]
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH = bram_single_port_DATA_DEPTH(ADDR_WIDTH),
-    localparam LATENCY    = bram_single_port_LATENCY   (REGISTERED_IN)
-
+    localparam DATA_DEPTH    = bram_single_port_DATA_DEPTH   (ADDR_WIDTH),
+    localparam READ_LATENCY  = bram_single_port_READ_LATENCY (REGISTERED_IN, REGISTERED_OUT),
+    localparam WRITE_LATENCY = bram_single_port_WRITE_LATENCY(REGISTERED_IN)
 ) (
     input                       clk_i,
 
@@ -41,6 +46,7 @@ module bram_single_port #(
     logic [DATA_WIDTH - 1 : 0] wr_data;
 
     logic [DATA_WIDTH - 1 : 0] rd_data;
+    logic [DATA_WIDTH - 1 : 0] rd_data_clb_fabric;
 
     always@(posedge clk_i) begin
         en      <= en_i;
@@ -72,14 +78,13 @@ module bram_single_port #(
         if(en_g) begin
             if(wr_en_g) begin
                 bram[addr_g] <= wr_data_g;
-                rd_data      <= rd_data;
             end else begin
                 rd_data <= bram[addr_g];
             end
-        end else begin
-            rd_data <= rd_data;
         end
+
+        rd_data_clb_fabric <= rd_data;
     end
 
-    assign rd_data_o = rd_data;
+    assign rd_data_o = (REGISTERED_OUT == 1) ? rd_data_clb_fabric : rd_data;
 endmodule

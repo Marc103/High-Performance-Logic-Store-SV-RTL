@@ -186,9 +186,17 @@ package constant_functions_pkg;
         return (2 ** ADDR_WIDTH);
     endfunction
 
-    function automatic int bram_single_port_LATENCY(int REGISTERED_IN);
+    function automatic int bram_single_port_READ_LATENCY(int REGISTERED_IN, int REGISTERED_OUT);
         int latency = 1;
-        if(REGISTERED_IN == 1) latency = 2;
+        if(REGISTERED_IN == 1)  latency++;
+        if(REGISTERED_OUT == 1) latency++;
+        return latency;
+    endfunction
+
+
+    function automatic int bram_single_port_WRITE_LATENCY(int REGISTERED_IN);
+        int latency = 1;
+        if(REGISTERED_IN == 1)  latency++;
         return latency;
     endfunction
 
@@ -198,10 +206,18 @@ package constant_functions_pkg;
         return (2 ** ADDR_WIDTH);
     endfunction
 
-    function automatic int bram_dual_port_simple_LATENCY(int REGISTERED_IN);
+    function automatic int bram_dual_port_simple_READ_LATENCY(int REGISTERED_IN, int REGISTERED_OUT);
         int latency = 1;
-        if(REGISTERED_IN == 1) latency = 2;
-        return latency;;
+        if(REGISTERED_IN == 1)  latency++;
+        if(REGISTERED_OUT == 1) latency++;
+        return latency;
+    endfunction
+
+
+    function automatic int bram_dual_port_simple_WRITE_LATENCY(int REGISTERED_IN);
+        int latency = 1;
+        if(REGISTERED_IN == 1)  latency++;
+        return latency;
     endfunction
 
     ////////////////////////////////////////////////////////////////
