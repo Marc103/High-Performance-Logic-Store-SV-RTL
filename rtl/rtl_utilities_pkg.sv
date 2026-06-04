@@ -257,7 +257,7 @@ package constant_functions_pkg;
 
     function automatic int queue_WRITE_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, REGISTERED_IN_BRAM);
         int latency = bram_dual_port_simple_WRITE_LATENCY(REGISTERED_IN_BRAM);
-        if(CONLFICT_PROOF == 1) latency++;
+        if(CONFLICT_PROOF == 1) latency++;
         if(REGISTERED_IN == 1)  latency++;
         return latency;
     endfunction

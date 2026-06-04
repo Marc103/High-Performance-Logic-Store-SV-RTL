@@ -61,7 +61,7 @@ module queue #(
     // Globally Defined Locally Set Parameters
     localparam DATA_DEPTH        = queue_DATA_DEPTH                  (ADDR_WIDTH),
     localparam READ_LATENCY      = queue_READ_LATENCY                (CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM),
-    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (CONLFICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM),
+    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM),
     localparam READ_LATENCY_BRAM = bram_dual_port_simple_READ_LATENCY(REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM)
 ) (
     input clk_i,
@@ -211,7 +211,7 @@ module queue #(
 
         // set backwards for just read output and accompanying valid pipeline
         bram_backward_rd_data          <= bram_normal_rd_data;
-        bram_backward_rd_data_valid[0] <= bram_mux_en_1;
+        bram_backward_rd_data_valid[0] <= empty_g & push_g & pop_g;
         for(int i = 1; i < READ_LATENCY_BRAM; i++) begin
             bram_backward_rd_data_valid[i] <= bram_backward_rd_data_valid[i-1];
         end

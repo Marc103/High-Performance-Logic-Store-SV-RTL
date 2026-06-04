@@ -3,9 +3,10 @@ import constant_functions_pkg::*;
 class QueueModel #(type T);
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH);
-    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
-    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE);
+    localparam DATA_DEPTH        = queue_DATA_DEPTH                  (T::ADDR_WIDTH);
+    localparam READ_LATENCY      = queue_READ_LATENCY                (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
+    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
+    localparam READ_LATENCY_BRAM = bram_dual_port_simple_READ_LATENCY(T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
 
     `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
     `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
@@ -109,7 +110,7 @@ class QueueModel #(type T);
 
     function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] pop();
         logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] rd_data;
-        if(element_count > $unsigned(0)) begin
+        if(this.element_count > $unsigned(0)) begin
             rd_data = this.queue.pop_front();
             this.element_count--;
         end else begin
@@ -121,13 +122,17 @@ class QueueModel #(type T);
 
     function automatic logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] pop_push(logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] wr_data);
         logic [T::NUMBER_OF_QUEUES][T::DATA_WIDTH - 1 : 0] rd_data;
-        if((element_count == 0) || 
-           ((element_count == $unsigned(1)) && (T::READ_THEN_WRITE == 0))) begin
+        if(((this.element_count == 0) || (this.element_count == this.element_max)) && (T::CONFLICT_PROOF != 1)) begin
             rd_data = 'x;
             this.error_state = 30;    
         end else begin
-            rd_data = this.queue.pop_front();
-            this.queue.push_back(wr_data);    
+            if(this.element_count == 0) begin
+                this.queue.push_back(wr_data);
+                rd_data = this.queue.pop_front();
+            end else begin
+                rd_data = this.queue.pop_front();
+                this.queue.push_back(wr_data);
+            end  
         end
         return rd_data;
     endfunction
@@ -177,8 +182,6 @@ class QueueModel #(type T);
     endfunction
 
     function automatic logic get_empty();
-        $display("get empty called");
-        $display(element_count);
         if(this.element_count == 0) return 1;
         return 0;
     endfunction

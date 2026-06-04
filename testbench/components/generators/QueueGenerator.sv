@@ -3,9 +3,11 @@ import constant_functions_pkg::*;
 class QueueGenerator #(type T);
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH    = queue_DATA_DEPTH    (T::ADDR_WIDTH);
-    localparam READ_LATENCY  = queue_READ_LATENCY  (T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
-    localparam WRITE_LATENCY = queue_WRITE_LATENCY (T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::READ_THEN_WRITE);
+    localparam DATA_DEPTH        = queue_DATA_DEPTH                  (T::ADDR_WIDTH);
+    localparam READ_LATENCY      = queue_READ_LATENCY                (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
+    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
+    localparam READ_LATENCY_BRAM = bram_dual_port_simple_READ_LATENCY(T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
+
     `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
@@ -31,11 +33,13 @@ class QueueGenerator #(type T);
 
         queue_io_in.rst_i       = rst;
         queue_io_in.push_i      = push;
-        queue_io_in.wr_data_i   = this.seed;
+        for(int i = 0; i < T::NUMBER_OF_QUEUES; i++) begin
+            queue_io_in.wr_data_i[i] = this.seed;
+            this.seed++;
+        end
         queue_io_in.pop_i       = pop;
         queue_io_in.less_than_i = less_than_i;
         queue_io_in.more_than_i = more_than_i;
-        seed++;
         io_obj.queue_io_in_q.push_back(queue_io_in);
         io_obj.ignore.push_back(ignore);
     endtask
@@ -54,6 +58,15 @@ class QueueGenerator #(type T);
 
         // reset start
         add_io(io_obj, 1, 0, 0, 0, less_than_i, more_than_i);
+
+        // start of with some empty push/pop if CONFLICT_PROOF is enabled
+        if (T::CONFLICT_PROOF == 1) begin
+            add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
+        end
+
+        if (T::CONFLICT_PROOF == 1) begin
+            add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
+        end
 
         // push
         add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
@@ -81,23 +94,23 @@ class QueueGenerator #(type T);
             add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
         end
 
-        // push / pop - only if READ_THEN_WRITE enabled
-        if (T::READ_THEN_WRITE == 1) begin
+        // push / pop - only if CONFLICT_PROOF enabled
+        if (T::CONFLICT_PROOF == 1) begin
             add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
         end
 
-        // push / pop - only if READ_THEN_WRITE enabled
-        if (T::READ_THEN_WRITE == 1) begin
+        // push / pop - only if CONFLICT_PROOF enabled
+        if (T::CONFLICT_PROOF == 1) begin
             add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
         end
 
-        // pop - only if READ_THEN_WRITE disabled
-        if (T::READ_THEN_WRITE == 0) begin
+        // pop - only if CONFLICT_PROOF disabled
+        if (T::CONFLICT_PROOF == 0) begin
             add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
         end
 
-        // push - only if READ_THEN_WRITE disabled
-        if (T::READ_THEN_WRITE == 0) begin
+        // push - only if CONFLICT_PROOF disabled
+        if (T::CONFLICT_PROOF == 0) begin
             add_io(io_obj, 0, 1, 0, 0, less_than_i, more_than_i);
         end
 

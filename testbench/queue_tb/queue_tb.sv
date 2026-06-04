@@ -42,9 +42,10 @@ module queue_tb();
     // localparams
     localparam ADDR_WIDTH = 3;
     localparam DATA_WIDTH = 16;
+    localparam CONFLICT_PROOF = 1;
     localparam REGISTERED_IN = 0;        // [0, 1]
     localparam REGISTERED_IN_BRAM = 0;   // [0, 1]
-    localparam READ_THEN_WRITE = 0;      // [0, 1]
+    localparam REGISTERED_OUT_BRAM = 0;      // [0, 1]
     localparam NUMBER_OF_QUEUES = 3;     // [1,..]
 
     localparam real CLK_PERIOD = 10;
@@ -52,18 +53,20 @@ module queue_tb();
     localparam type T = QueueIO #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
+        .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .READ_THEN_WRITE(READ_THEN_WRITE),
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
         .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
     );
 
     localparam type I = virtual queue_inf #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
+        .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .READ_THEN_WRITE(READ_THEN_WRITE),
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
         .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
     );
 
@@ -77,9 +80,10 @@ module queue_tb();
     queue_inf #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
+        .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .READ_THEN_WRITE(READ_THEN_WRITE),
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
         .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
     ) bfm (.clk_i(clk)); // bfm, "bus functional model"
     
@@ -88,9 +92,10 @@ module queue_tb();
     queue #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
+        .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .READ_THEN_WRITE(READ_THEN_WRITE),
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
         .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
     ) dut (
         .clk_i(clk),
