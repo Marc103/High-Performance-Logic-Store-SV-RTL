@@ -156,8 +156,8 @@ module queue #(
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_normal_rd_data;
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_backward_rd_data;
     
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0]        bram_mux_rd_data;
-    logic                           [READ_LATENCY_BRAM - 1 : 0] bram_backward_rd_data_valid;
+    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0]    bram_mux_rd_data;
+    logic                           [READ_LATENCY_BRAM : 0] bram_backward_rd_data_valid; // *** HERE ****
 
     // control state
     logic unsigned [ADDR_WIDTH : 0] element_count;
@@ -211,20 +211,9 @@ module queue #(
 
         // set backwards for just read output and accompanying valid pipeline
         bram_backward_rd_data          <= bram_normal_rd_data;
-        bram_backward_rd_data_valid[0] <= empty_g & push_g & pop_g;
-        for(int i = 1; i < READ_LATENCY_BRAM; i++) begin
+        bram_backward_rd_data_valid[0] <= full_g & push_g & pop_g; 
+        for(int i = 1; i <= READ_LATENCY_BRAM; i++) begin      
             bram_backward_rd_data_valid[i] <= bram_backward_rd_data_valid[i-1];
-        end
-
-        // read out mux
-        if(CONFLICT_PROOF == 1) begin
-            if(bram_backward_rd_data_valid[READ_LATENCY_BRAM - 1]) begin
-                bram_mux_rd_data = bram_backward_rd_data;
-            end else begin
-                bram_mux_rd_data = bram_normal_rd_data;
-            end
-        end else begin
-            bram_mux_rd_data = bram_normal_rd_data;
         end
     end
 
@@ -281,6 +270,17 @@ module queue #(
         end else begin
             bram_mux_en_1    = bram_forward_en_1;
             bram_mux_rd_addr = bram_forward_rd_addr;
+        end
+
+        // read out mux
+        if(CONFLICT_PROOF == 1) begin
+            if(bram_backward_rd_data_valid[READ_LATENCY_BRAM]) begin
+                bram_mux_rd_data = bram_backward_rd_data;
+            end else begin
+                bram_mux_rd_data = bram_normal_rd_data;
+            end
+        end else begin
+            bram_mux_rd_data = bram_normal_rd_data;
         end
         
         // control state
@@ -343,6 +343,6 @@ module queue #(
 
     assign less_than_o = element_count < less_than_g_u;
     assign more_than_o = more_than_g_u < element_count;
-
+    
     assign rd_data_o = bram_mux_rd_data;
 endmodule

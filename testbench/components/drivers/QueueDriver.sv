@@ -20,8 +20,11 @@ class QueueDriver #(type T, type I);
         bit start_sequence = 1;
 
         while(io_obj.queue_io_in_q.size() > 0) begin
+            
             queue_io_in = io_obj.queue_io_in_q.pop_front();
 
+            @(posedge inf.clk_i);
+            
             if(start_sequence) begin
                 inf.start_sequence <= 1;
                 start_sequence = 0;
@@ -29,15 +32,15 @@ class QueueDriver #(type T, type I);
                 inf.start_sequence <= 0;
             end
 
-            if(io_obj.queue_io_in_q.size() == 1) begin
+            if(io_obj.queue_io_in_q.size() == 0) begin
                 inf.end_sequence <= 1;
-                if(io_obj.end_last_sequence) begin
-                    inf.end_last_sequence <= 1;
-                end else begin
-                    inf.end_last_sequence <= 0;
-                end
             end else begin
                 inf.end_sequence <= 0;
+            end
+
+            if(io_obj.end_last_sequence) begin
+                inf.end_last_sequence <= 1;
+            end else begin
                 inf.end_last_sequence <= 0;
             end
 
@@ -48,6 +51,7 @@ class QueueDriver #(type T, type I);
                 inf.pop_i       <= 0;
                 inf.less_than_i <= queue_io_in.less_than_i;
                 inf.more_than_i <= queue_io_in.more_than_i;
+                inf.idle        <= 1;
             end else begin
                 inf.rst_i       <= queue_io_in.rst_i;
                 inf.push_i      <= queue_io_in.push_i;
@@ -55,13 +59,24 @@ class QueueDriver #(type T, type I);
                 inf.pop_i       <= queue_io_in.pop_i;
                 inf.less_than_i <= queue_io_in.less_than_i;
                 inf.more_than_i <= queue_io_in.more_than_i;
+                inf.idle        <= 0;
             end
-            @(posedge inf.clk_i);
+
+            if(io_obj.end_last_sequence) begin
+                inf.end_last_sequence <= 1;
+            end else begin
+                inf.end_last_sequence <= 0;
+            end
         end
+
         // back to idle (ignore)
-        inf.rst_i  = 0;
-        inf.push_i = 0;
-        inf.pop_i  = 0;
+        @(posedge inf.clk_i);
+        inf.rst_i             <= 0;
+        inf.push_i            <= 0;
+        inf.pop_i             <= 0;
+        inf.start_sequence    <= 0;
+        inf.end_sequence      <= 0;
+        inf.end_last_sequence <= 0;
     endtask;
 
 

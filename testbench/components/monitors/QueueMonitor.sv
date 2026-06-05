@@ -24,58 +24,87 @@ class QueueMonitor #(type T, type I);
     // 'fs' for finish sequencey
     // 'end_ls' for end last sequence
 
-    logic          [READ_LATENCY : 0][0:0] v_l; // +1 size for input
-    logic          [READ_LATENCY : 0][0:0] end_s_l; 
-    logic          [READ_LATENCY : 0][0:0] end_ls_l;
-    queue_io_out_t [READ_LATENCY : 0]  queue_io_out_l;
+    // index 0 represents input, 1 is 1 cycle later output, 2 is 2 cycle later output...
+    logic          [READ_LATENCY : 0] v_l      = 0; 
+    logic          [READ_LATENCY : 0] end_s_l  = 0; 
+    logic          [READ_LATENCY : 0] end_ls_l = 0;
+    logic          [READ_LATENCY : 0] push_l   = 0;
+    logic          [READ_LATENCY : 0] pop_l   = 0;
+    logic          [READ_LATENCY : 0] rst_l    = 0;
+    queue_io_out_t [READ_LATENCY : 0] queue_io_out_l;
+
+    logic active_sequence = 0;
+    logic finish_sequence = 0;
 
     task automatic run();
         T io_obj;
-
-        logic active_sequence = 0;
-        logic finish_sequence = 0;
     
         forever begin
             @(negedge inf.clk_i); 
             
             if(inf.start_sequence) begin
                 io_obj = new();
-                active_sequence = 1;
-                $display("start of sequence detected.");     
+                active_sequence <= 1;   
+            end else begin
+                active_sequence <= active_sequence;
             end
 
             if(inf.end_sequence) begin
-                finish_sequence = 1;
-                $display("end of sequence detected.");
-            end 
+                finish_sequence <= 1;
+            end else begin
+                finish_sequence <= 0;
+            end
 
-            if(active_sequence) begin
-                v_l[0]      <= inf.pop_i | inf.push_i | inf.rst_i; //otherwise its a 'ignore'
+            // input tracking pipeline
+            if(inf.start_sequence || active_sequence) begin
+                v_l[0]      <= !inf.idle; //otherwise its a 'ignore'
+                end_ls_l[0] <= inf.end_last_sequence; 
                 end_s_l[0]  <= inf.end_sequence;
-                end_ls_l[0] <= inf.end_last_sequence;
+                push_l[0]   <= inf.push_i;
+                pop_l[0]    <= inf.pop_i;
+                rst_l[0]    <= inf.rst_i;
             end
 
             for(int i = 1; i <= READ_LATENCY; i++) begin
                 v_l[i]      <= v_l[i - 1]; 
                 end_s_l[i]  <= end_s_l[i - 1];
                 end_ls_l[i] <= end_ls_l[i - 1]; 
+                push_l[i]   <= push_l[i - 1];
+                pop_l[i]    <= pop_l[i - 1];
+                rst_l[i]    <= rst_l[i - 1];
             end
-                
-            queue_io_out_l[1].full_o      <= inf.full_o;
-            queue_io_out_l[1].empty_o     <= inf.empty_o;
-            queue_io_out_l[1].less_than_o <= inf.less_than_o;
-            queue_io_out_l[1].more_than_o <= inf.more_than_o;
-            queue_io_out_l[1].rd_data_o   <= inf.rd_data_o;
 
-            for(int i = 2; i <= READ_LATENCY; i++) begin
-                if(i == READ_LATENCY) begin
+            queue_io_out_l[0].full_o      <= inf.full_o;
+            queue_io_out_l[0].empty_o     <= inf.empty_o;
+            queue_io_out_l[0].less_than_o <= inf.less_than_o;
+            queue_io_out_l[0].more_than_o <= inf.more_than_o;
+            queue_io_out_l[0].rd_data_o   <= inf.rd_data_o;
+            
+            // output pipelining
+            // we ignore 'queue_io_out_l[0]' since we don't record input, hence i starts at 1
+            for(int i = 1; i <= READ_LATENCY; i++) begin
+                // 1 cycle later : condition recording
+                if((i == 1 && (v_l[0]))) begin
+                    queue_io_out_l[i].full_o      <= inf.full_o;
+                    queue_io_out_l[i].empty_o     <= inf.empty_o;
+                    queue_io_out_l[i].less_than_o <= inf.less_than_o;
+                    queue_io_out_l[i].more_than_o <= inf.more_than_o;
+                end else begin
                     queue_io_out_l[i].full_o      <= queue_io_out_l[i-1].full_o;
                     queue_io_out_l[i].empty_o     <= queue_io_out_l[i-1].empty_o;
                     queue_io_out_l[i].less_than_o <= queue_io_out_l[i-1].less_than_o;
                     queue_io_out_l[i].more_than_o <= queue_io_out_l[i-1].more_than_o;
-                    queue_io_out_l[i].rd_data_o   <= inf.rd_data_o;
-                end else begin
-                    queue_io_out_l[i] <= queue_io_out_l[i-1];
+                end
+
+                // READ_LATENCY cycles later : read output recording
+                if((i == READ_LATENCY) && (v_l[READ_LATENCY - 1])) begin
+                    if((push_l[READ_LATENCY - 1] && (!pop_l[READ_LATENCY - 1])) || rst_l[READ_LATENCY - 1]) begin
+                        queue_io_out_l[i].rd_data_o   <= 'x;
+                    end else begin
+                        queue_io_out_l[i].rd_data_o   <= inf.rd_data_o;
+                    end
+                end else if(i == READ_LATENCY) begin 
+                    queue_io_out_l[i].rd_data_o   <= queue_io_out_l[i-1].rd_data_o;
                 end 
             end
             
@@ -84,16 +113,14 @@ class QueueMonitor #(type T, type I);
                 if(end_s_l[READ_LATENCY]) begin
                     if(end_ls_l[READ_LATENCY]) begin
                        io_obj.end_last_sequence = 1; 
-                       $display("io_obj end of last sequence detected");
                     end 
                     this.out_broadcaster.push(io_obj);
-                    $display("io_obj pushed out to scoreboard");
                 end
             end
 
             if(finish_sequence) begin
-                active_sequence = 0;
-                finish_sequence = 0;
+                active_sequence <= 0;
+                finish_sequence <= 0;
             end    
         end
     endtask

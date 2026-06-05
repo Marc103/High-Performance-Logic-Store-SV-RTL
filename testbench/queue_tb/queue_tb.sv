@@ -43,9 +43,9 @@ module queue_tb();
     localparam ADDR_WIDTH = 3;
     localparam DATA_WIDTH = 16;
     localparam CONFLICT_PROOF = 1;
-    localparam REGISTERED_IN = 0;        // [0, 1]
-    localparam REGISTERED_IN_BRAM = 0;   // [0, 1]
-    localparam REGISTERED_OUT_BRAM = 0;      // [0, 1]
+    localparam REGISTERED_IN = 1;        // [0, 1]
+    localparam REGISTERED_IN_BRAM = 1;   // [0, 1]
+    localparam REGISTERED_OUT_BRAM = 1;      // [0, 1]
     localparam NUMBER_OF_QUEUES = 3;     // [1,..]
 
     localparam real CLK_PERIOD = 10;
@@ -163,7 +163,7 @@ module queue_tb();
 
         ////////////////////////////////////////////////////////////////
         // Run
-
+        bfm.idle <= 1;
         @(posedge clk) // clean start just after posedge
 
         // Run

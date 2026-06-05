@@ -42,5 +42,6 @@ interface queue_inf #(
     logic start_sequence;
     logic end_sequence;
     logic end_last_sequence;
+    logic idle;
 endinterface
 `endif 

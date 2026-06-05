@@ -87,7 +87,7 @@ class QueueGenerator #(type T);
         add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);
 
         // throw in an ignore
-        add_io(io_obj, 0, 1, 0, 1, less_than_i, more_than_i);
+        add_io(io_obj, 0, 0, 0, 1, less_than_i, more_than_i);
 
         // push till full
         for (int i = 0; i < element_max; i++) begin
@@ -103,7 +103,7 @@ class QueueGenerator #(type T);
         if (T::CONFLICT_PROOF == 1) begin
             add_io(io_obj, 0, 1, 1, 0, less_than_i, more_than_i);
         end
-
+    
         // pop - only if CONFLICT_PROOF disabled
         if (T::CONFLICT_PROOF == 0) begin
             add_io(io_obj, 0, 0, 1, 0, less_than_i, more_than_i);

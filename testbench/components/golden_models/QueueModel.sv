@@ -15,6 +15,7 @@ class QueueModel #(type T);
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
     protected logic [T::NUMBER_OF_QUEUES : 0][T::DATA_WIDTH - 1 : 0] queue [$];
+    protected logic [T::NUMBER_OF_QUEUES : 0][T::DATA_WIDTH - 1 : 0] last_read;
     protected logic unsigned [T::ADDR_WIDTH : 0] element_count;
     protected logic unsigned [T::ADDR_WIDTH : 0] element_max;
     protected logic [T::ADDR_WIDTH : 0] less_than;
@@ -36,6 +37,7 @@ class QueueModel #(type T);
         this.less_than = 'x;
         this.more_than = 'x;
         this.error_state = 0;
+        this.last_read = 'x;
     endfunction
 
     task automatic run();
@@ -55,31 +57,33 @@ class QueueModel #(type T);
                    continue; 
                 end         
 
-                // pop and push 
-                if(queue_io_in.push_i && queue_io_in.pop_i) begin
-                    queue_io_out.rd_data_o = this.pop_push(queue_io_in.wr_data_i);
-                end else
+                // reset
+                if(!queue_io_in.rst_i) begin
+                    // pop and push 
+                    if(queue_io_in.push_i && queue_io_in.pop_i) begin
+                        queue_io_out.rd_data_o = this.pop_push(queue_io_in.wr_data_i);
+                        this.last_read = queue_io_out.rd_data_o;
+                    end 
 
-                // push
-                if(queue_io_in.push_i && (!queue_io_in.pop_i)) begin
-                    queue_io_out.rd_data_o = this.peek();
-                    this.push(queue_io_in.wr_data_i);
-                end
+                    // push
+                    if(queue_io_in.push_i && (!queue_io_in.pop_i)) begin
+                        queue_io_out.rd_data_o = 'x;
+                        this.push(queue_io_in.wr_data_i);   
+                    end
 
-                // pop
-                if((!queue_io_in.push_i) && queue_io_in.pop_i) begin
-                    queue_io_out.rd_data_o = this.peek();
+                    // pop
+                    if((!queue_io_in.push_i) && queue_io_in.pop_i) begin
+                        queue_io_out.rd_data_o = this.pop();
+                        this.last_read = queue_io_out.rd_data_o;
+                    end
+                end else begin
+                    this.reset();
+                    queue_io_out.rd_data_o = 'x;
                 end
 
                 // set less than / more than
                 this.set_less_than(queue_io_in.less_than_i);
                 this.set_more_than(queue_io_in.more_than_i);
-
-                // reset
-                if(queue_io_in.rst_i) begin
-                    this.reset();
-                    queue_io_out.rd_data_o = this.peek();
-                end 
 
                 // populate rest of io_out
                 queue_io_out.less_than_o = this.get_less_than();
