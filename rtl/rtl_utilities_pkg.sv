@@ -32,7 +32,7 @@ package constant_functions_pkg;
 
     function automatic int clog_base(int base, int value);
         int exponent = 0;
-        int acc = 1;
+        int acc = base ** 0;
 
         // Some sanity checks to prevent forever loop
         if(base <= 0)  $fatal("base is zero or negative: %d", base);
@@ -226,20 +226,19 @@ package constant_functions_pkg;
         return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
     endfunction
 
-    function automatic int multistage_fanout_PRE_FANOUT_SIZE(int FANOUT_FACTOR, int STAGES);
-        return (FANOUT_FACTOR ** (STAGES - 1));
-    endfunction
-
     function automatic int multistage_fanout_FINAL_FANOUT_SIZE(int FANOUT_FACTOR, int STAGES);
         return (FANOUT_FACTOR ** STAGES);
     endfunction
 
     function automatic int multistage_fanout_LATENCY(int IMMEDIATE_START_FANOUT, int STAGES);
+        int latency; 
         if(IMMEDIATE_START_FANOUT == 1) begin
-            return (STAGES - 1);
+            latency = 0;
         end else begin
-            return STAGES;
+            latency = 1;
         end
+        latency = latency + STAGES;
+        return latency;
     endfunction
 
     ////////////////////////////////////////////////////////////////

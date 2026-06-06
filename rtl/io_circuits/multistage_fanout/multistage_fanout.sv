@@ -31,7 +31,6 @@ module multistage_fanout #(
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
     localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
-    localparam PRE_FANOUT_SIZE   = multistage_fanout_PRE_FANOUT_SIZE  (FANOUT_FACTOR, STAGES),
     localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
     localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
 ) (
@@ -41,40 +40,32 @@ module multistage_fanout #(
 
     output [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o
 );
-    logic [STAGES - 1 : 0][PRE_FANOUT_SIZE - 1 : 0]  [DATA_WIDTH - 1 : 0] data_stages;
-    logic                 [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_reg_o;
+    
+    logic [DATA_WIDTH - 1 : 0] data;
+    logic [DATA_WIDTH - 1 : 0] data_g;
 
     always@(posedge clk_i) begin
-        // entry
-        data_stages[0][0] <= data_i;
+        data <= data_i;
+    end
 
+    assign data_g = (IMMEDIATE_START_FANOUT == 1) ? data_i : data;
+
+    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages;
+
+    always@(posedge clk_i) begin
         // fanout tree
-        for(int stage = 0; stage < (STAGES - 1); stage++) begin
-            for(int idx = 0; idx < (FANOUT_FACTOR ** stage); idx++) begin
-                for(int fanout = 0; fanout < FANOUT_FACTOR; fanout++) begin
-                    // condition for immediate fanout if enabled
-                    if((stage == 0) && (IMMEDIATE_START_FANOUT == 1)) begin
-                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_i;
+        for(int stage = 1; stage <= STAGES; stage++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR ** stage; fan_out++) begin
+                    if(stage == 1) begin 
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_g;
                     end else begin
-                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_stages[stage][idx];
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_stages[stage - 1][out];
                     end
                 end
             end
-        end
+        end 
     end
 
-    always_comb begin
-        // final fanout wires
-        for(int idx = 0; idx < PRE_FANOUT_SIZE; idx++) begin
-            for(int fanout = 0; fanout < FANOUT_FACTOR; fanout++) begin
-                if((IMMEDIATE_START_FANOUT == 1) && (STAGES == 1)) begin
-                    data_reg_o[(idx * FANOUT_FACTOR) + fanout] = data_i;
-                end else begin
-                    data_reg_o[(idx * FANOUT_FACTOR) + fanout] = data_stages[STAGES-1][idx];
-                end
-            end
-        end
-    end
-
-    assign data_o  = data_reg_o;
+    assign data_o  = (STAGES == 0) ? data_g : data_stages[STAGES];
 endmodule

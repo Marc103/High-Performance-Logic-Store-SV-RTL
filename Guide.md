@@ -139,6 +139,7 @@ and module name...
 - the input stimulus also includes sequencing information so that the generator is more capable
 and the driver knows how to drive it
 - the output data should carefully be populated by the monitor
+- associated outputs with inputs commands idea
 
 ### Generator
 - Generate input stimulus, using the data formats (nominally ports and sequencing capability) provided by the IO class.
@@ -159,3 +160,10 @@ and the driver knows how to drive it
 - the emphasis is to indirectly confirm that the initial, intermediary and
   final states are equal, but not necessarily at a cycle by cycle accuracy.
 - trying to do everything will raise the complexity of the testbench too much which (as discussed before) is not efficient. Instead, we use different forms of verification (hence manual verification)
+
+## Manual Verification Checklists
+- ports
+- declare blocks
+- sequential logic
+- combinational logic
+- generate blocks 
