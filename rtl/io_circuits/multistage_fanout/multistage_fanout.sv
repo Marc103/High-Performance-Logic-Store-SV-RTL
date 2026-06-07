@@ -7,13 +7,13 @@ fanout load on the wires. The latency is calculated as:
 DATA_WIDTH:
 - Data width.
 
-FANOUT_SIZE:
+FANOUT_SIZE [1, ...]:
 - How large do you want the input signal to fanout to. This is then used to find
   the nearest exponential ceiling and determined by FINAL_FANOUT_SIZE. I.e 
   if FANOUT_SIZE = 10 and FANOUT_FACTOR = 4, then FINAL_FANOUT_SIZE = 16 (ceiling of 10 -> 16) 
   available outputs.
 
-FANOUT_FACTOR:
+FANOUT_FACTOR [2, ...]:
 - Factor of exponential growth for the signal to grow by at each stage.
 
 IMMEDIATE_START_FANOUT [0, 1]:

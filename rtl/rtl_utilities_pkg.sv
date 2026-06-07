@@ -35,7 +35,7 @@ package constant_functions_pkg;
         int acc = base ** 0;
 
         // Some sanity checks to prevent forever loop
-        if(base <= 0)  $fatal("base is zero or negative: %d", base);
+        if(base <= 1)  $fatal("base is 1 or negative: %d", base);
         if(value <= 0) $fatal("value is zero or negative: %d", value);
 
         while(acc < value) begin
@@ -104,11 +104,19 @@ package constant_functions_pkg;
         logic clk_i;
 
         logic [GALACTIC - 1 : 0] data_i;
-        logic                    valid_i;
 
         logic [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_o;
-        logic [SOLAR - 1 : 0]                   valid_o;
     } multistage_fanout_t;
+
+    `define MULTISTAGE_FANOUT_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic                            [DATA_WIDTH - 1 : 0] data_i; \
+    } multistage_fanout_io_in_t;
+
+    `define MULTISTAGE_FANOUT_IO_OUT_STRUCT(DATA_WIDTH, FINAL_FANOUT_SIZE) \
+    typedef struct packed { \
+        logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o; \
+    } multistage_fanout_io_out_t;
 
     ////////////////////////////////////////////////////////////////
     // queue

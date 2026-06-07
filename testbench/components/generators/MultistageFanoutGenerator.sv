@@ -1,28 +1,55 @@
 import constant_functions_pkg::*;
 
 class MultistageFanoutGenerator #(type T);
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam STAGES            = multistage_fanout_STAGES           (T::FANOUT_FACTOR, T::FANOUT_SIZE);
+    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(T::FANOUT_FACTOR, T::STAGES);
+    localparam LATENCY           = multistage_fanout_LATENCY          (T::IMMEDIATE_START_FANOUT, T::STAGES);
+
+    `MULTISTAGE_FANOUT_IO_IN_STRUCT(T::DATA_WIDTH)
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
+    int seed;
+
     function new(TriggerableQueueBroadcaster #(T) out_broadcaster);
         this.out_broadcaster = out_broadcaster;
+        seed = 38;
     endfunction
+
+     task automatic add_io(
+        ref T io_obj,
+        input logic idle
+    );
+        multistage_fanout_io_in_t multistage_fanout_io_in;
+
+        multistage_fanout_io_in.data_i = this.seed;
+        this.seed++;
+
+        io_obj.multistage_fanout_io_in_q.push_back(multistage_fanout_io_in);
+        io_obj.idle.push_back(idle);
+    endtask;
+
     
     task automatic run();
-        T data_obj;
-        /*
-         * Although one could have a forever loop just generating a bunch of test data and rely
-         * on simulation termination condition elsewhere (for example, in the scoreboard),
-         * it's better to generate a set number of test items so as not to overburden the system.
-         */
+        T io_obj;
+        io_obj = new();
 
         for(int i = 0; i < 10; i++) begin
-            data_obj = new();
-            data_obj.data_i = $urandom(); // commonly, instead of generating random
-            // MSB is implicitly used as valid signal
-            data_obj.data_i[T::DATA_WIDTH - 1] = 1;
-            // data, we read from some test file.
-            out_broadcaster.push(data_obj);
+            if(i % 3 == 0) begin
+                add_io(io_obj, 1);
+            end else begin
+                add_io(io_obj, 0);
+            end
         end
+        $display();
+
+        // finished sequence.
+        io_obj.end_last_sequence = 1;
+
+        // broadcast
+        out_broadcaster.push(io_obj);
+
     endtask
 endclass

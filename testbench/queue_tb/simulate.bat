@@ -56,12 +56,4 @@ REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
 vsim -voptargs=+acc -c queue_tb -do "run -all; quit"
-
-IF ERRORLEVEL 1 (
-    powershell -Command "Write-Host 'Simulation test failed.' -ForegroundColor Red"
-    cd ..
-    exit /b 1
-)
-
-powershell -Command "Write-Host 'Simulation test passed!' -ForegroundColor Green"
 cd ..

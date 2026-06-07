@@ -46,7 +46,7 @@ module multistage_fanout_tb();
 
     localparam real CLK_PERIOD = 10;
 
-    localparam type T = MultistageFanoutClass #(
+    localparam type T = MultistageFanoutIO #(
         .DATA_WIDTH(DATA_WIDTH),
         .FANOUT_SIZE(FANOUT_SIZE),
         .FANOUT_FACTOR(FANOUT_FACTOR),
@@ -93,8 +93,11 @@ module multistage_fanout_tb();
     initial begin
         ////////////////////////////////////////////////////////////////
         // generator
-        static TriggerableQueueBroadcaster #(T) generator_out_broadcast = new();
-        static MultistageFanoutGenerator #(T) generator = new(generator_out_broadcast);
+        static TriggerableQueueBroadcaster #(T) dut_generator_out_broadcast = new();
+        static MultistageFanoutGenerator #(T) dut_generator = new(dut_generator_out_broadcast);
+
+        static TriggerableQueueBroadcaster #(T) model_generator_out_broadcast = new();
+        static MultistageFanoutGenerator #(T) model_generator = new(model_generator_out_broadcast);
 
         ////////////////////////////////////////////////////////////////
         // driver
@@ -119,12 +122,9 @@ module multistage_fanout_tb();
         static MultistageFanoutScoreboard #(T) scoreboard = new(scoreboard_in_queue_dut, scoreboard_in_queue_golden);
 
         ////////////////////////////////////////////////////////////////
-        // watch dog
-
-        ////////////////////////////////////////////////////////////////
         // Queue Linkage
-        generator_out_broadcast.add_queue(driver_in_queue);
-        generator_out_broadcast.add_queue(golden_in_queue);
+        dut_generator_out_broadcast.add_queue(driver_in_queue);
+        model_generator_out_broadcast.add_queue(golden_in_queue);
         monitor_out_broadcast.add_queue(scoreboard_in_queue_dut);
         golden_out_broadcast.add_queue(scoreboard_in_queue_golden);
 
@@ -132,26 +132,26 @@ module multistage_fanout_tb();
         // Set up dump 
         $dumpfile("waves.vcd");
         $dumpvars(0, multistage_fanout_tb);
+        
 
         ////////////////////////////////////////////////////////////////
         // Reset logic
-        bfm.data_i[DATA_WIDTH - 1 : 0] <= 0;
-        rst <= 0;
-        repeat(5) @(posedge clk)
-        rst <= 1;
-        repeat(7) @(posedge clk)
-        rst <= 0;
+        bfm.idle <= 1;
+        @(posedge clk) // clean start just after posedge
+
         // Run
         fork
-            generator.run();
+            dut_generator.run();
+            model_generator.run();
             driver.run();
             golden.run();
             monitor.run();
             scoreboard.run();
         join_none
 
-        #1000000;
+        #1000;
         $error("Testbench calling $finish");
         $finish;
+        
     end
 endmodule

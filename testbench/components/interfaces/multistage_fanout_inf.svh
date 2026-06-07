@@ -17,5 +17,11 @@ interface multistage_fanout_inf #(
     logic [DATA_WIDTH - 1 : 0] data_i;
 
     logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o;
+    
+    // testbench sequencing signals
+    logic start_sequence;
+    logic end_sequence;
+    logic end_last_sequence;
+    logic idle;
 endinterface
 `endif 

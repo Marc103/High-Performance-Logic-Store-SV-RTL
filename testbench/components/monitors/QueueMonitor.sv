@@ -81,7 +81,6 @@ class QueueMonitor #(type T, type I);
             queue_io_out_l[0].rd_data_o   <= inf.rd_data_o;
             
             // output pipelining
-            // we ignore 'queue_io_out_l[0]' since we don't record input, hence i starts at 1
             for(int i = 1; i <= READ_LATENCY; i++) begin
                 // 1 cycle later : condition recording
                 if((i == 1 && (v_l[0]))) begin
@@ -108,6 +107,7 @@ class QueueMonitor #(type T, type I);
                 end 
             end
             
+            // for valid commands
             if(v_l[READ_LATENCY]) begin
                 io_obj.queue_io_out_q.push_back(queue_io_out_l[READ_LATENCY]);
                 if(end_s_l[READ_LATENCY]) begin
@@ -116,6 +116,14 @@ class QueueMonitor #(type T, type I);
                     end 
                     this.out_broadcaster.push(io_obj);
                 end
+            end
+
+            // if last sequence item is an idle cycle
+            if(!v_l[READ_LATENCY] && end_s_l[READ_LATENCY]) begin
+                if(end_ls_l[READ_LATENCY]) begin
+                    io_obj.end_last_sequence = 1;
+                end
+                this.out_broadcaster.push(io_obj);
             end
 
             if(finish_sequence) begin

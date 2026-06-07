@@ -1,0 +1,315 @@
+////////////////////////////////////////////////////////////////
+// Trial 2
+"
+    localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
+"
+- defined as
+"
+        return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
+"
+- defined as 
+"
+        int exponent = 0;
+        int acc = base ** 0;
+
+        // Some sanity checks to prevent forever loop
+        if(base <= 1)  $fatal("base is 1 or negative: %d", base);
+        if(value <= 0) $fatal("value is zero or negative: %d", value);
+
+        while(acc < value) begin
+            acc = acc * base;
+            exponent++;
+        end
+
+        return exponent;
+"
+- correct arguments passed in
+- correct arguments passed into clog_base
+- the logic is we want to find out as according to our FANOUT_FACTOR and FANOUT_SIZE, how many
+  stages it would take to grow to the smallest equal or greater than (ceiling) power of FANOUT_FACTOR. Hence
+  we pass in the FANOUT_FACTOR as the base and the FANOUT_SIZE as the value into the clog_base function
+- we start with a value of FANOUT_FACTOR ** 0.
+- for example, let FANOUT_FACTOR = 4; if FANOUT_SIZE is 1, then we need 0 stages, if FANOUT_SIZE is 4, then
+  we need exactly 1 stage, if FANOUT_SIZE is 5, we need 2 stages because the nearest ceiling power is 16 = (4 ** 2)
+- this is what clog_base does, after the sanity checks we ask, where base must be > 1 and value > 0; is my acc value still strictly smaller than the request
+  value (FANOUT_SIZE)? if yes, increment the exponent and the corresponding calculation is multiplying the acc by the base
+  and so on. We return the exponent, which represents the number of stages needed.
+[Marc103 - 06/06/26]
+
+
+"
+    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
+"
+- defined as
+"
+        return (FANOUT_FACTOR ** STAGES);
+"
+- correct arguments passed in
+- logic is correct, FANOUT_FACTOR ** STAGES is the final size
+[Marc103 - 06/06/26]
+
+"
+    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
+"
+- defined as
+"
+        int latency; 
+        if(IMMEDIATE_START_FANOUT == 1) begin
+            latency = 0;
+        end else begin
+            latency = 1;
+        end
+        latency = latency + STAGES;
+        return latency;
+"
+- correct arguments passed in
+- latency starts as 0 or 1 depending on IMMEDIATE_START_FANOUT
+- STAGES latency cycles are added since each stage adds a cycle of latency
+    - when STAGE is 0, 0 cycles of latency are added, this is purposeful and correct.
+[Marc103 - 06/06/26]
+
+"
+    input clk_i,
+
+    input  [DATA_WIDTH - 1 : 0] data_i,
+
+    output [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o
+"
+- signals present, correct
+- bit widths are correct for each signal
+- directions are correct
+[Marc103 - 06/06/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] data;
+    logic [DATA_WIDTH - 1 : 0] data_g;
+
+    always@(posedge clk_i) begin
+        data <= data_i;
+    end
+
+    assign data_g = (IMMEDIATE_START_FANOUT == 1) ? data_i : data;
+"
+- bit widths correct
+- standard *_g operation
+- assignment condition correct
+[Marc103 - 06/06/26]
+
+"
+    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages;
+"
+- signals present, correct
+- packed types are correct for each signal
+    - 'STAGES' instead of 'STAGES - 1' is purposeful
+[Marc103 - 06/06/26]
+
+"
+    always@(posedge clk_i) begin
+        // fanout tree
+        for(int stage = 1; stage <= STAGES; stage++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR ** stage; fan_out++) begin
+                    if(stage == 1) begin 
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_g;
+                    end else begin
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_stages[stage - 1][out]
+                    end
+                end
+            end
+        end 
+    end
+"
+- 'data_g' represents stage 0. Therefore in the loop, we start 'stage' at 1 instead of 0 and 
+  end at STAGE (<= is intentional)
+- 'out' goes from 0 to < FANOUT_FACTOR ** (stage - 1). 'stage - 1' because we are iterating
+  over the outputs of the previous stage. 
+- 'fan_out' goes from 0 to < FANOUT_FACTOR because we fan out each output of the previous
+  stage by the FANOUT_FACTOR. 
+- '(out * FANOUT_FACTOR)' is the starting index per previous stage output, then we step through the
+  fanout, thus '(out * FANOUT_FACTOR) + fan_out'.
+- for stage == 1, since data_g represents stage 0, we instead use data_g as the previous stage instead
+  of data_stages[0][out]
+  - yes, this does mean that data_stages[0] is 'x, we never assign it anything nor intend to. Doing it this way keeps
+    the code clean and indexing meaningful wrt to stages.
+[Marc103 - 06/06/26]
+
+"
+    assign data_o  = (STAGES == 0) ? data_g : data_stages[STAGES];
+"
+- in the case that stages == 0, data_g, which is stage 0, should be assigned directly
+    - otherwise, data_stages[STAGES] gives the 
+[Marc103 - 06/06/26]
+
+////////////////////////////////////////////////////////////////
+// Trial 1, failed due to:
+// - although it passes simulation testing, the buggy immediate fanout
+//   would fail on particular but quite possible edge cases
+// - main logic is written in a sort of convoluted way
+"
+    localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
+"
+- defined as
+"
+        return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
+"
+- defined as 
+"
+        int exponent = 0;
+        int acc = 1;
+
+        // Some sanity checks to prevent forever loop
+        if(base <= 0)  $fatal("base is zero or negative: %d", base);
+        if(value <= 0) $fatal("value is zero or negative: %d", value);
+
+        while(acc < value) begin
+            acc = acc * base;
+            exponent++;
+        end
+
+        return exponent;
+"
+- correct arguments passed in
+- correct arguments passed into clog_base
+- the logic is we want to find out as according to our FANOUT_FACTOR and FANOUT_SIZE, how many
+  stages it would take to grow to the smallest equal or greater than (ceiling) power of FANOUT_FACTOR. Hence
+  we pass in the FANOUT_FACTOR as the base and the FANOUT_SIZE as the value into the clog_base function
+- we start with a value of 1, which represents FANOUT_FACTOR ** 0. Actually let me make this more explicit
+  and say 'acc = base ** 0' instead of 'acc = 1'
+- redefined as 
+"
+        int exponent = 0;
+        int acc = base ** 0;
+
+        // Some sanity checks to prevent forever loop
+        if(base <= 0)  $fatal("base is zero or negative: %d", base);
+        if(value <= 0) $fatal("value is zero or negative: %d", value);
+
+        while(acc < value) begin
+            acc = acc * base;
+            exponent++;
+        end
+
+        return exponent;
+"
+- correct arguments passed in
+- correct arguments passed into clog_base
+- the logic is we want to find out as according to our FANOUT_FACTOR and FANOUT_SIZE, how many
+  stages it would take to grow to the smallest equal or greater than (ceiling) power of FANOUT_FACTOR. Hence
+  we pass in the FANOUT_FACTOR as the base and the FANOUT_SIZE as the value into the clog_base function
+- we start with a value of FANOUT_FACTOR ** 0.
+- for examle, let FANOUT_FACTOR = 4; if FANOUT_SIZE is 1, then we need 0 stages, if FANOUT_SIZE is 4, then
+  we need exactly 1 stage, if FANOUT_SIZE is 5, we need 2 stages because the nearest ceiling power is 16 = (4 ** 2)
+- this is what clog_base does, after the sanity checks we ask; is my acc value still strictly smaller than the request
+  value (FANOUT_SIZE)? if yes, increment the exponent and the corresponding calculation is multiplying the acc by the base
+  and so on. We return the exponent, which represents the number of stages needed.
+[x]
+
+"
+      localparam PRE_FANOUT_SIZE   = multistage_fanout_PRE_FANOUT_SIZE  (FANOUT_FACTOR, STAGES),
+"
+  - defined as
+"
+          return (FANOUT_FACTOR ** (STAGES - 1));
+"
+- correct arguments passed in
+- this is the fanout size stage before it reaches or passes the requested fanout size
+- there is an issue here, if the STAGES is 0, which happens when the fanout size is 1,
+  then this will return FANOUT_FACTOR ** -1, not correct and should be limited to 1.
+- redefined as
+"
+        if(STAGES == 0) return 1;
+        return (FANOUT_FACTOR ** (STAGES - 1));
+"
+- correct arguments passed in
+- this is the fanout size stage before it reaches or passes the requested fanout size
+- when STAGES == 0, we limit it to 1, which is correct.
+[x]
+
+"
+    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
+"
+defined as
+"
+        return (FANOUT_FACTOR ** STAGES);
+"
+- correct arguments passed in
+- final size is base ** exp, which is FANOUT_FACTOR ** STAGES, where when STAGES = 0 is valid
+[x]
+
+"
+    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
+"
+- defined as
+"
+        if(IMMEDIATE_START_FANOUT == 1) begin
+            return (STAGES - 1);
+        end else begin
+            return STAGES;
+        end
+"
+- correct arguments passed in
+- there is a problem, if STAGES is 0 and IMMEDIATE_START_FANOUT == 1 it will return negative latency 
+- redefined as 
+"
+        if(IMMEDIATE_START_FANOUT == 1) begin
+            if(STAGES == 0) return 0;
+            return (STAGES - 1);
+        end else begin
+            return STAGES;
+        end
+"
+- correct arguments passed in
+- logic makes sense, either STAGES - 1 if immediate fanout, with 0 being the minimum, or STAGES
+[x]
+
+"
+    input clk_i,
+
+    input  [DATA_WIDTH - 1 : 0] data_i,
+
+    output [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_o
+"
+- signals present, correct
+- bit widths are correct for each signal
+- directions are correct
+[x] 
+
+"
+    logic [STAGES - 1 : 0][PRE_FANOUT_SIZE - 1 : 0]  [DATA_WIDTH - 1 : 0] data_stages;
+    logic                 [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_reg_o;
+"
+- signals present, correct
+- types are correct
+- packed bit widths are correct for each signal
+    - using PRE_FANOUT_SIZE for data_stages is correct, 
+[x]
+
+"
+    always@(posedge clk_i) begin
+        // entry
+        data_stages[0][0] <= data_i;
+
+        // fanout tree
+        for(int stage = 0; stage < (STAGES - 1); stage++) begin
+            for(int idx = 0; idx < (FANOUT_FACTOR ** stage); idx++) begin
+                for(int fanout = 0; fanout < FANOUT_FACTOR; fanout++) begin
+                    // condition for immediate fanout if enabled
+                    if((stage == 0) && (IMMEDIATE_START_FANOUT == 1)) begin
+                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_i;
+                    end else begin
+                        data_stages[stage + 1][(idx * FANOUT_FACTOR) + fanout] <= data_stages[stage][idx];
+                    end
+                end
+            end
+        end
+    end
+"
+- 'entry'
+    - data_stages[0][0] represent data_i registered so 1 cycle latency, data_stages[1][x] 2 cycle latency,
+      data_stages[2][x] 3 cycle latency... respectively stage 0, stage 1 , stage 2 ... 
+- 'fanout tree'
+    - for stage 0, the default is to register
+    - okay so although this is working according to simulation, they way I wrote it is kind of convoluted
+      and doesn't handle the immediate start fanout correctly, an edge case that i can see happening
+    - time for a rewrite
+[x]

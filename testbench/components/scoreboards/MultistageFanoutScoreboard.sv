@@ -1,8 +1,17 @@
 import constant_functions_pkg::*;
 
 class MultistageFanoutScoreboard #(type T);
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam STAGES            = multistage_fanout_STAGES           (T::FANOUT_FACTOR, T::FANOUT_SIZE);
+    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(T::FANOUT_FACTOR, T::STAGES);
+    localparam LATENCY           = multistage_fanout_LATENCY          (T::IMMEDIATE_START_FANOUT, T::STAGES);
+
+    `MULTISTAGE_FANOUT_IO_OUT_STRUCT(T::DATA_WIDTH, LATENCY)
+
     TriggerableQueue #(T) in_queue_dut;
     TriggerableQueue #(T) in_queue_golden;
+
 
     function new(
         TriggerableQueue #(T) in_queue_dut,
@@ -13,27 +22,54 @@ class MultistageFanoutScoreboard #(type T);
     endfunction
 
     task automatic run();
-        T dut_data_obj;
-        T model_data_obj;
-
-        // Need some kind of termination condition for the simulation
-        // this doesn't necessarily need to happen here but it is the simplest.
-        int received = 0;
-        int expected = 10;
+        T dut_io_obj;
+        T model_io_obj;
+        multistage_fanout_io_out_t dut_multistage_fanout_io_out;
+        multistage_fanout_io_out_t model_multistage_fanout_io_out;
+        logic unsigned [7:0] model_error_state;
+        int obj_iter = 0;
+        int seq_iter = 0;
 
         forever begin
-            in_queue_dut.pop(dut_data_obj);
-            in_queue_golden.pop(model_data_obj);
-            received++;
+            in_queue_golden.pop(model_io_obj);
+            in_queue_dut.pop(dut_io_obj);
             
-            if(dut_data_obj.data_o == model_data_obj.data_o) begin
-                $display("Assertion passed: dut:%p matches expected model:%p", dut_data_obj.data_o, model_data_obj.data_o);
+            assert(dut_io_obj.multistage_fanout_io_out_q.size() == model_io_obj.multistage_fanout_io_out_q.size())  begin
+                $display("%d %d : Output sequence sizes are the same \n DUT : %d, Model :  %d",
+                        obj_iter,
+                        seq_iter, 
+                        dut_io_obj.multistage_fanout_io_out_q.size(), 
+                        model_io_obj.multistage_fanout_io_out_q.size());
             end else begin
-                $error("Assertion failed: dut:%p but expected model:%b", dut_data_obj.data_o, model_data_obj.data_o);
+                $error("%d %d : Output sequence sizes are different \n DUT : %d, Model :  %d",
+                       obj_iter,
+                       seq_iter, 
+                       dut_io_obj.multistage_fanout_io_out_q.size(), 
+                       model_io_obj.multistage_fanout_io_out_q.size());
             end
 
-            #1000;
-            if(received >= expected) $finish;
+            seq_iter = 0;
+            while(dut_io_obj.multistage_fanout_io_out_q.size() > 0) begin
+                dut_multistage_fanout_io_out = dut_io_obj.multistage_fanout_io_out_q.pop_front();
+
+                model_multistage_fanout_io_out = model_io_obj.multistage_fanout_io_out_q.pop_front();
+                model_error_state = model_io_obj.error_state.pop_front();
+
+                assert(model_error_state == 0)
+                    else $error("%d %d: Model was thrown into error state %d", obj_iter, seq_iter, model_error_state);
+
+                assert(dut_multistage_fanout_io_out === model_multistage_fanout_io_out)
+                    else $error("%d %d: DUT does not match Model \n DUT : %p \n Model : %p", obj_iter, seq_iter, dut_multistage_fanout_io_out, model_multistage_fanout_io_out);
+
+                seq_iter++;
+            end
+
+            if(dut_io_obj.end_last_sequence) begin
+                $display("Scoreboard completed and called $finish");
+                $finish;
+            end
+
+            obj_iter++; 
         end
 
     endtask
