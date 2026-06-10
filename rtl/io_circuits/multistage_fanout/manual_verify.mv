@@ -132,6 +132,41 @@
   - yes, this does mean that data_stages[0] is 'x, we never assign it anything nor intend to. Doing it this way keeps
     the code clean and indexing meaningful wrt to stages.
 [Marc103 - 06/06/26]
+- Codex 5.5 caught error in code, fanout should go from 0 to FANOUT_FACTOR instead of 0 to FANOUT_FACTOR ** stage
+    - whilst this would produce the correct answer in simulation, functionally this is disastrous and probably (hopefully)
+      wouldn't synthesize.
+    - issue is named as "fanout bug"
+- redefined as (per 'fanout bug')
+"
+    always@(posedge clk_i) begin
+        // fanout tree
+        for(int stage = 1; stage <= STAGES; stage++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
+                    if(stage == 1) begin 
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_g;
+                    end else begin
+                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_stages[stage - 1][out];
+                    end
+                end
+            end
+        end 
+    end
+"
+- 'data_g' represents stage 0. Therefore in the loop, we start 'stage' at 1 instead of 0 and 
+  end at STAGE (<= is intentional)
+- 'out' goes from 0 to < FANOUT_FACTOR ** (stage - 1). 'stage - 1' because we are iterating
+  over the outputs of the previous stage. 
+- 'fan_out' goes from 0 to < FANOUT_FACTOR because we fan out each output of the previous
+  stage by the FANOUT_FACTOR. 
+- '(out * FANOUT_FACTOR)' is the starting index per previous stage output, then we step through the
+  fanout, thus '(out * FANOUT_FACTOR) + fan_out'.
+- for stage == 1, since data_g represents stage 0, we instead use data_g as the previous stage instead
+  of data_stages[0][out]
+  - yes, this does mean that data_stages[0] is 'x, we never assign it anything nor intend to. Doing it this way keeps
+    the code clean and indexing meaningful wrt to stages.
+[Marc103 + Codex 5.5 - 06/10/26]
+
 
 "
     assign data_o  = (STAGES == 0) ? data_g : data_stages[STAGES];

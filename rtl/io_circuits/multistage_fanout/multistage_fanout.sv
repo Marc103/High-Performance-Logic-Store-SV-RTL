@@ -56,7 +56,7 @@ module multistage_fanout #(
         // fanout tree
         for(int stage = 1; stage <= STAGES; stage++) begin
             for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
-                for(int fan_out = 0; fan_out < FANOUT_FACTOR ** stage; fan_out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
                     if(stage == 1) begin 
                         data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_g;
                     end else begin

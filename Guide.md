@@ -131,37 +131,63 @@ copies of modified versions of them
 - maybe one day i'll write some python script that autogens these files with the base template
 and module name...
 
-## File Checklist Work Flow: More in depth details
+## File Checklist Work Flow: More in depth details 
 ### Interface
-- regular port signals
-- sequencing signals for testbench
+- The interface is the testbench-facing version of the RTL port list.
+- It should contain the regular DUT signals plus a small set of sequencing signals used only by the testbench.
+- Keep the DUT-facing signals shaped exactly like the RTL ports. If a port represents `N` parallel lanes, use `[N - 1 : 0]`, not `[N : 0]`.
+- Testbench-only sequencing signals typically include:
+    - `start_sequence`
+    - `end_sequence`
+    - `end_last_sequence`
+    - `idle`
+- These sequencing signals are not part of the DUT contract. They exist so the driver, monitor, and scoreboard can agree on where transactions begin and end.
 
 ### IO 
-- represents input stimulus and output data format, with a 'io' input to 'new()' where
-- the input stimulus also includes sequencing information so that the generator is more capable
-and the driver knows how to drive it
-- the output data should carefully be populated by the monitor
-- associated outputs with inputs commands idea
+- The IO class defines the transaction format for both stimulus and observed output.
+- It is the main contract shared by the generator, driver, golden model, monitor, and scoreboard.
+- Input structs should describe everything the driver needs to apply a transaction to the interface.
+- Output structs should describe everything the monitor and golden model need to compare behavior.
+- The IO object also carries at minmum this sequencing information: `idle` (previous called 'ignore'), `error_state`, and `end_last_sequence`.
+- Design this file carefully before writing the rest of the testbench. If the IO object changes, every other testbench component usually changes with it.
 
 ### Generator
-- Generate input stimulus, using the data formats (nominally ports and sequencing capability) provided by the IO class.
+- The generator creates IO objects and fills their input queues.
+- It should focus on intent: what scenarios should be tested, in what order, and with what edge cases.
+- It should not know the details of how signals are driven cycle by cycle. That belongs in the driver.
+- Good generators include a mix of simple nominal cases, boundary cases, reset behavior, idle/ignored cycles, and any known dangerous combinations.
 
 ### Driver
-- drive input stimulus, using whatever information provided by the IO class.
+- The driver consumes IO input transactions and applies them to the interface.
+- It owns cycle-level stimulus timing.
+- The driver should translate transaction fields into signal assignments without adding extra interpretation that belongs in the generator.
+- In clocked driver code, nonblocking assignments are usually appropriate for interface signals.
+- At the end of a sequence, drive the interface back to a known idle state so the monitor does not see stale control signals.
 
 ### Golden Model
-- represents the state the golden model and all functions that operate on it (like classical OOP)
-- it too receives the same input stimulus and modifies its own state to model the computation
-- produces the output IO objects and populates 
+- The golden model is the software-style reference model of the DUT behavior.
+- It receives the same input IO objects as the driver, updates its own internal state, and produces expected output IO objects.
+- It does not need to be written like RTL. It should be easier to understand than the DUT and should use a different perspective where possible.
+- This difference in perspective is important: if the RTL and golden model are written in the same style, they can share the same bug.
+- Model state should be explicit and easy to inspect.
+- Any undefined or illegal stimulus behavior should either produce a clear error state or be intentionally ignored by both the model and scoreboard.
 
 ### Monitor
-- Monitors IO, to produce output IO objects
+- The monitor observes the interface and creates output IO objects from DUT behavior.
+- It owns cycle-level output timing and latency alignment.
+- It should not decide what the correct answer is. That belongs in the golden model and scoreboard.
+- Pipeline tracking in the monitor should use nonblocking assignments where old values must shift forward together.
+- Bookkeeping variables that are not true sampled pipeline state can use blocking assignments, especially inside class tasks where some simulators reject nonblocking assignments to automatic-lifetime variables.
+- Be careful when associating outputs with input commands. The monitor must account for DUT latency, idle cycles, reset cycles, and commands that intentionally do not produce useful output.
 
 ### Scoreboard
-- compares outputs from golden model to monitor
-- the emphasis is to indirectly confirm that the initial, intermediary and
-  final states are equal, but not necessarily at a cycle by cycle accuracy.
-- trying to do everything will raise the complexity of the testbench too much which (as discussed before) is not efficient. Instead, we use different forms of verification (hence manual verification)
+- The scoreboard compares monitor output objects against golden model output objects.
+- It should first check that both sides produced the same number of output transactions.
+- Then it should compare each output transaction and report enough context to debug the mismatch.
+- The scoreboard should be strict about observable behavior, but it does not need to prove every internal RTL state cycle by cycle.
+- The goal is to catch functional disagreement between the DUT and model while keeping the testbench maintainable.
+- Deep internal correctness should be covered by a combination of focused tests, manual verification, waveform inspection, and code review.
+- If the scoreboard becomes too complicated, reconsider the IO format and monitor/model split. Complexity in the scoreboard is often a sign that the transaction contract is not clear enough.
 
 ## Manual Verification Checklists
 - ports

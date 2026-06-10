@@ -157,7 +157,7 @@ module queue #(
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_backward_rd_data;
     
     logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0]    bram_mux_rd_data;
-    logic                           [READ_LATENCY_BRAM : 0] bram_backward_rd_data_valid; // *** HERE ****
+    logic                           [READ_LATENCY_BRAM : 0] bram_backward_rd_data_valid; 
 
     // control state
     logic unsigned [ADDR_WIDTH : 0] element_count;
