@@ -1,12 +1,6 @@
 import constant_functions_pkg::*;
 
 class MultistageFanoutModel #(type T);
-    ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
-    localparam STAGES            = multistage_fanout_STAGES           (T::FANOUT_FACTOR, T::FANOUT_SIZE);
-    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(T::FANOUT_FACTOR, T::STAGES);
-    localparam LATENCY           = multistage_fanout_LATENCY          (T::IMMEDIATE_START_FANOUT, T::STAGES);
-    
     `MULTISTAGE_FANOUT_IO_IN_STRUCT(T::DATA_WIDTH)
     `MULTISTAGE_FANOUT_IO_OUT_STRUCT(T::DATA_WIDTH, T::FINAL_FANOUT_SIZE)
     
@@ -54,9 +48,9 @@ class MultistageFanoutModel #(type T);
 
     ////////////////////////////////////////////////////////////////
     // Main Functions
-    function automatic logic [FINAL_FANOUT_SIZE - 1 : 0][T::DATA_WIDTH - 1 : 0] fanout (logic [T::DATA_WIDTH - 1 : 0] data_i);
-        logic [FINAL_FANOUT_SIZE - 1 : 0][T::DATA_WIDTH - 1 : 0] data_o;
-        for(int i = 0; i < FINAL_FANOUT_SIZE; i++) begin
+    function automatic logic [T::FINAL_FANOUT_SIZE - 1 : 0][T::DATA_WIDTH - 1 : 0] fanout (logic [T::DATA_WIDTH - 1 : 0] data_i);
+        logic [T::FINAL_FANOUT_SIZE - 1 : 0][T::DATA_WIDTH - 1 : 0] data_o;
+        for(int i = 0; i < T::FINAL_FANOUT_SIZE; i++) begin
             data_o[i] = data_i;
         end
         return data_o;

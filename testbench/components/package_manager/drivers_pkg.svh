@@ -1,5 +1,5 @@
 package drivers_pkg;
-    `include "ExampleDriver.sv"
+    import utilities_pkg::*;
     `include "MultistageFanoutDriver.sv"
     `include "QueueDriver.sv"
 endpackage

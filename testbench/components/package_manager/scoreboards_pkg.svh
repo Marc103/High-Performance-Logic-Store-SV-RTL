@@ -1,5 +1,5 @@
 package scoreboards_pkg;
-    `include "ExampleScoreboard.sv"
+    import utilities_pkg::*;
     `include "MultistageFanoutScoreboard.sv"
     `include "QueueScoreboard.sv"
 endpackage

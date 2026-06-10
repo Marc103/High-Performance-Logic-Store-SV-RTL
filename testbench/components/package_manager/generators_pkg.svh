@@ -1,5 +1,5 @@
 package generators_pkg;
-    `include "ExampleGenerator.sv"
+    import utilities_pkg::*;
     `include "MultistageFanoutGenerator.sv"
     `include "QueueGenerator.sv"
 endpackage

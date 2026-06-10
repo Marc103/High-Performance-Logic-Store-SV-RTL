@@ -1,5 +1,5 @@
 package monitors_pkg;
-    `include "ExampleMonitor.sv"
+    import utilities_pkg::*;
     `include "MultistageFanoutMonitor.sv"
     `include "QueueMonitor.sv"
 endpackage

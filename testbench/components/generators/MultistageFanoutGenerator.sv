@@ -1,12 +1,6 @@
 import constant_functions_pkg::*;
 
 class MultistageFanoutGenerator #(type T);
-    ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
-    localparam STAGES            = multistage_fanout_STAGES           (T::FANOUT_FACTOR, T::FANOUT_SIZE);
-    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(T::FANOUT_FACTOR, T::STAGES);
-    localparam LATENCY           = multistage_fanout_LATENCY          (T::IMMEDIATE_START_FANOUT, T::STAGES);
-
     `MULTISTAGE_FANOUT_IO_IN_STRUCT(T::DATA_WIDTH)
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
@@ -18,7 +12,7 @@ class MultistageFanoutGenerator #(type T);
         seed = 38;
     endfunction
 
-     task automatic add_io(
+    task automatic add_io(
         ref T io_obj,
         input logic idle
     );

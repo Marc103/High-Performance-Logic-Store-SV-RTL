@@ -1,13 +1,6 @@
 import constant_functions_pkg::*;
 
 class QueueGenerator #(type T);
-    ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
-    localparam DATA_DEPTH        = queue_DATA_DEPTH                  (T::ADDR_WIDTH);
-    localparam READ_LATENCY      = queue_READ_LATENCY                (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
-    localparam WRITE_LATENCY     = queue_WRITE_LATENCY               (T::CONFLICT_PROOF, T::REGISTERED_IN, T::REGISTERED_IN_BRAM);
-    localparam READ_LATENCY_BRAM = bram_dual_port_simple_READ_LATENCY(T::REGISTERED_IN_BRAM, T::REGISTERED_OUT_BRAM);
-
     `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;

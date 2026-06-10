@@ -44,7 +44,7 @@ set INCLUDE_FLAGS=^
 REM -------------------------------------------------
 REM Compile (SystemVerilog)
 REM -------------------------------------------------
-vlog %INCLUDE_FLAGS% -sv ..\queue_tb.sv
+vlog %INCLUDE_FLAGS% -sv ..\???_tb.sv
 
 IF ERRORLEVEL 1 (
     echo Compilation failed.
@@ -55,5 +55,5 @@ IF ERRORLEVEL 1 (
 REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
-vsim -voptargs=+acc -c queue_tb -do "run -all; quit"
+vsim -voptargs=+acc -c ???_tb -do "run -all; quit"
 cd ..

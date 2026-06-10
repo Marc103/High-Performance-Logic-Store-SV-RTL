@@ -5,7 +5,7 @@ import constant_functions_pkg::*;
 
 ////////////////////////////////////////////////////////////////
 // interface include 
-`include "multistage_fanout_inf.svh"
+`include "???_inf.svh"
 
 ////////////////////////////////////////////////////////////////
 // package includes
@@ -29,35 +29,26 @@ import scoreboards_pkg::*;
 
 ////////////////////////////////////////////////////////////////
 // RTL includes
-`include "io_circuits/multistage_fanout/multistage_fanout.sv"
+`include "???.sv"
 
 ////////////////////////////////////////////////////////////////
 // timescale 
 `timescale 1ns / 1ns
 
-module multistage_fanout_tb();
+module ???_tb();
 
     ////////////////////////////////////////////////////////////////
     // localparams
-    localparam DATA_WIDTH = 8;
-    localparam FANOUT_SIZE = 17;            // 16, 15, 17, 3 , 11, 11
-    localparam FANOUT_FACTOR = 4;           // 4,  4,  4,  10, 10, 10
-    localparam IMMEDIATE_START_FANOUT = 1;  // 0,  1,  0,  1 , 1, 0
+    ???
 
     localparam real CLK_PERIOD = 10;
 
-    localparam type T = MultistageFanoutIO #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .FANOUT_SIZE(FANOUT_SIZE),
-        .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+    localparam type T = ???IO #(
+        ???
     );
 
-    localparam type I = virtual multistage_fanout_inf #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .FANOUT_SIZE(FANOUT_SIZE),
-        .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+    localparam type I = virtual ???_inf #(
+        ???
     );
 
     ////////////////////////////////////////////////////////////////
@@ -68,58 +59,48 @@ module multistage_fanout_tb();
 
     ////////////////////////////////////////////////////////////////
     // interface
-    multistage_fanout_inf #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .FANOUT_SIZE(FANOUT_SIZE),
-        .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
-    ) bfm (.clk_i(clk)); // bfm, "bus functional model"
+    ???_inf #(
+        ???
+    ) bfm (???); // bfm, "bus functional model"
     
     ////////////////////////////////////////////////////////////////
     // DUT
-    multistage_fanout #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .FANOUT_SIZE(FANOUT_SIZE),
-        .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+    ??? #(
+        ???
     ) dut (
-        .clk_i(clk),
-
-        .data_i(bfm.data_i),
-
-        .data_o(bfm.data_o)
+        ???
     );
 
     initial begin
         ////////////////////////////////////////////////////////////////
         // generator
         static TriggerableQueueBroadcaster #(T) dut_generator_out_broadcast = new();
-        static MultistageFanoutGenerator #(T) dut_generator = new(dut_generator_out_broadcast);
+        static ???Generator #(T) dut_generator = new(dut_generator_out_broadcast);
 
         static TriggerableQueueBroadcaster #(T) model_generator_out_broadcast = new();
-        static MultistageFanoutGenerator #(T) model_generator = new(model_generator_out_broadcast);
+        static ???Generator #(T) model_generator = new(model_generator_out_broadcast);
 
         ////////////////////////////////////////////////////////////////
         // driver
         static TriggerableQueue #(T) driver_in_queue = new();
-        static MultistageFanoutDriver #(T,I) driver = new(driver_in_queue, bfm);
+        static ???Driver #(T,I) driver = new(driver_in_queue, bfm);
 
         ////////////////////////////////////////////////////////////////
         // golden model
         static TriggerableQueue #(T) golden_in_queue = new();
         static TriggerableQueueBroadcaster #(T) golden_out_broadcast = new();
-        static MultistageFanoutModel #(T) golden = new(golden_in_queue, golden_out_broadcast);
+        static ???Model #(T) golden = new(golden_in_queue, golden_out_broadcast);
 
         ////////////////////////////////////////////////////////////////
         // monitor
         static TriggerableQueueBroadcaster #(T) monitor_out_broadcast = new();
-        static MultistageFanoutMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
+        static ???Monitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
 
         ////////////////////////////////////////////////////////////////
         // scoreboard
         static TriggerableQueue #(T) scoreboard_in_queue_dut = new();
         static TriggerableQueue #(T) scoreboard_in_queue_golden = new();
-        static MultistageFanoutScoreboard #(T) scoreboard = new(scoreboard_in_queue_dut, scoreboard_in_queue_golden);
+        static ???Scoreboard #(T) scoreboard = new(scoreboard_in_queue_dut, scoreboard_in_queue_golden);
 
         ////////////////////////////////////////////////////////////////
         // Queue Linkage
@@ -131,12 +112,12 @@ module multistage_fanout_tb();
         ////////////////////////////////////////////////////////////////
         // Set up dump 
         $dumpfile("waves.vcd");
-        $dumpvars(0, multistage_fanout_tb);
+        $dumpvars(0, ???_tb);
         
 
         ////////////////////////////////////////////////////////////////
         // Reset logic
-        bfm.idle <= 1;
+        bfm.idle = 1;
         @(posedge clk) // clean start just after posedge
 
         // Run

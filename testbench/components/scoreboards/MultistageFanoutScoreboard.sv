@@ -1,13 +1,7 @@
 import constant_functions_pkg::*;
 
 class MultistageFanoutScoreboard #(type T);
-    ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
-    localparam STAGES            = multistage_fanout_STAGES           (T::FANOUT_FACTOR, T::FANOUT_SIZE);
-    localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(T::FANOUT_FACTOR, T::STAGES);
-    localparam LATENCY           = multistage_fanout_LATENCY          (T::IMMEDIATE_START_FANOUT, T::STAGES);
-
-    `MULTISTAGE_FANOUT_IO_OUT_STRUCT(T::DATA_WIDTH, LATENCY)
+    `MULTISTAGE_FANOUT_IO_OUT_STRUCT(T::DATA_WIDTH, T::FINAL_FANOUT_SIZE)
 
     TriggerableQueue #(T) in_queue_dut;
     TriggerableQueue #(T) in_queue_golden;
@@ -71,6 +65,6 @@ class MultistageFanoutScoreboard #(type T);
 
             obj_iter++; 
         end
-
     endtask
+    
 endclass

@@ -133,6 +133,8 @@ and module name...
 
 ## File Checklist Work Flow: More in depth details
 ### Interface
+- regular port signals
+- sequencing signals for testbench
 
 ### IO 
 - represents input stimulus and output data format, with a 'io' input to 'new()' where

@@ -1,5 +1,5 @@
 package golden_models_pkg;
-    `include "ExampleModel.sv"
+    import utilities_pkg::*;
     `include "MultistageFanoutModel.sv"
     `include "QueueModel.sv"
 endpackage

@@ -1,10 +1,10 @@
 import constant_functions_pkg::*;
 
-class MultistageFanoutDriver #(type T, type I);
-    `MULTISTAGE_FANOUT_IO_IN_STRUCT(T::DATA_WIDTH)
+class ???Driver #(type T, type I);
+    `???_IO_IN_STRUCT(???)
 
     TriggerableQueue #(T) in_queue;
-    I inf;
+    I inf;    
 
     function new(
         TriggerableQueue #(T) in_queue,
@@ -15,12 +15,12 @@ class MultistageFanoutDriver #(type T, type I);
     endfunction
 
     task automatic drive(T io_obj);
-        multistage_fanout_io_in_t multistage_fanout_io_in;
+        ???_io_in_t ???_io_in;
         bit start_sequence = 1;
 
-        while(io_obj.multistage_fanout_io_in_q.size() > 0) begin
+        while(io_obj.???_io_in_q.size() > 0) begin
             
-            multistage_fanout_io_in = io_obj.multistage_fanout_io_in_q.pop_front();
+            ???_io_in = io_obj.???_io_in_q.pop_front();
 
             @(posedge inf.clk_i);
 
@@ -31,7 +31,7 @@ class MultistageFanoutDriver #(type T, type I);
                 inf.start_sequence <= 0;
             end
 
-            if(io_obj.multistage_fanout_io_in_q.size() == 0) begin
+            if(io_obj.???_io_in_q.size() == 0) begin
                 inf.end_sequence <= 1;
             end else begin
                 inf.end_sequence <= 0;
@@ -44,10 +44,10 @@ class MultistageFanoutDriver #(type T, type I);
             end
 
             if(io_obj.idle.pop_front()) begin
-                inf.data_i   <= multistage_fanout_io_in.data_i;
+                ???
                 inf.idle     <= 1;
             end else begin
-                inf.data_i   <= multistage_fanout_io_in.data_i;
+                ???
                 inf.idle     <= 0;
             end
         end
@@ -55,13 +55,4 @@ class MultistageFanoutDriver #(type T, type I);
         // back to idle, nothing to do
         @(posedge inf.clk_i);
     endtask;
-
-    task automatic run();
-        T io_obj;
-        forever begin
-            in_queue.pop(io_obj);
-            drive(io_obj);
-        end
-    endtask
-
 endclass
