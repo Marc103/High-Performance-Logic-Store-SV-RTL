@@ -6,10 +6,16 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SIM_DIR="$SCRIPT_DIR/simulate_verilator"
 
 TOP_MODULE="multistage_fanout_tb"
+THREADS="${THREADS:-1}"
 
 TB_DIR="$REPO_ROOT/testbench"
 CT_DIR="$TB_DIR/components"
 RTL_DIR="$REPO_ROOT/rtl"
+
+if ! [[ "$THREADS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: THREADS must be a positive integer" >&2
+    exit 1
+fi
 
 if ! command -v verilator >/dev/null 2>&1; then
     echo "error: verilator was not found in PATH" >&2
@@ -76,6 +82,7 @@ verilator \
     --binary \
     --timing \
     --trace-vcd \
+    --threads "$THREADS" \
     -CFLAGS "$COROUTINE_CFLAGS" \
     -MAKEFLAGS "CXX=$CXX" \
     --top-module "$TOP_MODULE" \
