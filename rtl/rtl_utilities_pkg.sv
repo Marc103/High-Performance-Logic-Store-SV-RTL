@@ -20,7 +20,8 @@ package constant_functions_pkg;
         BRAM_DUAL_PORT_SIMPLE,
         MULTISTAGE_FANOUT,
         ALTERNATE_BASE_FP_ADDER,
-        QUEUE
+        QUEUE,
+        MAX
     } module_id_e;
     
     typedef logic signed [31:0] int_t;
@@ -181,6 +182,38 @@ package constant_functions_pkg;
         logic                 more_than_o; \
     } queue_io_out_t;
 
+    ////////////////////////////////////////////////////////////////
+    // alternate base fp
+
+
+    ////////////////////////////////////////////////////////////////
+    // max
+    typedef struct packed {
+        int DATA_WIDTH;
+        int SIGNED;
+        int REGISTERED_IN;
+        int GRADE;
+    } max_pt;
+
+    typedef struct packed {
+        logic clk_i;
+
+        logic [SOLAR - 1 : 0] data_a_i;
+        logic [SOLAR - 1 : 0] data_b_i;
+
+        logic [SOLAR - 1 : 0] data_o;
+    } max_t;
+
+    `define MAX_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] data_a_i; \
+        logic [DATA_WIDTH - 1 : 0] data_b_i; \                  
+    } max_io_in_t;
+
+    `define MAX_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] data_o; \
+    } max_io_out_t;
 
 
     ////////////////////////////////////////////////////////////////
@@ -302,6 +335,23 @@ package constant_functions_pkg;
 
     function automatic int alternate_base_fp_DATA_WIDTH_EXT_1(int EXP_WIDTH, int MANT_WIDTH, int BASE_WIDTH);
         return (1 + EXP_WIDTH + MANT_WIDTH + BASE_WIDTH + 1 + 1);
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // max
+    function automatic int max_LATENCY(REGISTERED_IN, GRADE);
+        int latency;
+        if(GRADE == 2) begin
+            latency = 1;
+        end else if (GRADE == 1) begin
+            latency = 2;
+        end else begin // assume GRADE == 2
+            latency = 1;
+        end
+
+        if(REGISTERED_IN == 1) latency++;
+
+        return latency;
     endfunction
 
 endpackage
