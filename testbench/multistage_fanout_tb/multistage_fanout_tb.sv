@@ -35,15 +35,15 @@ import scoreboards_pkg::*;
 // timescale 
 `timescale 1ns / 1ns
 
-module multistage_fanout_tb();
+module multistage_fanout_tb #(
+    parameter DATA_WIDTH = 8,
+    parameter FANOUT_SIZE = 17,
+    parameter FANOUT_FACTOR = 4,
+    parameter IMMEDIATE_START_FANOUT = 1
+) ();
 
     ////////////////////////////////////////////////////////////////
     // localparams
-    localparam DATA_WIDTH = 8;
-    localparam FANOUT_SIZE = 17;            // 16, 15, 17, 3 , 11, 11
-    localparam FANOUT_FACTOR = 4;           // 4,  4,  4,  10, 10, 10
-    localparam IMMEDIATE_START_FANOUT = 1;  // 0,  1,  0,  1 , 1, 0
-
     localparam real CLK_PERIOD = 10;
 
     localparam type T = MultistageFanoutIO #(

@@ -207,7 +207,7 @@ package constant_functions_pkg;
     `define MAX_IO_IN_STRUCT(DATA_WIDTH) \
     typedef struct packed { \
         logic [DATA_WIDTH - 1 : 0] data_a_i; \
-        logic [DATA_WIDTH - 1 : 0] data_b_i; \                  
+        logic [DATA_WIDTH - 1 : 0] data_b_i; \
     } max_io_in_t;
 
     `define MAX_IO_OUT_STRUCT(DATA_WIDTH) \

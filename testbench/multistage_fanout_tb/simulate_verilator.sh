@@ -8,6 +8,9 @@ SIM_DIR="$SCRIPT_DIR/simulate_verilator"
 TOP_MODULE="multistage_fanout_tb"
 THREADS="${THREADS:-1}"
 
+# Example parameter override:
+#   ./simulate_verilator.sh -GFANOUT_SIZE=16 -GFANOUT_FACTOR=4 -GIMMEDIATE_START_FANOUT=0
+
 TB_DIR="$REPO_ROOT/testbench"
 CT_DIR="$TB_DIR/components"
 RTL_DIR="$REPO_ROOT/rtl"
@@ -99,6 +102,7 @@ verilator \
     -I"$CT_DIR/scoreboards" \
     -I"$CT_DIR/io" \
     -I"$CT_DIR/utilities" \
+    "$@" \
     "$SCRIPT_DIR/${TOP_MODULE}.sv"
 
 "$SIM_DIR/obj_dir/V$TOP_MODULE"
