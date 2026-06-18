@@ -3,4 +3,5 @@ package drivers_pkg;
     `include "MultistageFanoutDriver.sv"
     `include "QueueDriver.sv"
     `include "MaxDriver.sv"
+    `include "PriorityEncoderDriver.sv"
 endpackage

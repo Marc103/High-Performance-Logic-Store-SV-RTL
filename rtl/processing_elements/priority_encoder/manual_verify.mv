@@ -1,0 +1,294 @@
+"
+    localparam                                     ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS      (INPUT_DATA_WIDTH, LUTX),
+"
+- defined as 
+"
+    function automatic int priority_encoder_ENCODE_GROUPS(int INPUT_DATA_WIDTH, int LUTX);
+        int encode_groups;
+        encode_groups = INPUT_DATA_WIDTH / LUTX; // truncation towards 0, safe
+        if((INPUT_DATA_WIDTH % LUTX) != 0) begin // if not perfectly divisible
+            encode_groups++;
+        end
+        return encode_groups;
+    endfunction
+
+    function automatic int priority_encoder_ENCODE_DEPTH(int ENCODE_GROUPS);
+        return $clog2(ENCODE_GROUPS);
+    endfunction
+"
+- correct arguments passed in
+- we divide the input width by the lut size giving us the number of groups
+    - since integer division truncates towards 0, we check if there is a remainder and 
+      add +1 to account for the partial group
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    localparam                                     ENCODE_DEPTH               = priority_encoder_ENCODE_DEPTH       (ENCODE_GROUPS);
+"
+- defined as 
+"
+        return $clog2(ENCODE_GROUPS);
+"
+- correct arguments passed in
+- This is correct, lets try some examples
+    - ENCODE_GROUPS == 5, clog2(5) is 3. 0 : input, 1 : 5 reduced to 3, 2 : 3 reduced to 2, 3 : 2 reduced to 1, finished, so [3]
+      is the index of the result of the prioritized groups.
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    localparam int_t [SMALL - 1 : 0][SOLAR - 1: 0] ENCODE_MAX_TREE_MAP        = priority_encoder_ENCODE_MAX_TREE_MAP(ENCODE_GROUPS, ENCODE_DEPTH),
+"
+- correct return types, arguments
+- defined as 
+"
+    function automatic int_t [SMALL - 1 : 0][SOLAR - 1 : 0] priority_encoder_ENCODE_MAX_TREE_MAP(int ENCODE_GROUPS, int ENCODE_DEPTH);
+        int_t [SMALL - 1 : 0][SOLAR - 1 : 0] max_tree_map;
+
+        // initialize all values to 0
+        for(int r = 0; r < SMALL; r++) begin
+            for(int c = 0; c < SOLAR; c++) begin
+                max_tree_map = 0;
+            end
+        end
+        
+        // set 0th row to 1s for each group
+        for(int group = 0; group < ENCODE_GROUPS; group++) begin
+            max_tree_map[0][group] = 1;
+        end
+
+        // determine tree for rest of rows ( <= ENCODE_DEPTH is intentional)
+        for(int row = 1; row <= ENCODE_DEPTH; row++) begin
+            for(int col = 0; col < ENCODE_GROUPS; col++) begin
+                if(((col * 2) + 0) >= ENCODE_GROUPS) break;
+                if(max_tree_map[row - 1][(col * 2) + 0] | max_tree_map[row - 1][(col * 2) + 1]) begin
+                    max_tree_map[row][col] = 1;
+                end
+            end
+        end
+
+        return  max_tree_map;
+    endfunction
+"
+- declaration type is correct of max_tree_map
+- initializing to all 0, r and c conditions correct.
+- then the 0th row (first layer) is set to 1 for each encode group
+- then, each row goes from 1 to ENCODE_DEPTH (inclusive), correct
+- each col goes from 0 to ENCODE_GROUPS (exclusive)
+    - this is oversized, since at each layer the number should decrease by 2, but
+      it keeps the code clean due to issues with odd sized layers
+- each element in the current row is made from the pair of the previous row
+    - we guard with a break, making sure '(col * 2) + 0' is within bounds
+        - we don't check '(col * 2) + 1', the actual array is much larger and cases
+          where the ENCODE_GROUPS are odd still needs to considered regardless
+    - we check for 1 on either size (although the only two cases are 1,1 or 1,0), 
+      that signifies we have a result in the current element
+    - '[row - 1][(col * 2) + 0]' and '[row - 1][(col * 2) + 1]' are correct
+    - final [row][col] for assignment is correct 
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    localparam                                     ENCODE_FIRST_LAYER_LATENCY = max_LATENCY                         (1, GRADE),
+    localparam                                     ENCODE_REST_LAYERS_LATENCY = max_LATENCY                         (0, GRADE),
+"
+- check correct arguments passed into max_LATENCY, which should be REGISTERED_IN and GRADE
+    - first one, REGISTERED_IN is 1, correct
+    - rest layers, REGISTERED_IN is 0, correct
+- otherwise, max_LATENCY() has been verified in the max folder
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    localparam                                     LATENCY                    = priority_encoder_LATENCY            (REGISTERED_IN, ENCODE_DEPTH, ENCODE_FIRST_LAYER_LATENCY, ENCODE_REST_LAYERS_LATENCY),
+"
+- correct arguments passed in
+- defined as
+"
+    function automatic int priority_encoder_LATENCY(int REGISTERED_IN, int ENCODE_DEPTH, int ENCODE_FIRST_LAYER_LATENCY, int ENCODE_REST_LAYERS_LATENCY);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        if(ENCODE_DEPTH >= 1) latency += ENCODE_FIRST_LAYER_LATENCY;
+        if(ENCODE_DEPTH >= 2) latency += (ENCODE_REST_LAYERS_LATENCY * (ENCODE_DEPTH - 1));
+        return latency;
+    endfunction
+"
+- latency starts as 0
+- REGISTERED_IN adds 1 cycle
+- ENCODE_DEPTH >= 1 checks if there is at least 1 layer for the tree (if there is a tree), in which
+  case we add the ENCODE_FIRST_LAYER_LATENCY to it
+- ENCODE_DEPTH >= 2 checks if there are more layers afterwards, to which we add the ENCODE_REST_LAYERS_LATENCY
+  for each additional layer after the first, hence ENCODE_REST_LAYERS_LATENCY * (ENCODE_DEPTH - 1)
+
+"
+    localparam                                     OUTPUT_DATA_WIDTH          = priority_encoder_OUTPUT_DATA_WIDTH  (INPUT_DATA_WIDTH)
+"
+- defined as 
+- correct arguments passed in
+"
+    function automatic int priority_encoder_OUTPUT_DATA_WIDTH(int INPUT_DATA_WIDTH);
+        return $clog2(INPUT_DATA_WIDTH);
+    endfunction
+"
+- yup, the priority encoded value fits in $clog2(INPUT_DATA_WIDTH)
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    input clk_i,
+
+    input  [INPUT_DATA_WIDTH - 1 : 0]  priority_i,
+
+    output [OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o
+"
+- types and no missing signals 
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    logic [INPUT_DATA_WIDTH - 1 : 0] priority_xkeyword;
+    logic [INPUT_DATA_WIDTH - 1 : 0] priority_xkeyword_g;
+
+    always@(posedge clk_i) begin
+        priority_xkeyword <= priority_i; 
+    end
+
+    assign priority_xkeyword_g = (REGISTERED_IN == 1) ? priority_xkeyword : priority_i;
+"
+- standard REGISTERED_IN procedure
+- check types
+- check clk_i used
+- check condition
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    logic [ENCODE_GROUPS - 1 : 0][OUTPUT_DATA_WIDTH - 1 : 0] encoded;
+    
+    // encode values layer
+    always_comb begin
+        for(int group = 0; group < ENCODE_GROUPS; group++) begin
+            encoded[group] = 0;
+            for(int i = (group * LUTX); i < ((group + 1) * LUTX); i++) begin
+                if(i < INPUT_DATA_WIDTH) begin // if within bounds check since last group may not be full
+                    if(priority_xkeyword_g[i]) begin
+                        encoded[group] = i;
+                    end
+                end
+            end
+        end
+    end
+
+"
+- packed types are correct, we ENCODE_GROUPS number of OUTPUT_DATA_WIDTHs
+- basic logic is, each group of signals gets encoded to their respective value
+    - group goes from 0 -> ENCODE_GROUPS (exclusive)
+    - as a default start, we set the encoded[group] to 0
+    - initial i = (group * LUTX) is correct. then we proceed i++ until < the next group, hence (group + 1) * LUTX
+    - then the if statement encodes the value with a priority, this is because i goes from LSB to MSB, so the MSB set
+      bit gets priority, as we expect.
+    - where i represent the value that a set bit would be, it is guaranteed that i would fit in OUTPUT_DATA_WIDTH
+    - we also know, since the for loop consists of LUTX iterations, that this logic should map perfectly into the 
+      LUTX, instead of creating chain logic
+[Marc103 + Codex 5.5 - 06/18/26]
+
+"
+    generate
+        assign priority_encoded[0] = encoded;
+
+        for(genvar row = 1; row <= ENCODE_DEPTH; row++) begin
+            for(genvar col = 0; col < ENCODE_GROUPS; col++) begin
+                if(((col * 2) + 0) < ENCODE_GROUPS) begin
+                    if(ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & 
+                       ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]) begin // both 1s
+                        if(row == 1) // first layer? we register inputs.
+                            max #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .SIGNED(0),
+                                .REGISTERED_IN(1),
+                                .GRADE(GRADE)
+                            ) max_part_first_layer (
+                                .clk_i(clk_i),
+                            
+                                .data_a_i(priority_encoded[row - 1][(col * 2) + 0]),
+                                .data_b_i(priority_encoded[row - 1][(col * 2) + 1]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        else begin
+                            max #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .SIGNED(0),
+                                .REGISTERED_IN(0),
+                                .GRADE(GRADE)
+                            ) max_part_rest_layers (
+                                .clk_i(clk_i),
+                            
+                                .data_a_i(priority_encoded[row - 1][(col * 2) + 0]),
+                                .data_b_i(priority_encoded[row - 1][(col * 2) + 1]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        end
+                    end else if(ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] | 
+                                ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]) begin // left 1 and right 0 (left 0 and right 1 is impossible to happen)
+                        if(row == 1) // first layer? we use ENCODE_FIRST_LAYER_LATENCY
+                            pipe #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .LATENCY(ENCODE_FIRST_LAYER_LATENCY)
+                            ) pipe_part_first_layer (
+                                .clk_i(clk_i),
+                            
+                                .data_i(priority_encoded[row - 1][(col * 2) + 0]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        else begin
+                            pipe #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .LATENCY(ENCODE_REST_LAYERS_LATENCY)
+                            ) pipe_part_rest_layers (
+                                .clk_i(clk_i),
+                            
+                                .data_i(priority_encoded[row - 1][(col * 2) + 0]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        end
+                    end
+                end
+            end
+        end
+    endgenerate
+"
+- initial declaration is correct
+    - 'ENCODE_DEPTH : 0' is intentional
+- index [0] represents the encoded inputs, then we need to form a max tree to get the 
+  priority encoded value
+- follows the map provided by priority_encoder_MAX_TREE_MAP()
+    - the first row [0], is simply set to the encoded values
+    - then we proceed from row 1 -> ENCODE_DEPTH (inclusive)
+    - where for each col 0 -> ENCODE_GROUPS (exclusive), this is a loose upperbound and
+      does change the functionality of what we are trying to achieve
+        - we look at [row - 1][(col * 2) + 0] and [row - 1][(col * 2) + 1], but first do a check
+          to make sure we are in bounds ((col * 2) + 0) < ENCODE_GROUPS. In theory, since we used 
+          oversized structs, so long as ENCODE_GROUPS  < SOLAR / 2, we wouldn't actual need to have
+          this check.
+        - if both values are 1, this means we need a max module between them. If left is 1 and right is 0,
+          we simply pipe the value on the left, if both 0 do nothing, left 0 right 1 isn't possible.
+            - for the first row, we use REGISTERED_IN, to pipeline the priority_encoded[0] values properly
+              since those are immediate inputs.
+- an example, where we have 5 groups.
+[1, 1, 1, 1, 1, 0, 0, 0...] - [0]
+ max   max   pipe           - ENCODE_FIRST_LAYER_LATENCY, REGISTERED_IN == 1
+[1, 1, 1, 0, 0, 0, 0, 0...] - [1]
+ max   pipe                 - ENCODE_REST_LAYERS_LATENCY, REGISTERED_IN == 0
+[1, 1, 0, 0, 0, 0, 0, 0...] - [2]
+ max                        - ENCODE_REST_LAYERS_LATENCY, REGISTERED_IN == 0
+[1, 0, 0, 0, 0, 0, 0, 0...] - [3] which is [ENCODE_DEPTH]
+ ^
+ |
+Result here.
+- hence result is at priority_encoded[ENCODE_DEPTH][0]
+- check correct parameterization of modules
+
+"
+    assign priority_encoded_o = priority_encoded[ENCODE_DEPTH][0];
+"
+- 'hence result is at priority_encoded[ENCODE_DEPTH][0]'
+- all outputs assigned, correct
+[Marc103 + Codex 5.5 - 06/18/26]

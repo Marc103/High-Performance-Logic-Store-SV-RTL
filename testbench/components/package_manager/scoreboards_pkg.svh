@@ -3,4 +3,5 @@ package scoreboards_pkg;
     `include "MultistageFanoutScoreboard.sv"
     `include "QueueScoreboard.sv"
     `include "MaxScoreboard.sv"
+    `include "PriorityEncoderScoreboard.sv"
 endpackage

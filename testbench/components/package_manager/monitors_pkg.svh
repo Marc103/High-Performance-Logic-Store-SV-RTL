@@ -3,4 +3,5 @@ package monitors_pkg;
     `include "MultistageFanoutMonitor.sv"
     `include "QueueMonitor.sv"
     `include "MaxMonitor.sv"
+    `include "PriorityEncoderMonitor.sv"
 endpackage

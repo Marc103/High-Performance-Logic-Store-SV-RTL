@@ -3,4 +3,5 @@ package golden_models_pkg;
     `include "MultistageFanoutModel.sv"
     `include "QueueModel.sv"
     `include "MaxModel.sv"
+    `include "PriorityEncoderModel.sv"
 endpackage

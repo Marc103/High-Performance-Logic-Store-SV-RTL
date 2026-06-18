@@ -3,6 +3,7 @@
 "
 - defined as
 "
+    function automatic int max_LATENCY(int REGISTERED_IN, int GRADE);
         int latency;
         if(GRADE == 2) begin
             latency = 1;
@@ -15,6 +16,7 @@
         if(REGISTERED_IN == 1) latency++;
 
         return latency;
+    endfunction
 "
 - correct arguments passed in
 - initial grade determines latency, where grade 1 means per stage should use

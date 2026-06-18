@@ -21,7 +21,8 @@ package constant_functions_pkg;
         MULTISTAGE_FANOUT,
         ALTERNATE_BASE_FP_ADDER,
         QUEUE,
-        MAX
+        MAX,
+        PRIORITY_ENCODER
     } module_id_e;
     
     typedef logic signed [31:0] int_t;
@@ -199,7 +200,6 @@ package constant_functions_pkg;
         logic clk_i;
 
         logic [SOLAR - 1 : 0] data_a_i;
-        logic [SOLAR - 1 : 0] data_b_i;
 
         logic [SOLAR - 1 : 0] data_o;
     } max_t;
@@ -214,6 +214,34 @@ package constant_functions_pkg;
     typedef struct packed { \
         logic [DATA_WIDTH - 1 : 0] data_o; \
     } max_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
+    // priority encoder
+    typedef struct packed {
+        int INPUT_DATA_WIDTH;
+        int REGISTERED_IN;
+        int REVERSED;
+        int LUTX;
+        int GRADE;
+    } priority_encoder_pt;
+
+    typedef struct packed {
+        logic clk_i;
+
+        logic [SOLAR - 1 : 0] priority_i;
+
+        logic [SMALL - 1 : 0] priority_encoded_o;
+    } priority_encoder_t;
+
+    `define PRIORITY_ENCODER_IO_IN_STRUCT(INPUT_DATA_WIDTH) \
+    typedef struct packed { \
+        logic [INPUT_DATA_WIDTH - 1 : 0] priority_i; \
+    } priority_encoder_io_in_t;
+
+    `define PRIORITY_ENCODER_IO_OUT_STRUCT(OUTPUT_DATA_WIDTH) \
+    typedef struct packed { \
+        logic [OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o; \
+    } priority_encoder_io_out_t;
 
 
     ////////////////////////////////////////////////////////////////
@@ -339,7 +367,7 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // max
-    function automatic int max_LATENCY(REGISTERED_IN, GRADE);
+    function automatic int max_LATENCY(int REGISTERED_IN, int GRADE);
         int latency;
         if(GRADE == 2) begin
             latency = 1;
@@ -352,6 +380,61 @@ package constant_functions_pkg;
         if(REGISTERED_IN == 1) latency++;
 
         return latency;
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // priority encoder
+    function automatic int priority_encoder_ENCODE_GROUPS(int INPUT_DATA_WIDTH, int LUTX);
+        int encode_groups;
+        encode_groups = INPUT_DATA_WIDTH / LUTX; // truncation towards 0, safe
+        if((INPUT_DATA_WIDTH % LUTX) != 0) begin // if not perfectly divisible
+            encode_groups++;
+        end
+        return encode_groups;
+    endfunction
+
+    function automatic int priority_encoder_ENCODE_DEPTH(int ENCODE_GROUPS);
+        return $clog2(ENCODE_GROUPS);
+    endfunction
+
+    function automatic int_t [SMALL - 1 : 0][SOLAR - 1 : 0] priority_encoder_ENCODE_MAX_TREE_MAP(int ENCODE_GROUPS, int ENCODE_DEPTH);
+        int_t [SMALL - 1 : 0][SOLAR - 1 : 0] max_tree_map;
+
+        // initialize all values to 0
+        for(int r = 0; r < SMALL; r++) begin
+            for(int c = 0; c < SOLAR; c++) begin
+                max_tree_map = 0;
+            end
+        end
+        
+        // set 0th row to 1s for each group
+        for(int group = 0; group < ENCODE_GROUPS; group++) begin
+            max_tree_map[0][group] = 1;
+        end
+
+        // determine tree for rest of rows ( <= ENCODE_DEPTH is intentional)
+        for(int row = 1; row <= ENCODE_DEPTH; row++) begin
+            for(int col = 0; col < ENCODE_GROUPS; col++) begin
+                if(((col * 2) + 0) >= ENCODE_GROUPS) break;
+                if(max_tree_map[row - 1][(col * 2) + 0] | max_tree_map[row - 1][(col * 2) + 1]) begin
+                    max_tree_map[row][col] = 1;
+                end
+            end
+        end
+
+        return  max_tree_map;
+    endfunction
+    
+    function automatic int priority_encoder_LATENCY(int REGISTERED_IN, int ENCODE_DEPTH, int ENCODE_FIRST_LAYER_LATENCY, int ENCODE_REST_LAYERS_LATENCY);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        if(ENCODE_DEPTH >= 1) latency += ENCODE_FIRST_LAYER_LATENCY;
+        if(ENCODE_DEPTH >= 2) latency += (ENCODE_REST_LAYERS_LATENCY * (ENCODE_DEPTH - 1));
+        return latency;
+    endfunction
+
+    function automatic int priority_encoder_OUTPUT_DATA_WIDTH(int INPUT_DATA_WIDTH);
+        return $clog2(INPUT_DATA_WIDTH);
     endfunction
 
 endpackage

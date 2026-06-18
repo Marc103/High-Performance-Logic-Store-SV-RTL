@@ -17,8 +17,8 @@ REGISTERED_IN [0, 1]:
 
 GRADE [1,2]:
 - Determines logic levels per stage. If 1, the compare and mux happen in
-  separate stages (since 1 logic level per stage), which is 2 cycle of latency. If 2, compare and
-  mux happen in 1 stage (2 logic levels per stage), using 1 cycles of latency.
+  separate stages (since 1 logic level per stage), which is 2 cycles of latency. 
+  If 2, compare and mux happen in 1 stage (2 logic levels per stage), using 1 cycles of latency.
 */
 
 import constant_functions_pkg::*; 
