@@ -48,6 +48,20 @@ package constant_functions_pkg;
         return exponent;
     endfunction
 
+    function automatic int mux_ability(int LUTX);
+        int selector_width;
+        selector_width = SMALL;
+        
+        // sanity check, the smallest is a 2:1 mux
+        if(LUTX < 3) return 1;
+
+        while((selector_width + (2**selector_width)) > LUTX) begin
+            selector_width--;
+        end
+
+        return selector_width;
+    endfunction
+
     ////////////////////////////////////////////////////////////////
     //            Module specific oversized structs               //
     //////////////////////////////////////////////////////////////// 
@@ -243,6 +257,35 @@ package constant_functions_pkg;
         logic [OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o; \
     } priority_encoder_io_out_t;
 
+    ////////////////////////////////////////////////////////////////
+    // multistage mux
+    typedef struct packed {
+        int DATA_WIDTH;
+        int INPUT_SIZE;
+        int REGISTERED_IN;
+        int LUTX;
+        int GRADE;
+    } multistage_mux_pt;
+
+    typedef struct packed {
+        input clk_i,
+
+        input [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_i,
+        input                [SMALL - 1 : 0]    sel_i,
+
+        output               [GALACTIC - 1 : 0] data_o
+    } multistage_mux_t;
+
+    `define MULTISTAGE_MUX_IO_IN_STRUCT(DATA_WIDTH, SIZE, SELECTOR_WIDTH) \
+    typedef struct packed { \
+        logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0]     data_i; \
+        logic               [SELECTOR_WIDTH - 1 : 0] sel_i;
+    } multistage_mux_io_in_t;
+
+    `define MULTISTAGE_MUX_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] data_o; \
+    } multistage_mux_io_out_t;
 
     ////////////////////////////////////////////////////////////////
     //           Module specific constant functions               //
@@ -436,5 +479,80 @@ package constant_functions_pkg;
     function automatic int priority_encoder_OUTPUT_DATA_WIDTH(int INPUT_DATA_WIDTH);
         return $clog2(INPUT_DATA_WIDTH);
     endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // multistage mux
+    function automatic int multistage_mux_SELECTOR_WIDTH(int SIZE);
+        return $clog2(SIZE);
+    endfunction
+
+    function automatic int multistage_mux_GROUP_SIZE(LUTX, GRADE);
+        int mux_ability, graded_mux_ability, group_size;
+
+        mux_ability = mux_ability(LUTX);
+        graded_mux_ability = mux_ability * GRADE;
+
+        group_size = 2 ** graded_mux_ability;
+
+        return group_size;
+    endfunction
+
+    function automatic int multistage_
+
+    function automatic int multistage_mux_STAGES(int GROUP_SIZE, SIZE);
+        return clog_base(GROUP_SIZE, SIZE);
+    endfunction
+
+    function automatic int_t [SMALL - 1 : 0][SOLAR - 1 : 0] multistage_mux_MUX_TREE_MAP(int STAGES, int GROUP_SIZE, int SIZE);
+        int_t [SMALL - 1 : 0][SOLAR - 1 : 0] mux_tree_map;
+        int counter;
+        
+        // initialize all values to 0
+        for(int r = 0; r < SMALL; r++) begin
+            for(int c = 0; c < SOLAR; c++) begin
+                mux_tree_map = 0;
+            end
+        end
+
+        // set 0th row to 1s for each input 
+        for(int input = 0; input < SIZE; input++) begin
+            mux_tree_map[0][input] = 1;
+        end
+
+        // *we set the lowest index for each group the number of actual inputs available
+        // and is used to deal with partial groups
+
+        for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
+            counter = 0;
+            for(int g = 0; g < GROUP_SIZE; g++) begin
+                if(mux_tree_map[0][group + g] != 0) counqter++
+            end
+            mux_tree_map[0][group] == counter;
+        end
+
+
+        // mux tree, repeat the two steps above for each proceeding stage
+        for(int row = 1; row <= STAGES; row++) begin
+            for(int col = 0; col < SIZE; col++) begin
+                if(((col * GROUP_SIZE) + 0) >= SIZE) break;
+
+                // check if there are inputs from previous row to mux, 
+                // set as 1 in current row if there is
+                if(mux_tree_map[row - 1][((col * GROUP_SIZE) + 0)] != 0) begin
+                    mux_tree_map[row][col] = 1;
+                end
+            end
+
+            // set group completness in the current row, in the lowest index *
+            for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
+                counter = 0;
+                for(int g = 0; g < GROUP_SIZE; g++) begin
+                    if(mux_tree_map[row][group + g] != 0) counter++
+                end
+            end
+        end
+        
+    endfunction
+
 
 endpackage
