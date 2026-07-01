@@ -486,20 +486,20 @@ package constant_functions_pkg;
         return $clog2(SIZE);
     endfunction
 
-    function automatic int multistage_mux_GROUP_SIZE(LUTX, GRADE);
-        int mux_ability, graded_mux_ability, group_size;
+    function automatic int multistage_mux_GROUP_SELECTOR_WIDTH(int LUTX, int GRADE);
+        int mux_ability, graded_mux_ability;
 
         mux_ability = mux_ability(LUTX);
         graded_mux_ability = mux_ability * GRADE;
 
-        group_size = 2 ** graded_mux_ability;
-
-        return group_size;
+        return graded_mux_ability;
     endfunction
 
-    function automatic int multistage_
+    function automatic int multistage_mux_GROUP_SIZE(int GROUP_SELECTOR_WIDTH);
+        return 2 ** GROUP_SELECTOR_WIDTH;
+    endfunction
 
-    function automatic int multistage_mux_STAGES(int GROUP_SIZE, SIZE);
+    function automatic int multistage_mux_STAGES(int GROUP_SIZE, int SIZE);
         return clog_base(GROUP_SIZE, SIZE);
     endfunction
 
@@ -525,9 +525,9 @@ package constant_functions_pkg;
         for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
             counter = 0;
             for(int g = 0; g < GROUP_SIZE; g++) begin
-                if(mux_tree_map[0][group + g] != 0) counqter++
+                if(mux_tree_map[0][group + g] != 0) counter++;
             end
-            mux_tree_map[0][group] == counter;
+            mux_tree_map[0][group] = counter;
         end
 
 
@@ -549,6 +549,7 @@ package constant_functions_pkg;
                 for(int g = 0; g < GROUP_SIZE; g++) begin
                     if(mux_tree_map[row][group + g] != 0) counter++
                 end
+                mux_tree_map[row][group] = counter;
             end
         end
         
