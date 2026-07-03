@@ -285,6 +285,120 @@
 Result here.
 - hence result is at priority_encoded[ENCODE_DEPTH][0]
 - check correct parameterization of modules
+[Marc103 + Codex 5.5 - 06/18/26]
+- using if conditionals in gnerate block produce out of index range problems 
+  with older tools, despite the appropriate checks being in place.
+- issue is named as 'generate problem'
+- redefined (as per 'generate problem')
+
+"
+    logic [ENCODE_DEPTH : 0][ENCODE_GROUPS - 1 : 0][OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded;
+
+    generate
+        assign priority_encoded[0] = encoded;
+
+        for(genvar row = 1; row <= ENCODE_DEPTH; row++) begin
+            for(genvar col = 0; col < ENCODE_GROUPS; col++) begin
+                for(genvar check_bound = (((col * 2) + 0) < ENCODE_GROUPS); 
+                           check_bound == 1; 
+                           check_bound = 0) begin
+                    for(genvar left_right = (ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]);
+                               left_right == 1;
+                               left_right = 0)  begin // both 1s
+                        if(row == 1) // first layer? we register inputs.
+                            max #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .SIGNED(0),
+                                .REGISTERED_IN(1),
+                                .GRADE(GRADE)
+                            ) max_part_first_layer (
+                                .clk_i(clk_i),
+                            
+                                .data_a_i(priority_encoded[row - 1][(col * 2) + 0]),
+                                .data_b_i(priority_encoded[row - 1][(col * 2) + 1]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        else begin
+                            max #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .SIGNED(0),
+                                .REGISTERED_IN(0),
+                                .GRADE(GRADE)
+                            ) max_part_rest_layers (
+                                .clk_i(clk_i),
+                            
+                                .data_a_i(priority_encoded[row - 1][(col * 2) + 0]),
+                                .data_b_i(priority_encoded[row - 1][(col * 2) + 1]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        end
+                    end 
+                    for(genvar left_only = (ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & (!ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]));
+                               left_only == 1;
+                               left_only = 0) begin
+                        if(row == 1) // first layer? we use ENCODE_FIRST_LAYER_LATENCY
+                            pipe #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .LATENCY(ENCODE_FIRST_LAYER_LATENCY)
+                            ) pipe_part_first_layer (
+                                .clk_i(clk_i),
+                            
+                                .data_i(priority_encoded[row - 1][(col * 2) + 0]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        else begin
+                            pipe #(
+                                .DATA_WIDTH(OUTPUT_DATA_WIDTH),
+                                .LATENCY(ENCODE_REST_LAYERS_LATENCY)
+                            ) pipe_part_rest_layers (
+                                .clk_i(clk_i),
+                            
+                                .data_i(priority_encoded[row - 1][(col * 2) + 0]),
+
+                                .data_o(priority_encoded[row][col])
+                            );
+                        end
+                    end
+                end
+            end
+        end
+    endgenerate
+"
+- initial declaration is correct
+    - 'ENCODE_DEPTH : 0' is intentional
+- index [0] represents the encoded inputs, then we need to form a max tree to get the 
+  priority encoded value
+- follows the map provided by priority_encoder_MAX_TREE_MAP()
+    - the first row [0], is simply set to the encoded values
+    - then we proceed from row 1 -> ENCODE_DEPTH (inclusive)
+    - where for each col 0 -> ENCODE_GROUPS (exclusive), this is a loose upperbound and
+      does change the functionality of what we are trying to achieve
+        - we look at [row - 1][(col * 2) + 0] and [row - 1][(col * 2) + 1], but first do a check
+          to make sure we are in bounds ((col * 2) + 0) < ENCODE_GROUPS. In theory, since we used 
+          oversized structs, so long as ENCODE_GROUPS  < SOLAR / 2, we wouldn't actual need to have
+          this check.
+        - if both values are 1, this means we need a max module between them. If left is 1 and right is 0,
+          we simply pipe the value on the left, if both 0 do nothing, left 0 right 1 isn't possible.
+            - for the first row, we use REGISTERED_IN, to pipeline the priority_encoded[0] values properly
+              since those are immediate inputs.
+- an example, where we have 5 groups.
+[1, 1, 1, 1, 1, 0, 0, 0...] - [0]
+ max   max   pipe           - ENCODE_FIRST_LAYER_LATENCY, REGISTERED_IN == 1
+[1, 1, 1, 0, 0, 0, 0, 0...] - [1]
+ max   pipe                 - ENCODE_REST_LAYERS_LATENCY, REGISTERED_IN == 0
+[1, 1, 0, 0, 0, 0, 0, 0...] - [2]
+ max                        - ENCODE_REST_LAYERS_LATENCY, REGISTERED_IN == 0
+[1, 0, 0, 0, 0, 0, 0, 0...] - [3] which is [ENCODE_DEPTH]
+ ^
+ |
+Result here.
+- hence result is at priority_encoded[ENCODE_DEPTH][0]
+- check correct parameterization of modules
+[Marc103 - 07/01/26]
+
 
 "
     assign priority_encoded_o = priority_encoded[ENCODE_DEPTH][0];

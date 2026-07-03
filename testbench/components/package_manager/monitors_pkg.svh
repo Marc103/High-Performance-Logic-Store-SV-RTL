@@ -4,4 +4,5 @@ package monitors_pkg;
     `include "QueueMonitor.sv"
     `include "MaxMonitor.sv"
     `include "PriorityEncoderMonitor.sv"
+    `include "MultistageMuxMonitor.sv"
 endpackage

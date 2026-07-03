@@ -17,6 +17,20 @@ cd simulate
 vlib work
 
 REM -------------------------------------------------
+REM Parameter defaults
+REM Override from cmd before calling, for example:
+REM   set DATA_WIDTH=8
+REM   set SIGNED=0
+REM   set REGISTERED_IN=1
+REM   set GRADE=2
+REM   simulate.bat
+REM -------------------------------------------------
+if not defined DATA_WIDTH set DATA_WIDTH=8
+if not defined SIGNED set SIGNED=1
+if not defined REGISTERED_IN set REGISTERED_IN=1
+if not defined GRADE set GRADE=1
+
+REM -------------------------------------------------
 REM Directories
 REM -------------------------------------------------
 set TB_DIR=..\..\testbench
@@ -55,5 +69,12 @@ IF ERRORLEVEL 1 (
 REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
-vsim -voptargs=+acc -c max_tb -do "run -all; quit"
+vsim -voptargs=+acc -c ^
+    -g/max_tb/DATA_WIDTH=%DATA_WIDTH% ^
+    -g/max_tb/SIGNED=%SIGNED% ^
+    -g/max_tb/REGISTERED_IN=%REGISTERED_IN% ^
+    -g/max_tb/GRADE=%GRADE% ^
+    max_tb ^
+    -do "vcd file waves.vcd; vcd add -r /*; run -all; vcd flush; quit -f" ^
+    %*
 cd ..

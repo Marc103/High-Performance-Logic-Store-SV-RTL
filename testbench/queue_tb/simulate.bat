@@ -17,6 +17,26 @@ cd simulate
 vlib work
 
 REM -------------------------------------------------
+REM Parameter defaults
+REM Override from cmd before calling, for example:
+REM   set ADDR_WIDTH=3
+REM   set DATA_WIDTH=16
+REM   set CONFLICT_PROOF=1
+REM   set REGISTERED_IN=1
+REM   set REGISTERED_IN_BRAM=1
+REM   set REGISTERED_OUT_BRAM=1
+REM   set NUMBER_OF_QUEUES=3
+REM   simulate.bat
+REM -------------------------------------------------
+if not defined ADDR_WIDTH set ADDR_WIDTH=3
+if not defined DATA_WIDTH set DATA_WIDTH=16
+if not defined CONFLICT_PROOF set CONFLICT_PROOF=1
+if not defined REGISTERED_IN set REGISTERED_IN=1
+if not defined REGISTERED_IN_BRAM set REGISTERED_IN_BRAM=1
+if not defined REGISTERED_OUT_BRAM set REGISTERED_OUT_BRAM=1
+if not defined NUMBER_OF_QUEUES set NUMBER_OF_QUEUES=3
+
+REM -------------------------------------------------
 REM Directories
 REM -------------------------------------------------
 set TB_DIR=..\..\testbench
@@ -55,5 +75,15 @@ IF ERRORLEVEL 1 (
 REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
-vsim -voptargs=+acc -c queue_tb -do "run -all; quit"
+vsim -voptargs=+acc -c ^
+    -g/queue_tb/ADDR_WIDTH=%ADDR_WIDTH% ^
+    -g/queue_tb/DATA_WIDTH=%DATA_WIDTH% ^
+    -g/queue_tb/CONFLICT_PROOF=%CONFLICT_PROOF% ^
+    -g/queue_tb/REGISTERED_IN=%REGISTERED_IN% ^
+    -g/queue_tb/REGISTERED_IN_BRAM=%REGISTERED_IN_BRAM% ^
+    -g/queue_tb/REGISTERED_OUT_BRAM=%REGISTERED_OUT_BRAM% ^
+    -g/queue_tb/NUMBER_OF_QUEUES=%NUMBER_OF_QUEUES% ^
+    queue_tb ^
+    -do "vcd file waves.vcd; vcd add -r /*; run -all; vcd flush; quit -f" ^
+    %*
 cd ..

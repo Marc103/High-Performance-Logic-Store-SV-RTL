@@ -4,4 +4,5 @@ package drivers_pkg;
     `include "QueueDriver.sv"
     `include "MaxDriver.sv"
     `include "PriorityEncoderDriver.sv"
+    `include "MultistageMuxDriver.sv"
 endpackage

@@ -4,4 +4,5 @@ package scoreboards_pkg;
     `include "QueueScoreboard.sv"
     `include "MaxScoreboard.sv"
     `include "PriorityEncoderScoreboard.sv"
+    `include "MultistageMuxScoreboard.sv"
 endpackage

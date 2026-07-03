@@ -60,25 +60,28 @@
 [Marc103 + Codex 5.5 - 06/15/26]
 
 "
+    logic unsigned [DATA_WIDTH - 1 : 0] data_a_us_g;
+    logic unsigned [DATA_WIDTH - 1 : 0] data_b_us_g;
     logic unsigned [2:0][DATA_WIDTH - 1 : 0] data_a_us;
     logic unsigned [2:0][DATA_WIDTH - 1 : 0] data_b_us;
 
     logic signed [DATA_WIDTH - 1 : 0] data_a_s;
     logic signed [DATA_WIDTH - 1 : 0] data_b_s;
 
-    logic [1:0][0:0] mux_sel;
+    logic mux_sel_g;
+    logic [1:0] mux_sel;
 
     always_comb begin
-        data_a_us[0] = data_a_g[DATA_WIDTH - 1 : 0];
-        data_b_us[0] = data_b_g[DATA_WIDTH - 1 : 0];
+        data_a_us_g = data_a_g[DATA_WIDTH - 1 : 0];
+        data_b_us_g = data_b_g[DATA_WIDTH - 1 : 0];
 
         data_a_s = data_a_g[DATA_WIDTH - 1 : 0];
         data_b_s = data_b_g[DATA_WIDTH - 1 : 0];
 
         if(SIGNED == 1) begin
-            mux_sel[0] = data_b_s < data_a_s ? 1 : 0;
+            mux_sel_g = data_b_s < data_a_s ? 1 : 0;
         end else begin
-            mux_sel[0] = data_b_us[0] < data_a_us[0] ? 1 : 0;
+            mux_sel_g = data_b_us_g < data_a_us_g ? 1 : 0;
         end
     end
 "
@@ -88,38 +91,38 @@
       logically remapping are just to determine the correct mux
       signalling, which happen on the first stage, ultimately we mux the unsigned signals.
     - since we can have up to 2 stages and at minimum 1 stage,
-      [2 : 0] is appropriate, where [0] represents the input data_*_g signal,
-      [1] 1 stage (cycle) later, [2] 2 stages (cycles) later...
+      [2 : 0] is wide enough for [1] 1 stage (cycle) later and [2] 2 stages
+      (cycles) later.
+    - data_*_us_g and mux_sel_g represent the current combinational stage 0
+      values, kept separate from the registered pipeline arrays.
     - the mux_sel pipeline is [1:0] instead of [2:0] since it finishes by stage 1
-    - and so, this block is to set all the initial values for the pipelines at 
-      index [0].
 [Marc103 + Codex 5.5 - 06/15/26]
 
 
 "
     always@(posedge clk_i) begin
         if(GRADE == 1) begin
-            data_a_us[1] <= data_a_us[0];
-            data_b_us[1] <= data_b_us[0];
+            data_a_us[1] <= data_a_us_g;
+            data_b_us[1] <= data_b_us_g;
 
             data_a_us[2] <= mux_sel[1] ? data_a_us[1] : data_b_us[1];
         end else if(GRADE == 2) begin
-            data_a_us[1] <= mux_sel[0] ? data_a_us[0] : data_b_us[0];
+            data_a_us[1] <= mux_sel_g ? data_a_us_g : data_b_us_g;
         end else begin
-            data_a_us[1] <= mux_sel[0] ? data_a_us[0] : data_b_us[0];
+            data_a_us[1] <= mux_sel_g ? data_a_us_g : data_b_us_g;
         end
-        mux_sel[1] <= mux_sel[0];
+        mux_sel[1] <= mux_sel_g;
     end
 "
 - if GRADE == 1
-    - data_*_us[0] signals pipe forward to stage 1, [1]
-    - mux_sel[0] also pipes forward to stage 1, [1]
-        - reminder that mux_sel[0] is calculated in the always_comb block prior
+    - data_*_us_g signals pipe forward to stage 1, [1]
+    - mux_sel_g also pipes forward to stage 1, [1]
+        - reminder that mux_sel_g is calculated in the always_comb block prior
     - then in stage 2, data_a_us[2] will hold the muxd signal as according to
       mux_sel[1]
     - check input values to mux, correct
 - if GRADE == 2
-    - data_a_us[1] will hold the muxd value as according to mux_sel[0]
+    - data_a_us[1] will hold the muxd value as according to mux_sel_g
     - check input values to mux, correct
 - else follows GRADE == 2 logic
 [Marc103 + Codex 5.5 - 06/15/26]

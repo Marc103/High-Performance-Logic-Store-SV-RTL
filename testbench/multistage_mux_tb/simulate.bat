@@ -19,16 +19,18 @@ vlib work
 REM -------------------------------------------------
 REM Parameter defaults
 REM Override from cmd before calling, for example:
-REM   set INPUT_DATA_WIDTH=17
+REM   set DATA_WIDTH=8
+REM   set SIZE=10
 REM   set REGISTERED_IN=1
-REM   set LUTX=4
+REM   set LUTX=6
 REM   set GRADE=2
 REM   simulate.bat
 REM -------------------------------------------------
-if not defined INPUT_DATA_WIDTH set INPUT_DATA_WIDTH=17
-if not defined REGISTERED_IN set REGISTERED_IN=1
+if not defined DATA_WIDTH set DATA_WIDTH=12
+if not defined SIZE set SIZE=17
+if not defined REGISTERED_IN set REGISTERED_IN=0
 if not defined LUTX set LUTX=4
-if not defined GRADE set GRADE=1
+if not defined GRADE set GRADE=2
 
 REM -------------------------------------------------
 REM Directories
@@ -58,7 +60,7 @@ set INCLUDE_FLAGS=^
 REM -------------------------------------------------
 REM Compile (SystemVerilog)
 REM -------------------------------------------------
-vlog %INCLUDE_FLAGS% -sv ..\priority_encoder_tb.sv
+vlog %INCLUDE_FLAGS% -sv ..\multistage_mux_tb.sv
 
 IF ERRORLEVEL 1 (
     echo Compilation failed.
@@ -70,11 +72,12 @@ REM -------------------------------------------------
 REM Run simulation (command line mode)
 REM -------------------------------------------------
 vsim -voptargs=+acc -c ^
-    -g/priority_encoder_tb/INPUT_DATA_WIDTH=%INPUT_DATA_WIDTH% ^
-    -g/priority_encoder_tb/REGISTERED_IN=%REGISTERED_IN% ^
-    -g/priority_encoder_tb/LUTX=%LUTX% ^
-    -g/priority_encoder_tb/GRADE=%GRADE% ^
-    priority_encoder_tb ^
+    -g/multistage_mux_tb/DATA_WIDTH=%DATA_WIDTH% ^
+    -g/multistage_mux_tb/SIZE=%SIZE% ^
+    -g/multistage_mux_tb/REGISTERED_IN=%REGISTERED_IN% ^
+    -g/multistage_mux_tb/LUTX=%LUTX% ^
+    -g/multistage_mux_tb/GRADE=%GRADE% ^
+    multistage_mux_tb ^
     -do "vcd file waves.vcd; vcd add -r /*; run -all; vcd flush; quit -f" ^
     %*
 cd ..

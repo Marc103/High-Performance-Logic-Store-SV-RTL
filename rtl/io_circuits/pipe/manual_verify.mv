@@ -8,29 +8,35 @@
 [Marc103 + Codex 5.5 - 06/17/26]
 
 "
-    logic [LATENCY : 0][DATA_WIDTH - 1 : 0] data;
-
-    assign data[0] = data_i;
+    generate
+        if(LATENCY == 0) begin
+            assign data_o = data_i;
+        end else begin
+            logic [LATENCY : 1][DATA_WIDTH - 1 : 0] data;
 "
 - packed widths are correct
-    - 'LATENCY : 0' is intentional, [0] represents inputs, [1] 1 cycle
-      later, [2] 2 cycles later... hence we assign data[0] = data_i
+    - latency 0 is a direct passthrough
+    - 'LATENCY : 1' is intentional for latency greater than 0, where [1]
+      represents 1 cycle later, [2] represents 2 cycles later, etc.
 [Marc103 + Codex 5.5 - 06/17/26]
 
 
 "
-    always@(posedge clk_i) begin
-        for(int i = 1; i <= LATENCY; i++) begin
-            data[i] <= data[i - 1];
-        end
-    end
+            always@(posedge clk_i) begin
+                data[1] <= data_i;
+                for(int i = 2; i <= LATENCY; i++) begin
+                    data[i] <= data[i - 1];
+                end
+            end
 
-    assign data_o = data[LATENCY];
+            assign data_o = data[LATENCY];
+        end
+    endgenerate
 "
 - clk_i used
-- for loop conditions are correct, start at 1 -> LATENCY (inclusive)
-    - set [i] to [i - 1]
-- final assign data_o points to [LATENCY]
+- for loop conditions are correct, start at 2 -> LATENCY (inclusive)
+    - [1] captures data_i directly, later stages set [i] to [i - 1]
+- final assign data_o points to [LATENCY], with a direct data_i passthrough for LATENCY == 0
 - all outputs assigned
 [Marc103 + Codex 5.5 - 06/17/26]
 

@@ -22,16 +22,21 @@ module pipe #(
     output [DATA_WIDTH - 1 : 0] data_o
 );
 
-    logic [LATENCY : 0][DATA_WIDTH - 1 : 0] data;
+    generate
+        if(LATENCY == 0) begin
+            assign data_o = data_i;
+        end else begin
+            logic [LATENCY : 1][DATA_WIDTH - 1 : 0] data;
 
-    assign data[0] = data_i;
+            always@(posedge clk_i) begin
+                data[1] <= data_i;
+                for(int i = 2; i <= LATENCY; i++) begin
+                    data[i] <= data[i - 1];
+                end
+            end
 
-    always@(posedge clk_i) begin
-        for(int i = 1; i <= LATENCY; i++) begin
-            data[i] <= data[i - 1];
+            assign data_o = data[LATENCY];
         end
-    end
-
-    assign data_o = data[LATENCY];
+    endgenerate
 
 endmodule

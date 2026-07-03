@@ -54,40 +54,43 @@ module max #(
     assign data_a_g = (REGISTERED_IN == 1) ? data_a : data_a_i;
     assign data_b_g = (REGISTERED_IN == 1) ? data_b : data_b_i;
 
+    logic unsigned [DATA_WIDTH - 1 : 0] data_a_us_g;
+    logic unsigned [DATA_WIDTH - 1 : 0] data_b_us_g;
     logic unsigned [2:0][DATA_WIDTH - 1 : 0] data_a_us;
     logic unsigned [2:0][DATA_WIDTH - 1 : 0] data_b_us;
 
     logic signed [DATA_WIDTH - 1 : 0] data_a_s;
     logic signed [DATA_WIDTH - 1 : 0] data_b_s;
 
-    logic [1:0][0:0] mux_sel;
+    logic mux_sel_g;
+    logic [1:0] mux_sel;
 
     always_comb begin
-        data_a_us[0] = data_a_g[DATA_WIDTH - 1 : 0];
-        data_b_us[0] = data_b_g[DATA_WIDTH - 1 : 0];
+        data_a_us_g = data_a_g[DATA_WIDTH - 1 : 0];
+        data_b_us_g = data_b_g[DATA_WIDTH - 1 : 0];
 
         data_a_s = data_a_g[DATA_WIDTH - 1 : 0];
         data_b_s = data_b_g[DATA_WIDTH - 1 : 0];
 
         if(SIGNED == 1) begin
-            mux_sel[0] = data_b_s < data_a_s ? 1 : 0;
+            mux_sel_g = data_b_s < data_a_s ? 1 : 0;
         end else begin
-            mux_sel[0] = data_b_us[0] < data_a_us[0] ? 1 : 0;
+            mux_sel_g = data_b_us_g < data_a_us_g ? 1 : 0;
         end
     end
 
     always@(posedge clk_i) begin
         if(GRADE == 1) begin
-            data_a_us[1] <= data_a_us[0];
-            data_b_us[1] <= data_b_us[0];
+            data_a_us[1] <= data_a_us_g;
+            data_b_us[1] <= data_b_us_g;
 
             data_a_us[2] <= mux_sel[1] ? data_a_us[1] : data_b_us[1];
         end else if(GRADE == 2) begin
-            data_a_us[1] <= mux_sel[0] ? data_a_us[0] : data_b_us[0];
+            data_a_us[1] <= mux_sel_g ? data_a_us_g : data_b_us_g;
         end else begin
-            data_a_us[1] <= mux_sel[0] ? data_a_us[0] : data_b_us[0];
+            data_a_us[1] <= mux_sel_g ? data_a_us_g : data_b_us_g;
         end
-        mux_sel[1] <= mux_sel[0];
+        mux_sel[1] <= mux_sel_g;
     end
 
     generate 

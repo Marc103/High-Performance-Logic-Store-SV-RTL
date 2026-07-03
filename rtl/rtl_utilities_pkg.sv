@@ -268,18 +268,18 @@ package constant_functions_pkg;
     } multistage_mux_pt;
 
     typedef struct packed {
-        input clk_i,
+        logic clk_i;
 
-        input [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_i,
-        input                [SMALL - 1 : 0]    sel_i,
+        logic [SOLAR - 1 : 0][GALACTIC - 1 : 0] data_i;
+        logic                [SMALL - 1 : 0]    sel_i;
 
-        output               [GALACTIC - 1 : 0] data_o
+        logic                [GALACTIC - 1 : 0] data_o;
     } multistage_mux_t;
 
     `define MULTISTAGE_MUX_IO_IN_STRUCT(DATA_WIDTH, SIZE, SELECTOR_WIDTH) \
     typedef struct packed { \
         logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0]     data_i; \
-        logic               [SELECTOR_WIDTH - 1 : 0] sel_i;
+        logic               [SELECTOR_WIDTH - 1 : 0] sel_i; \
     } multistage_mux_io_in_t;
 
     `define MULTISTAGE_MUX_IO_OUT_STRUCT(DATA_WIDTH) \
@@ -487,10 +487,10 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int multistage_mux_GROUP_SELECTOR_WIDTH(int LUTX, int GRADE);
-        int mux_ability, graded_mux_ability;
+        int width_mux_ability, graded_mux_ability;
 
-        mux_ability = mux_ability(LUTX);
-        graded_mux_ability = mux_ability * GRADE;
+        width_mux_ability = mux_ability(LUTX);
+        graded_mux_ability = width_mux_ability * GRADE;
 
         return graded_mux_ability;
     endfunction
@@ -510,13 +510,13 @@ package constant_functions_pkg;
         // initialize all values to 0
         for(int r = 0; r < SMALL; r++) begin
             for(int c = 0; c < SOLAR; c++) begin
-                mux_tree_map = 0;
+                mux_tree_map[r][c] = 0;
             end
         end
 
         // set 0th row to 1s for each input 
-        for(int input = 0; input < SIZE; input++) begin
-            mux_tree_map[0][input] = 1;
+        for(int i = 0; i < SIZE; i++) begin
+            mux_tree_map[0][i] = 1;
         end
 
         // *we set the lowest index for each group the number of actual inputs available
@@ -547,12 +547,20 @@ package constant_functions_pkg;
             for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
                 counter = 0;
                 for(int g = 0; g < GROUP_SIZE; g++) begin
-                    if(mux_tree_map[row][group + g] != 0) counter++
+                    if(mux_tree_map[row][group + g] != 0) counter++;
                 end
                 mux_tree_map[row][group] = counter;
             end
         end
-        
+
+        return mux_tree_map;
+    endfunction
+
+    function automatic int multistage_mux_LATENCY(int REGISTERED_IN, int STAGES);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
+        return latency;
     endfunction
 
 

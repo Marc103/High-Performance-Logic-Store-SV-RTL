@@ -3,4 +3,5 @@ package io_pkg;
     `include "QueueIO.sv"
     `include "MaxIO.sv"
     `include "PriorityEncoderIO.sv"
+    `include "MultistageMuxIO.sv"
 endpackage

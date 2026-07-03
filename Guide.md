@@ -68,6 +68,112 @@
 
     - On to High Level Synthesis (HLS)
         - Wouldn't it be nice if we didn't have to manually populate the 2D MAP, FROM, TO, PARAMS arrays?... I think you get the idea.
+
+### The problem with Generate Statements
+- generate statements are the only way to instantiate multiple 'nameless' modules using parameters and all that's good but it's pretty strict as compared
+to always_comb blocks when it comes to conditional indexing
+- an example:
+
+logic [7:0] a;
+generate
+    for(genvar i = 0; i < 12; i++) begin
+        if(i < 8) begin
+            a[i] = 1;
+        end
+    end
+endgenerate
+
+- we see from this example that clearly there's no way a will be indexed out of range due to our if statement check, but older (ish) tools can struggle with this
+in the elaboration/parse phase because this translates too:
+
+if(0 < 8) begin
+    a[0] = 1;
+end
+if(1 < 8) begin
+    a[1] = 1
+end
+...
+if(12 < 8) begin
+    a[12] = 1;
+end
+
+- and so the elaborater sees 'a[12]' and chokes on it despite there being a clear if guard check for that precise problem.
+- on the contrary,
+
+logic [7:0] a;
+always_comb begin
+    for(int i = 0; i < 12; i++) begin
+        if(i < 8) begin
+            a[i] = 1;
+        end
+    end
+end
+
+- works just fine. 
+- So only use generate statements if you absolutely have to (basically whenever module generation required), but still even then sometimes
+we can still run into this sort of issue because a certain amount of complexity is required. Here's my ugly hack to workaround this issue:
+
+logic [7:0] a;
+generate
+    for(genvar i = 0; i < 12; i++) begin
+        for(genvar check_idx = (i < 8);
+                   check_idx == 1; 
+                   check_idx = 0) begin
+            a[i] = 1;
+        end
+    end
+endgenerate
+
+- See how it literally prevents statements that assign out of range to even appear? It's gross but it gets the job done.
+- This doesn't mean if statements are banned from generates entirely, it just means that all if branches within generates
+  must not contain assignmnets to out of range indices.
+- it's from this issue that I realized that generate statements are quite a bit different, more strict and need to be careful
+  designed whenever used.
+
+### Packed Arrays and Mixed Drivers
+- Avoid driving different indices of the same packed array from different processes.
+- In SystemVerilog, a declaration such as `logic [N : 0][DATA_WIDTH - 1 : 0] pipe;` is one packed variable, even though it is indexed like an array.
+- Some tools allow this pattern:
+
+```
+assign pipe[0] = data_i;
+
+always@(posedge clk_i) begin
+    pipe[1] <= pipe[0];
+end
+```
+
+- However, stricter simulators can reject it because `pipe` is being driven by both a continuous assignment and a procedural clocked block.
+- The same issue can happen with `always_comb` and `always@(posedge clk_i)`:
+
+```
+always_comb begin
+    pipe[0] = data_g;
+end
+
+always@(posedge clk_i) begin
+    pipe[1] <= pipe[0];
+end
+```
+
+- Even though the code only writes different indices, the simulator may treat this as multiple processes driving the same packed variable.
+- Safer pattern: keep combinational stage-0 values in separate signals, and keep the packed pipeline variable purely registered.
+
+```
+logic [DATA_WIDTH - 1 : 0] pipe_g;
+logic [N : 1][DATA_WIDTH - 1 : 0] pipe;
+
+assign pipe_g = data_i;
+
+always@(posedge clk_i) begin
+    pipe[1] <= pipe_g;
+    for(int i = 2; i <= N; i++) begin
+        pipe[i] <= pipe[i - 1];
+    end
+end
+```
+
+- For latency-0 cases, use a generate branch that directly assigns the output instead of trying to include an input alias inside the packed pipeline.
     
 ## Manual Verification with AI Assistance
 - having a simple to moderately complex testbench clears out about 95% bugs
@@ -129,7 +235,8 @@
 - many of the testbench files have a similar structure as the example files and hence are
 copies of modified versions of them
 - maybe one day i'll write some python script that autogens these files with the base template
-and module name...
+and module name... even better, we got AI to do it and in many cases fill in the testbench files
+themselves aswell!
 
 ## File Checklist Work Flow: More in depth details 
 ### Interface
