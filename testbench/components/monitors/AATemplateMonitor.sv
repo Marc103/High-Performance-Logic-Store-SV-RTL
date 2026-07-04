@@ -39,6 +39,17 @@ class ???Monitor #(type T, type I);
                 active_sequence = active_sequence;
             end
 
+            // latency == 0 handling
+            if(T::??? == 0) begin
+                if(inf.start_sequence || active_sequence) begin
+                    ???
+                end
+                if(inf.end_sequence) begin
+                    active_sequence = 0;
+                end
+                continue;
+            end
+
             if(inf.end_sequence) begin
                 finish_sequence = 1;
             end else begin
