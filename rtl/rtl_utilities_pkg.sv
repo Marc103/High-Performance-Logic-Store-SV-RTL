@@ -22,7 +22,8 @@ package constant_functions_pkg;
         ALTERNATE_BASE_FP_ADDER,
         QUEUE,
         MAX,
-        PRIORITY_ENCODER
+        PRIORITY_ENCODER,
+        MULTISTAGE_MUX
     } module_id_e;
     
     typedef logic signed [31:0] int_t;

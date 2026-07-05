@@ -1,6 +1,11 @@
 /* 
 Queue (aka FIFO). 
 
+*** READ ME READ ME READ ME *********
+less_than_i acts as less_than_equal_i
+more_than_i acts as more_than_equal_i
+*************************************
+
 With CONFLICT_PROOF enabled, simultaneous push/pop behavior is: 
     1. empty state push/pop performs write then read via write forwarding
     2. full state pop/push performs read then write via read forwarding
@@ -341,8 +346,8 @@ module queue #(
     assign full_o  = $unsigned(DATA_DEPTH - 1) < element_count;
     assign empty_o = element_count             < $unsigned(1);
 
-    assign less_than_o = element_count < less_than_g_u;
-    assign more_than_o = more_than_g_u < element_count;
+    assign less_than_o = element_count <= less_than_g_u;
+    assign more_than_o = element_count >= more_than_g_u;
     
     assign rd_data_o = bram_mux_rd_data;
 endmodule

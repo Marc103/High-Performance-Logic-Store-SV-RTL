@@ -158,7 +158,7 @@ class QueueModel #(type T);
 
     function automatic logic get_less_than();
         if(error_state != 0) return 'x;
-        if(this.element_count < this.less_than_u) return 1;
+        if(this.element_count <= this.less_than_u) return 1;
         return 0;
     endfunction
 
@@ -169,7 +169,7 @@ class QueueModel #(type T);
 
     function automatic logic get_more_than();
         if(error_state) return 'x;
-        if(this.more_than_u < this.element_count) return 1;
+        if(this.element_count >= this.more_than_u ) return 1;
         return 0;
     endfunction
 

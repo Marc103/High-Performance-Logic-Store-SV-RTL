@@ -420,6 +420,14 @@ This will also require a pipelined forwarded_valid signal to travel along the re
 "
 - covered with the changes of use more_than_i and less_than_i and rd_data_o going to bram_mux_rd_data instead
 [Marc103 - 06/03/26]
+- partially redefined to work as less_than_equal instead of less_than and greater_than_equal instead of greater_than
+- comparors >=, <=, >  and < are all easy to compute with additions, inversion of carry out is absorbed by LUT feeding carry
+  chain, thus there is no need to only use < instead of <=. However, == is another discussion.
+"
+    assign less_than_o = element_count <= less_than_g_u;
+    assign more_than_o = element_count >= more_than_g_u;
+"
+[Marc103 - 07/05/26]
 
 
 ////////////////////////////////////////////////////////////////
