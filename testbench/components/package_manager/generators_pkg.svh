@@ -5,4 +5,5 @@ package generators_pkg;
     `include "MaxGenerator.sv"
     `include "PriorityEncoderGenerator.sv"
     `include "MultistageMuxGenerator.sv"
+    `include "EqualGenerator.sv"
 endpackage

@@ -5,4 +5,5 @@ package golden_models_pkg;
     `include "MaxModel.sv"
     `include "PriorityEncoderModel.sv"
     `include "MultistageMuxModel.sv"
+    `include "EqualModel.sv"
 endpackage

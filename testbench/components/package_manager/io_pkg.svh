@@ -4,4 +4,5 @@ package io_pkg;
     `include "MaxIO.sv"
     `include "PriorityEncoderIO.sv"
     `include "MultistageMuxIO.sv"
+    `include "EqualIO.sv"
 endpackage

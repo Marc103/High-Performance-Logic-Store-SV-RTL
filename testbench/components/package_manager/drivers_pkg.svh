@@ -5,4 +5,5 @@ package drivers_pkg;
     `include "MaxDriver.sv"
     `include "PriorityEncoderDriver.sv"
     `include "MultistageMuxDriver.sv"
+    `include "EqualDriver.sv"
 endpackage
