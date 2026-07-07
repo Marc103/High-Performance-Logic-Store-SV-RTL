@@ -64,6 +64,59 @@ package constant_functions_pkg;
         return selector_width;
     endfunction
 
+    function automatic int_t [SMALL - 1 : 0][SOLAR - 1 : 0] generic_tree_map(int STAGES, int GROUP_SIZE, int SIZE);
+        int_t [SMALL - 1 : 0][SOLAR - 1 : 0] tree_map;
+        int counter;
+        
+        // initialize all values to 0
+        for(int r = 0; r < SMALL; r++) begin
+            for(int c = 0; c < SOLAR; c++) begin
+                tree_map[r][c] = 0;
+            end
+        end
+
+        // set 0th row to 1s for each input 
+        for(int i = 0; i < SIZE; i++) begin
+            tree_map[0][i] = 1;
+        end
+
+        // *we set the lowest index for each group the number of actual inputs available
+        // and is used to deal with partial groups
+
+        for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
+            counter = 0;
+            for(int g = 0; g < GROUP_SIZE; g++) begin
+                if(tree_map[0][group + g] != 0) counter++;
+            end
+            tree_map[0][group] = counter;
+        end
+
+
+        // tree, repeat the two steps above for each proceeding stage
+        for(int row = 1; row <= STAGES; row++) begin
+            for(int col = 0; col < SIZE; col++) begin
+                if(((col * GROUP_SIZE) + 0) >= SIZE) break;
+
+                // check if there are inputs from previous row to mux, 
+                // set as 1 in current row if there is
+                if(tree_map[row - 1][((col * GROUP_SIZE) + 0)] != 0) begin
+                    tree_map[row][col] = 1;
+                end
+            end
+
+            // set group completness in the current row, in the lowest index *
+            for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
+                counter = 0;
+                for(int g = 0; g < GROUP_SIZE; g++) begin
+                    if(tree_map[row][group + g] != 0) counter++;
+                end
+                tree_map[row][group] = counter;
+            end
+        end
+
+        return tree_map;
+    endfunction
+
     ////////////////////////////////////////////////////////////////
     //            Module specific oversized structs               //
     //////////////////////////////////////////////////////////////// 
@@ -605,6 +658,19 @@ package constant_functions_pkg;
             latency = 0;
         end
         if(REGISTERED_IN == 1) latency++;
+        return latency;
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // reduction tree
+    function automatic int reduction_tree_STAGES(int LUTX, int DATA_WIDTH);
+        return clog_base(LUTX, DATA_WIDTH);
+    endfunction
+
+    function automatic int reduction_tree_LATENCY(int REGISTERED_IN, int STAGES);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
         return latency;
     endfunction
 
