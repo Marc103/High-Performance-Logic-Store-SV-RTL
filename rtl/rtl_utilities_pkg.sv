@@ -16,6 +16,7 @@ package constant_functions_pkg;
     //                       Module IDs                           //
     ////////////////////////////////////////////////////////////////
     typedef enum int {
+        NO_MODULE,
         BRAM_SINGLE_PORT,
         BRAM_DUAL_PORT_SIMPLE,
         MULTISTAGE_FANOUT,
@@ -24,7 +25,8 @@ package constant_functions_pkg;
         MAX,
         PRIORITY_ENCODER,
         MULTISTAGE_MUX,
-        EQUAL
+        EQUAL,
+        REDUCTION_TREE
     } module_id_e;
     
     typedef logic signed [31:0] int_t;
@@ -369,6 +371,34 @@ package constant_functions_pkg;
     typedef struct packed { \
         logic eq_o; \
     } equal_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
+    // reduction tree
+    typedef struct packed {
+        int DATA_WIDTH;
+        int GATE;
+        int REGISTERED_IN;
+        int LUTX;
+        int GRADE;
+    } reduction_tree_pt;
+
+    typedef struct packed {
+        logic clk_i;
+
+        logic [SOLAR - 1 : 0] data_a_i;
+
+        logic reduced_o;
+    } reduction_tree_t;
+
+    `define REDUCTION_TREE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] data_i; \
+    } reduction_tree_io_in_t;
+
+    `define REDUCTION_TREE_IO_OUT_STRUCT \
+    typedef struct packed { \
+        logic reduced_o; \
+    } reduction_tree_io_out_t;
 
     ////////////////////////////////////////////////////////////////
     //           Module specific constant functions               //

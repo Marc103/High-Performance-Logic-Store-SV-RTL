@@ -53,7 +53,7 @@ module reduction_tree #(
     
     input [DATA_WIDTH - 1 : 0] data_i,
 
-    output data_o
+    output reduced_o
 );
 
     logic [DATA_WIDTH - 1 : 0] data;
@@ -116,6 +116,6 @@ module reduction_tree #(
         end 
     end
 
-    assign data_o = reduce_data[STAGES][0];
+    assign reduced_o = reduce_data[STAGES][0];
 
 endmodule
