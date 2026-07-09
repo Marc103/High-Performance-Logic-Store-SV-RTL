@@ -6,4 +6,5 @@ package drivers_pkg;
     `include "PriorityEncoderDriver.sv"
     `include "MultistageMuxDriver.sv"
     `include "EqualDriver.sv"
+    `include "ReductionTreeDriver.sv"
 endpackage

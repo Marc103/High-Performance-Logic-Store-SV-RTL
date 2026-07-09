@@ -6,4 +6,5 @@ package scoreboards_pkg;
     `include "PriorityEncoderScoreboard.sv"
     `include "MultistageMuxScoreboard.sv"
     `include "EqualScoreboard.sv"
+    `include "ReductionTreeScoreboard.sv"
 endpackage

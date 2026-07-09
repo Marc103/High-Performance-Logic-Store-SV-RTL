@@ -5,4 +5,5 @@ package io_pkg;
     `include "PriorityEncoderIO.sv"
     `include "MultistageMuxIO.sv"
     `include "EqualIO.sv"
+    `include "ReductionTreeIO.sv"
 endpackage

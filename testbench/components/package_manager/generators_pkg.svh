@@ -6,4 +6,5 @@ package generators_pkg;
     `include "PriorityEncoderGenerator.sv"
     `include "MultistageMuxGenerator.sv"
     `include "EqualGenerator.sv"
+    `include "ReductionTreeGenerator.sv"
 endpackage

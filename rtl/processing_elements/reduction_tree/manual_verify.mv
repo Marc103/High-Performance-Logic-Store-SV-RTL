@@ -1,0 +1,179 @@
+"
+    localparam                                      GROUP_SIZE           = reduction_tree_GROUP_SIZE(LUTX, GRADE),
+"
+- defined as 
+"
+    function automatic int reduction_tree_GROUP_SIZE(int LUTX, int GRADE);
+        return LUTX ** GRADE;
+    endfunction
+"
+- correct arguments passed in
+- a LUT6 reduces by 6 inputs for GRADE == 1, then 6 LUT6 -> 1 LUT6 for GRADE == 2, and so on, hence,
+  LUTX ** GRADE.
+[Marc103 + Codex 5.5 - 07/09/26]
+
+"
+    localparam                                      STAGES               = reduction_tree_STAGES (GROUP_SIZE, DATA_WIDTH),
+"
+- defined as 
+"
+    function automatic int reduction_tree_STAGES(int GROUP_SIZE, int DATA_WIDTH);
+        if(DATA_WIDTH == 1) return 1;
+        return clog_base(GROUP_SIZE, DATA_WIDTH);
+    endfunction
+"
+- correct arguments passed in  
+- GROUP_SIZE is the base factor reduction that we are reducing DATA_WIDTH by
+- but, we also have a guard, since STAGES cannot be 0 (must be at least 1)
+[Marc103 + Codex 5.5 - 07/09/26]
+
+"
+    localparam int_t [SMALL - 1 : 0][SOLAR - 1 : 0] REDUCTION_TREE_MAP   = generic_tree_map      (STAGES, GROUP_SIZE, DATA_WIDTH),
+"
+- defined as 
+"
+    function automatic int_t [SMALL - 1 : 0][SOLAR - 1 : 0] generic_tree_map(int STAGES, int GROUP_SIZE, int SIZE);
+        int_t [SMALL - 1 : 0][SOLAR - 1 : 0] tree_map;
+        int counter;
+        
+        // initialize all values to 0
+        for(int r = 0; r < SMALL; r++) begin
+            for(int c = 0; c < SOLAR; c++) begin
+                tree_map[r][c] = 0;
+            end
+        end
+
+        // set 0th row to 1s for each input 
+        for(int i = 0; i < SIZE; i++) begin
+            tree_map[0][i] = 1;
+        end
+
+        // *we set the lowest index for each group the number of actual inputs available
+        // and is used to deal with partial groups
+
+        for(int group = 0; group < SIZE; group += GROUP_SIZE) begin
+            counter = 0;
+            for(int g = 0; g < GROUP_SIZE; g++) begin
+                if(tree_map[0][group + g] != 0) counter++;
+            end
+            tree_map[0][group] = counter;
+        end
+
+
+"
+- this function produces a generic tree map where
+    - STAGES is how many stages is required to reduce the input(s) to a single output
+    - GROUP_SIZE refers to the factor by which we reduce the inputs by at a time 
+    - SIZE is the number of inputs
+- in this case we pass in 
+    - STAGES for STAGES 
+    - GROUP_SIZE for GROUP_SIZE
+    - DATA_WIDTH for SIZE, as that tell us the number of inputs for the logical reduction tree
+- so that means correct arguments passed in
+- otherwise, see "multistage_mux_MUX_TREE_MAP" manual verification, as it is exactly the same with 
+  minor renaming
+[Marc103 + Codex 5.5 - 07/09/26]
+
+"
+    localparam                                      LATENCY              = reduction_tree_LATENCY(REGISTERED_IN, STAGES)
+"
+- defined as 
+"
+    function automatic int reduction_tree_LATENCY(int REGISTERED_IN, int STAGES);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
+        return latency;
+    endfunction
+"
+- correct arguments passed in   
+- latency starts as 0, REGISTERED_IN add 1 then we add STAGES - 1 (STAGES is guaranteed to be > 0)
+[Marc103 + Codex 5.5 - 07/09/26]
+
+"
+    input clk_i,
+    
+    input [DATA_WIDTH - 1 : 0] data_i,
+
+    output reduced_o
+"
+- types and no missing signals
+[Marc103 + Codex 5.5 - 07/09/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] data;
+    logic [DATA_WIDTH - 1 : 0] data_g;
+
+    always@(posedge clk_i) begin
+        data <= data_i;
+    end
+
+    assign data_g = (REGISTERED_IN == 1) ? data : data_i;
+"
+- standard REGISTERED_IN procedure
+
+"
+    logic [STAGES : 0][DATA_WIDTH - 1 : 0] reduce_data;
+    logic [STAGES - 1: 0][DATA_WIDTH - 1 : 0] reduce_data_pipeline;
+    /*
+    See schematic in 'multistage_mux.sv', follows similar pipeline structure
+    */
+
+    always_comb begin
+        reduce_data[0]          = 'x;
+
+        for(int row = 1; row <= STAGES; row++) begin
+            for(int col = 0; col < DATA_WIDTH; col++) begin
+                if(REDUCTION_TREE_MAP[row][col] != 0) begin
+                    logic [GROUP_SIZE - 1 : 0] group_reduce_data;
+
+                    // wire inputs
+                    if(GATE == 0) begin          // AND
+                        group_reduce_data = '1;
+                    end else if(GATE == 1) begin // OR
+                        group_reduce_data = '0;
+                    end else if(GATE == 2) begin // XOR
+                        group_reduce_data = '0;
+                    end else begin
+                        group_reduce_data = '0;
+                    end
+
+                    for(int g = 0; g < REDUCTION_TREE_MAP[row - 1][(col * GROUP_SIZE) + 0]; g++) begin
+                        if(row == 1) begin
+                            group_reduce_data[g] = data_g[(col * GROUP_SIZE) + g];
+                        end else begin
+                            group_reduce_data[g] = reduce_data_pipeline[row - 1][(col * GROUP_SIZE) + g];
+                        end
+                    end
+
+                    // perform reduction
+                    if(GATE == 0) begin          // AND
+                        reduce_data[row][col] = &group_reduce_data;
+                    end else if(GATE == 1) begin // OR
+                        reduce_data[row][col] = |group_reduce_data;
+                    end else if(GATE == 2) begin // XOR
+                        reduce_data[row][col] = ^group_reduce_data;
+                    end else begin               // default 'x 
+                        reduce_data[row][col] = 'x;
+                    end
+                end
+            end
+        end 
+    end
+
+    always@(posedge clk_i) begin
+        for(int row = 1; row < STAGES; row++) begin
+            reduce_data_pipeline[row] <= reduce_data[row];
+        end 
+    end
+
+    assign reduced_o = reduce_data[STAGES][0];
+"
+- see 'multistage_mux.sv' related files for a detailed explanation, this is directly taken from there
+  and slightly modified. Modifications will be explained here.
+    - '...int col = 0; col < DATA_WIDTH; col++...' previously used SIZE, but in this case each bit is an input, hence, DATA_WIDTH
+      is SIZE 
+    - 'logic [GROUP_SIZE - 1 : 0] group_reduce_data;', we complete partial groups with their appropriate '0 or '1 fill
+       - '1 for AND, and '0 for XOR and OR
+    - finally we set reduce_data[row][col] to the respective logical reduction
+[Marc103 + Codex 5.5 - 07/09/26]

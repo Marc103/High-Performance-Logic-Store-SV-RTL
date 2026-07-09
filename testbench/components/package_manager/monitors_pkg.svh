@@ -6,4 +6,5 @@ package monitors_pkg;
     `include "PriorityEncoderMonitor.sv"
     `include "MultistageMuxMonitor.sv"
     `include "EqualMonitor.sv"
+    `include "ReductionTreeMonitor.sv"
 endpackage

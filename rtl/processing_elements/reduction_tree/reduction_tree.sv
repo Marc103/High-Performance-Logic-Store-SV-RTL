@@ -1,19 +1,16 @@
 /*
 Reduction Tree
 Performs logical reduction of given input. Supports
-AND, OR, XOR, NAND, NOR, NXOR reduction.
+AND, OR and XOR reduction.
 
 DATA_WIDTH:
 - Data width
 
-GATE[0,1,2,3,4,5]:
+GATE[0,1,2]:
 - Which logical reduction to perform? 
 0 - AND
 1 - OR
 2 - XOR
-3 - NAND
-4 - NOR
-5 - NXOR
 
 REGISTERED_IN [0, 1]:
 - If 1, inputs are registered, increasing latency by 1 cycle,
@@ -44,8 +41,9 @@ module reduction_tree #(
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam                                      STAGES               = reduction_tree_STAGES (LUTX, DATA_WIDTH),
-    localparam int_t [SMALL - 1 : 0][SOLAR - 1 : 0] REDUCTION_TREE_MAP   = generic_tree_map      (STAGES, LUTX, DATA_WIDTH),
+    localparam                                      GROUP_SIZE           = reduction_tree_GROUP_SIZE(LUTX, GRADE),
+    localparam                                      STAGES               = reduction_tree_STAGES (GROUP_SIZE, DATA_WIDTH),
+    localparam int_t [SMALL - 1 : 0][SOLAR - 1 : 0] REDUCTION_TREE_MAP   = generic_tree_map      (STAGES, GROUP_SIZE, DATA_WIDTH),
     localparam                                      LATENCY              = reduction_tree_LATENCY(REGISTERED_IN, STAGES)
 
 ) (
@@ -66,9 +64,9 @@ module reduction_tree #(
     assign data_g = (REGISTERED_IN == 1) ? data : data_i;
 
     logic [STAGES : 0][DATA_WIDTH - 1 : 0] reduce_data;
-    logic [STAGES - 1 : 0][DATA_WIDTH - 1 : 0] reduce_data_pipeline;
+    logic [STAGES - 1: 0][DATA_WIDTH - 1 : 0] reduce_data_pipeline;
     /*
-    See schematic in 'reduction_tree.sv', follows similar pipeline structure
+    See schematic in 'multistage_mux.sv', follows similar pipeline structure
     */
 
     always_comb begin
@@ -76,32 +74,35 @@ module reduction_tree #(
 
         for(int row = 1; row <= STAGES; row++) begin
             for(int col = 0; col < DATA_WIDTH; col++) begin
-                if(REDUCE_TREE_MAP[row][col] != 0) begin
-                    logic [REDUCE_TREE_MAP[row - 1][(col * LUTX) + 0] - 1 : 0] group_reduce_data;
+                if(REDUCTION_TREE_MAP[row][col] != 0) begin
+                    logic [GROUP_SIZE - 1 : 0] group_reduce_data;
 
                     // wire inputs
-                    group_reduce_data = 'x;
-                    for(int g = 0; g < REDUCE_TREE_MAP[row - 1][(col * LUTX) + 0]; g++) begin
+                    if(GATE == 0) begin          // AND
+                        group_reduce_data = '1;
+                    end else if(GATE == 1) begin // OR
+                        group_reduce_data = '0;
+                    end else if(GATE == 2) begin // XOR
+                        group_reduce_data = '0;
+                    end else begin
+                        group_reduce_data = '0;
+                    end
+
+                    for(int g = 0; g < REDUCTION_TREE_MAP[row - 1][(col * GROUP_SIZE) + 0]; g++) begin
                         if(row == 1) begin
-                            group_reduce_data[g] = data_g[(col * LUTX) + g];
+                            group_reduce_data[g] = data_g[(col * GROUP_SIZE) + g];
                         end else begin
-                            group_reduce_data[g] = reduce_data_pipeline[row - 1][(col * LUTX) + g];
+                            group_reduce_data[g] = reduce_data_pipeline[row - 1][(col * GROUP_SIZE) + g];
                         end
                     end
 
                     // perform reduction
-                    if(GATE == 0) begin // AND
+                    if(GATE == 0) begin          // AND
                         reduce_data[row][col] = &group_reduce_data;
                     end else if(GATE == 1) begin // OR
                         reduce_data[row][col] = |group_reduce_data;
                     end else if(GATE == 2) begin // XOR
                         reduce_data[row][col] = ^group_reduce_data;
-                    end else if(GATE == 3) begin // NAND
-                        reduce_data[row][col] = ~&group_reduce_data;
-                    end else if(GATE == 4) begin // NOR
-                        reduce_data[row][col] = ~|group_reduce_data;
-                    end else if(GATE == 5) begin // NXOR
-                        reduce_data[row][col] = ~^group_reduce_data;
                     end else begin               // default 'x 
                         reduce_data[row][col] = 'x;
                     end

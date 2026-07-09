@@ -6,4 +6,5 @@ package golden_models_pkg;
     `include "PriorityEncoderModel.sv"
     `include "MultistageMuxModel.sv"
     `include "EqualModel.sv"
+    `include "ReductionTreeModel.sv"
 endpackage

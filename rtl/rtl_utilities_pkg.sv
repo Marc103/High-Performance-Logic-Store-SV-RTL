@@ -385,7 +385,7 @@ package constant_functions_pkg;
     typedef struct packed {
         logic clk_i;
 
-        logic [SOLAR - 1 : 0] data_a_i;
+        logic [SOLAR - 1 : 0] data_i;
 
         logic reduced_o;
     } reduction_tree_t;
@@ -613,6 +613,7 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int multistage_mux_STAGES(int GROUP_SIZE, int SIZE);
+        if(SIZE == 1) return 1;
         return clog_base(GROUP_SIZE, SIZE);
     endfunction
 
@@ -693,8 +694,13 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // reduction tree
-    function automatic int reduction_tree_STAGES(int LUTX, int DATA_WIDTH);
-        return clog_base(LUTX, DATA_WIDTH);
+    function automatic int reduction_tree_GROUP_SIZE(int LUTX, int GRADE);
+        return LUTX ** GRADE;
+    endfunction
+
+    function automatic int reduction_tree_STAGES(int GROUP_SIZE, int DATA_WIDTH);
+        if(DATA_WIDTH == 1) return 1;
+        return clog_base(GROUP_SIZE, DATA_WIDTH);
     endfunction
 
     function automatic int reduction_tree_LATENCY(int REGISTERED_IN, int STAGES);

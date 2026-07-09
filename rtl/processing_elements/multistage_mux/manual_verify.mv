@@ -325,3 +325,7 @@
     - 'sel_pipeline[row] <= sel_pipeline[row - 1];' is correct
 - finally, we assign 'data_o = mux_data[STAGES][0]', the combinatorial output of mux_data_pipeline[STAGES - 1][..]
 [Marc103 + Codex 5.5 - 07/03/26]
+
+- Hotfix, STAGES calculation, add if guard so that if SIZE == 1, returns 1 instead of
+  just clog(GROUP_SIZE, SIZE)
+[Marc103 - 07/09/26]
