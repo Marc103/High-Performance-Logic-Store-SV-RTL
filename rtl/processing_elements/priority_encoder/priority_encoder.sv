@@ -23,6 +23,8 @@ LUTX [1,...]:
   underutilize the LUTs and create unecessarily larger max tree (and hence larger latency),
   but would be more appropriate with ASICs targets, where there are no magical LUT primitives.
 
+GRADE [1,2]:
+- passed to the GRADE of the max components in the MAX tree.
 */
 
 import constant_functions_pkg::*; 
