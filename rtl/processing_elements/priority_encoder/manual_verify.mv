@@ -47,7 +47,7 @@
         // initialize all values to 0
         for(int r = 0; r < SMALL; r++) begin
             for(int c = 0; c < SOLAR; c++) begin
-                max_tree_map = 0;
+                max_tree_map[r][c] = 0;
             end
         end
         
@@ -406,3 +406,6 @@ Result here.
 - 'hence result is at priority_encoded[ENCODE_DEPTH][0]'
 - all outputs assigned, correct
 [Marc103 + Codex 5.5 - 06/18/26]
+
+- hotfix
+    - priority_encoder_ENCODE_MAX_TREE_MAP() where inner loop assigned entire array for each iteration instead of individual element for 0 initialization, causing elaboration to take very long.

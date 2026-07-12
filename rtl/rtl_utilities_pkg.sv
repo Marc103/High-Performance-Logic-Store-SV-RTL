@@ -559,7 +559,7 @@ package constant_functions_pkg;
         // initialize all values to 0
         for(int r = 0; r < SMALL; r++) begin
             for(int c = 0; c < SOLAR; c++) begin
-                max_tree_map = 0;
+                max_tree_map[r][c] = 0;
             end
         end
         
