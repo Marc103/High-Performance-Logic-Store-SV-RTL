@@ -38,7 +38,7 @@ module aligner #(
     parameter START_SYMBOL_IMMEDIATE_START_FANOUT,
 
     // REGISTERED_IN respective
-
+    parameter REGISTERED_IN_EQUAL,
     parameter REGISTERED_IN_PRIORITY_ENCODER,
     parameter REGISTERED_IN_REDUCTION_TREE,
     parameter REGISTERED_IN_MULTISTAGE_MUX,
@@ -63,19 +63,47 @@ module aligner #(
     localparam START_SYMBOL_FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(START_SYMBOL_FANOUT_FACTOR, START_SYMBOL_STAGES),
     localparam START_SYMBOL_LATENCY           = multistage_fanout_LATENCY          (START_SYMBOL_IMMEDIATE_START_FANOUT, START_SYMBOL_STAGES),
 
+    // equal 
+    localparam EQUAL_LATENCY = equal_LATENCY(REGISTERED_IN_EQUAL, GRADE_EQUAL),
+
     // priority encoder
     localparam                                     PRIORITY_ENCODER_ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS      (SIZE, LUTX_PRIORITY_ENCODER),
     localparam                                     PRIORITY_ENCODER_ENCODE_DEPTH               = priority_encoder_ENCODE_DEPTH       (PRIORITY_ENCODER_ENCODE_GROUPS),
-    localparam int_t [SMALL - 1 : 0][SOLAR - 1: 0] PRIORITY_ENCODER_ENCODE_MAX_TREE_MAP        = priority_encoder_ENCODE_MAX_TREE_MAP(PRIORITY_ENCODER_ENCODE_GROUPS, PRIORITY_ENCODER_ENCODE_DEPTH),
     localparam                                     PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY = max_LATENCY                         (1, GRADE_PRIORITY_ENCODER),
     localparam                                     PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY = max_LATENCY                         (0, GRADE_PRIORITY_ENCODER),
-    localparam                                     PRIORITY_ENCODER_LATENCY                    = priority_encoder_LATENCY            (REGISTERED_IN_PRIORITY_ENCODER, PRIORITY_ENCODER_ENCODE_DEPTH, PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
+    localparam                                     PRIORITY_ENCODER_LATENCY                    = priority_encoder_LATENCY(
+                                                                                                     REGISTERED_IN_PRIORITY_ENCODER, 
+                                                                                                     PRIORITY_ENCODER_ENCODE_DEPTH, 
+                                                                                                     PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, 
+                                                                                                     PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
     localparam                                     PRIORITY_ENCODER_OUTPUT_DATA_WIDTH          = priority_encoder_OUTPUT_DATA_WIDTH  (SIZE),
 
+    // reduction tree
+    localparam                                      REDUCTION_TREE_GROUP_SIZE           = reduction_tree_GROUP_SIZE(LUTX_REDUCTION_TREE, GRADE_REDUCTION_TREE),
+    localparam                                      REDUCTION_TREE_STAGES               = reduction_tree_STAGES (REDUCTION_TREE_GROUP_SIZE, SIZE),
+    localparam                                      REDUCTION_TREE_LATENCY              = reduction_tree_LATENCY(REGISTERED_IN_REDUCTION_TREE, REDUCTION_TREE_STAGES),
 
-    localparam SIZE_COMBINED = SIZE * 2, // aligner_SIZE_COMBINED(SIZE)
-    localparam FLATTEN_WIDTH = SIZE * DATA_WIDTH , // aligner_FLATTEN_WIDTH(SIZE, DATA_WIDTH)
-    localparam LATENCY =  10 // aligner_LATENCY(START_SYMBOL_LATENCY)
+    // multistage mux
+    localparam                                      MULTISTAGE_MUX_SELECTOR_WIDTH       = multistage_mux_SELECTOR_WIDTH(SIZE),
+    localparam                                      MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX_MULTISTAGE_MUX, GRADE_MULTISTAGE_MUX),
+    localparam                                      MULTISTAGE_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH),
+    localparam                                      MULTISTAGE_MUX_STAGES               = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SIZE),
+    localparam                                      MULTISTAGE_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_IN_MULTISTAGE_MUX, MULTISTAGE_MUX_STAGES),
+    
+    // aligner locals
+    localparam SIZE_COMBINED   = aligner_SIZE_COMBINED(SIZE),
+    localparam FLATTEN_WIDTH   = aligner_FLATTEN_WIDTH(DATA_WIDTH, SIZE),
+    localparam PARTIAL_LATENCY = aligner_PARTIAL_LATENCY(
+                                    REGISTERED_IN,
+                                    START_SYMBOL_LATENCY,
+                                    EQUAL_LATENCY,
+                                    PRIORITY_ENCODER_LATENCY,
+                                    REDUCTION_TREE_LATENCY
+    ),
+    localparam LATENCY =      aligner_LATENCY(PARTIAL_LATENCY, MULTISTAGE_MUX_LATENCY),
+
+    localparam ADJUST_PRIORITY_ENCODER_LATENCY = aligner_ADJUST_PRIORITY_ENCODER_LATENCY(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY),
+    localparam ADJUST_REDUCTION_TREE_LATENCY   = aligner_ADJUST_REDUCTION_TREE_LATENCY(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY) 
 ) (
     input                                     clk_i,
     input  [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
@@ -100,9 +128,9 @@ module aligner #(
     assign start_symbol_g = (REGISTERED_IN == 1) ? start_symbol : start_symbol_i;
 
     // data pipeline
-    logic[LATENCY : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_pipeline;
+    logic[PARTIAL_LATENCY : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_pipeline;
     always@(posedge clk_i) begin
-        for(int r = 1; r <= LATENCY; r++) begin
+        for(int r = 1; r <= PARTIAL_LATENCY; r++) begin
             if(r == 1) begin
                 data_pipeline[r] <= data_g;
             end else begin
@@ -133,7 +161,7 @@ module aligner #(
             if(START_SYMBOL_LATENCY == 0) begin
                 equal #(
                     .DATA_WIDTH(DATA_WIDTH),
-                    .REGISTERED_IN(0),
+                    .REGISTERED_IN(REGISTERED_IN_EQUAL),
                     .GRADE(GRADE_EQUAL)
                 ) equal_inst (
                     .clk_i(clk_i),
@@ -145,7 +173,7 @@ module aligner #(
             if(START_SYMBOL_LATENCY != 0) begin
                 equal #(
                     .DATA_WIDTH(DATA_WIDTH),
-                    .REGISTERED_IN(0),
+                    .REGISTERED_IN(REGISTERED_IN_EQUAL),
                     .GRADE(GRADE_EQUAL)
                 ) equal_inst (
                     .clk_i(clk_i),
@@ -172,6 +200,16 @@ module aligner #(
         .reduced_o(or_reduced_o)
     );
 
+    logic adj_or_reduced_o;
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(ADJUST_REDUCTION_TREE_LATENCY)
+    ) adj_or_reduced_pipe (
+        .clk_i(clk_i),
+        .data_i(or_reduced_o),
+        .data_o(adj_or_reduced_o)
+    );
+
     // Priority Encoder
     // on the comparison results
     logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o;
@@ -185,6 +223,26 @@ module aligner #(
         .priority_i(start_symbol_eq_o),
         .priority_encoded_o(priority_encoded_o)
     );
+
+    logic adj_priority_encoded_o;
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(ADJUST_PRIORITY_ENCODER_LATENCY)
+    ) adj_priority_encoded_pipe (
+        .clk_i(clk_i),
+        .data_i(priority_encoded_o),
+        .data_o(adj_priority_encoded_o)
+    );
+    
+    // Selector update logic, only update if a match is found.
+    logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] sel;
+    always@(posedge clk_i) begin
+        if(adj_or_reduced_o) begin
+            sel <= adj_priority_encoded_o;
+        end else begin
+            sel <= sel;
+        end
+    end
     
     // Mux
     // mux according to priority encoder out
@@ -193,8 +251,13 @@ module aligner #(
     logic [SIZE - 1 : 0][FLATTEN_WIDTH - 1 : 0] mux_flatten_data;
     always_comb begin
         for(int i = 0; i < SIZE; i++) begin
-            combine_data[i]        = data_pipeline[8][i];
-            combine_data[SIZE + i] = data_pipeline[9][i];
+            if(PARTIAL_LATENCY == 1) begin
+                combine_data[i]        = data_g          [i];
+                combine_data[SIZE + i] = data_pipeline[1][i];
+            end else begin
+                combine_data[i]        = data_pipeline[PARTIAL_LATENCY - 1][i];
+                combine_data[SIZE + i] = data_pipeline[PARTIAL_LATENCY - 0][i];
+            end
         end
         for(int mux_group = 0; mux_group < SIZE; mux_group++) begin
             for(int i = 0; i < SIZE; i++) begin
@@ -218,7 +281,7 @@ module aligner #(
     ) multistage_mux_inst (
         .clk_i(clk_i),
         .data_i(mux_flatten_data),
-        .sel_i(priority_encoded_o),
+        .sel_i(sel),
         .data_o(mux_data_o)
     );
 

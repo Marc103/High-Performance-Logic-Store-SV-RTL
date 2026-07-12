@@ -23,9 +23,10 @@ module pipe #(
 );
 
     generate
-        if(LATENCY == 0) begin
+        for(genvar cond = (LATENCY == 0); cond == 1; cond = 0) begin
             assign data_o = data_i;
-        end else begin
+        end
+        for(genvar cond = (LATENCY != 0); cond == 1; cond = 0) begin
             logic [LATENCY : 1][DATA_WIDTH - 1 : 0] data;
 
             always@(posedge clk_i) begin

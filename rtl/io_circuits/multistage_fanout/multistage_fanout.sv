@@ -67,5 +67,20 @@ module multistage_fanout #(
         end 
     end
 
-    assign data_o  = (STAGES == 0) ? data_g : data_stages[STAGES];
+    logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_comb_out;
+    always_comb begin
+        for(int stage = STAGES; stage <= STAGES; stage++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
+                    if(stage == 1) begin 
+                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_g;
+                    end else begin
+                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_stages[stage - 1][out];
+                    end
+                end
+            end
+        end 
+    end
+
+    assign data_o = (STAGES == 0) ? data_g : ((IMMEDIATE_START_FANOUT == 1) ? data_stages_comb_out : data_stages[STAGES]);
 endmodule

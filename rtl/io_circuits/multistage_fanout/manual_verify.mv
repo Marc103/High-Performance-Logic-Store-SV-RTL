@@ -55,18 +55,21 @@
 "
         int latency; 
         if(IMMEDIATE_START_FANOUT == 1) begin
-            latency = 0;
+            latency = STAGES - 1;
         end else begin
-            latency = 1;
+            latency = STAGES + 1;
         end
-        latency = latency + STAGES;
+
+        if(latency < 0) latency = 0;
         return latency;
 "
 - correct arguments passed in
-- latency starts as 0 or 1 depending on IMMEDIATE_START_FANOUT
-- STAGES latency cycles are added since each stage adds a cycle of latency
-    - when STAGE is 0, 0 cycles of latency are added, this is purposeful and correct.
-[Marc103 - 06/06/26]
+- when IMMEDIATE_START_FANOUT == 1, the final fanout stage is now combinationally derived from the previous registered
+  stage, so the observable latency is STAGES - 1, clamped at 0 for STAGES == 0.
+- when IMMEDIATE_START_FANOUT == 0, data_g itself is the registered input, and data_o uses the registered final stage,
+  so the observable latency is STAGES + 1.
+- this was re-tested with immediate and non-immediate fanout cases after the combinational final-stage output path was added.
+[Marc103 + Codex 5.5 - 07/12/26]
 
 "
     input clk_i,
@@ -169,11 +172,35 @@
 
 
 "
-    assign data_o  = (STAGES == 0) ? data_g : data_stages[STAGES];
+    logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_comb_out;
+    always_comb begin
+        for(int stage = STAGES; stage <= STAGES; stage++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
+                    if(stage == 1) begin 
+                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_g;
+                    end else begin
+                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_stages[stage - 1][out];
+                    end
+                end
+            end
+        end 
+    end
+
+    assign data_o = (STAGES == 0) ? data_g : ((IMMEDIATE_START_FANOUT == 1) ? data_stages_comb_out : data_stages[STAGES]);
 "
 - in the case that stages == 0, data_g, which is stage 0, should be assigned directly
-    - otherwise, data_stages[STAGES] gives the 
-[Marc103 - 06/06/26]
+    - otherwise, data_stages[STAGES] gives the registered final fanout stage for non-immediate fanout
+- for IMMEDIATE_START_FANOUT == 1, the final stage is generated combinationally from the previous registered stage
+  so that the latency is reduced by one cycle while preserving the staged fanout tree.
+- data_stages_comb_out must be assigned per output lane using
+  data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out]; assigning the whole packed array from one DATA_WIDTH value
+  only drives one effective lane/produces incorrect fanout.
+- tested cases:
+    - FANOUT_SIZE=17, FANOUT_FACTOR=4,  IMMEDIATE_START_FANOUT=1
+    - FANOUT_SIZE=16, FANOUT_FACTOR=4,  IMMEDIATE_START_FANOUT=0
+    - FANOUT_SIZE=3,  FANOUT_FACTOR=10, IMMEDIATE_START_FANOUT=1
+[Marc103 + Codex 5.5 - 07/12/26]
 
 ////////////////////////////////////////////////////////////////
 // Trial 1, failed due to:
@@ -348,3 +375,15 @@ defined as
       and doesn't handle the immediate start fanout correctly, an edge case that i can see happening
     - time for a rewrite
 [x]
+
+////////////////////////////////////////////////////////////////
+// Change record
+// - Updated verification notes for the rewritten immediate fanout behavior.
+// - LATENCY now follows multistage_fanout_LATENCY:
+//     - IMMEDIATE_START_FANOUT == 1: STAGES - 1, clamped to 0.
+//     - IMMEDIATE_START_FANOUT == 0: STAGES + 1.
+// - data_o now selects data_g for STAGES == 0, the registered final stage for non-immediate fanout,
+//   and the combinational final-stage fanout path for immediate fanout.
+// - Confirmed the final-stage combinational fanout assigns each output lane explicitly.
+// - Re-tested representative immediate, non-immediate, and small fanout cases.
+// [Marc103 + Codex 5.5 - 07/12/26]
