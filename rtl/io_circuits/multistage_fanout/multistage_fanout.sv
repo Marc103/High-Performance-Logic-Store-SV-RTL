@@ -16,9 +16,9 @@ FANOUT_SIZE [1, ...]:
 FANOUT_FACTOR [2, ...]:
 - Factor of exponential growth for the signal to grow by at each stage.
 
-IMMEDIATE_START_FANOUT [0, 1]:
-- If 1, the input is fanouted immediately
-  else, inputs are first registered, increasing latency by 1 cycle.
+REGISTERED_IN [0, 1]:
+- If 1, inputs are registered, increasing latency by 1 cycle,
+  else, inputs are direct.
 */
 import constant_functions_pkg::*; 
 
@@ -26,13 +26,13 @@ module multistage_fanout #(
     parameter DATA_WIDTH,
     parameter FANOUT_SIZE,
     parameter FANOUT_FACTOR,
-    parameter IMMEDIATE_START_FANOUT,
+    parameter REGISTERED_IN,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
     localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
     localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
-    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
+    localparam LATENCY           = multistage_fanout_LATENCY          (REGISTERED_IN, STAGES)
 ) (
     input clk_i,
 
@@ -48,39 +48,33 @@ module multistage_fanout #(
         data <= data_i;
     end
 
-    assign data_g = (IMMEDIATE_START_FANOUT == 1) ? data_i : data;
+    assign data_g = (REGISTERED_IN == 1) ? data : data_i;
 
-    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages;
+    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages; 
+    logic [STAGES - 1 : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_pipeline;
+
+    always_comb begin
+        data_stages[0] = 'x;
+
+        //fanout tree
+        for(int row = 1; row <= STAGES; row++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (row - 1)); out++) begin
+                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
+                    if(row == 1) begin
+                        data_stages[row][(out * FANOUT_FACTOR) + fan_out] = data_g;
+                    end else begin
+                        data_stages[row][(out * FANOUT_FACTOR) + fan_out] = data_stages_pipeline[row - 1][out];
+                    end
+                end
+            end
+        end
+    end
 
     always@(posedge clk_i) begin
-        // fanout tree
-        for(int stage = 1; stage <= STAGES; stage++) begin
-            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
-                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
-                    if(stage == 1) begin 
-                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_g;
-                    end else begin
-                        data_stages[stage][(out * FANOUT_FACTOR) + fan_out] <= data_stages[stage - 1][out];
-                    end
-                end
-            end
+        for(int row = 1; row < STAGES; row++) begin
+            data_stages_pipeline[row] <= data_stages[row];
         end 
     end
 
-    logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_comb_out;
-    always_comb begin
-        for(int stage = STAGES; stage <= STAGES; stage++) begin
-            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
-                for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
-                    if(stage == 1) begin 
-                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_g;
-                    end else begin
-                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_stages[stage - 1][out];
-                    end
-                end
-            end
-        end 
-    end
-
-    assign data_o = (STAGES == 0) ? data_g : ((IMMEDIATE_START_FANOUT == 1) ? data_stages_comb_out : data_stages[STAGES]);
+    assign data_o = data_stages[STAGES];
 endmodule

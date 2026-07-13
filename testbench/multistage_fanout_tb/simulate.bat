@@ -22,13 +22,13 @@ REM Override from cmd before calling, for example:
 REM   set DATA_WIDTH=8
 REM   set FANOUT_SIZE=17
 REM   set FANOUT_FACTOR=4
-REM   set IMMEDIATE_START_FANOUT=1
+REM   set REGISTERED_IN=1
 REM   simulate.bat
 REM -------------------------------------------------
 if not defined DATA_WIDTH set DATA_WIDTH=8
 if not defined FANOUT_SIZE set FANOUT_SIZE=17
 if not defined FANOUT_FACTOR set FANOUT_FACTOR=4
-if not defined IMMEDIATE_START_FANOUT set IMMEDIATE_START_FANOUT=1
+if not defined REGISTERED_IN set REGISTERED_IN=1
 
 REM -------------------------------------------------
 REM Directories
@@ -73,7 +73,7 @@ vsim -voptargs=+acc -c ^
     -g/multistage_fanout_tb/DATA_WIDTH=%DATA_WIDTH% ^
     -g/multistage_fanout_tb/FANOUT_SIZE=%FANOUT_SIZE% ^
     -g/multistage_fanout_tb/FANOUT_FACTOR=%FANOUT_FACTOR% ^
-    -g/multistage_fanout_tb/IMMEDIATE_START_FANOUT=%IMMEDIATE_START_FANOUT% ^
+    -g/multistage_fanout_tb/REGISTERED_IN=%REGISTERED_IN% ^
     multistage_fanout_tb ^
     -do "vcd file waves.vcd; vcd add -r /*; run -all; vcd flush; quit -f" ^
     %*

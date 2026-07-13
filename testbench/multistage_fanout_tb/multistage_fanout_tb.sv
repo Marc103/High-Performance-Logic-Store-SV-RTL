@@ -39,7 +39,7 @@ module multistage_fanout_tb #(
     parameter DATA_WIDTH = 8,
     parameter FANOUT_SIZE = 17,
     parameter FANOUT_FACTOR = 4,
-    parameter IMMEDIATE_START_FANOUT = 1
+    parameter REGISTERED_IN = 1
 ) ();
 
     ////////////////////////////////////////////////////////////////
@@ -50,14 +50,14 @@ module multistage_fanout_tb #(
         .DATA_WIDTH(DATA_WIDTH),
         .FANOUT_SIZE(FANOUT_SIZE),
         .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+        .REGISTERED_IN(REGISTERED_IN)
     );
 
     localparam type I = virtual multistage_fanout_inf #(
         .DATA_WIDTH(DATA_WIDTH),
         .FANOUT_SIZE(FANOUT_SIZE),
         .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+        .REGISTERED_IN(REGISTERED_IN)
     );
 
     ////////////////////////////////////////////////////////////////
@@ -72,7 +72,7 @@ module multistage_fanout_tb #(
         .DATA_WIDTH(DATA_WIDTH),
         .FANOUT_SIZE(FANOUT_SIZE),
         .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+        .REGISTERED_IN(REGISTERED_IN)
     ) bfm (.clk_i(clk)); // bfm, "bus functional model"
     
     ////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ module multistage_fanout_tb #(
         .DATA_WIDTH(DATA_WIDTH),
         .FANOUT_SIZE(FANOUT_SIZE),
         .FANOUT_FACTOR(FANOUT_FACTOR),
-        .IMMEDIATE_START_FANOUT(IMMEDIATE_START_FANOUT)
+        .REGISTERED_IN(REGISTERED_IN)
     ) dut (
         .clk_i(clk),
 

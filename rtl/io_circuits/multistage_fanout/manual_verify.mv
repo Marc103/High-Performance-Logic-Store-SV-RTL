@@ -5,6 +5,7 @@
 "
 - defined as
 "
+        if(FANOUT_SIZE == 1) return 1;
         return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
 "
 - defined as 
@@ -25,11 +26,14 @@
 "
 - correct arguments passed in
 - correct arguments passed into clog_base
+- FANOUT_SIZE == 1 is handled as a special case and returns 1 stage. This keeps the current implementation's
+  always_comb fanout tree meaningful because data_o is always taken from data_stages[STAGES].
 - the logic is we want to find out as according to our FANOUT_FACTOR and FANOUT_SIZE, how many
   stages it would take to grow to the smallest equal or greater than (ceiling) power of FANOUT_FACTOR. Hence
   we pass in the FANOUT_FACTOR as the base and the FANOUT_SIZE as the value into the clog_base function
 - we start with a value of FANOUT_FACTOR ** 0.
-- for example, let FANOUT_FACTOR = 4; if FANOUT_SIZE is 1, then we need 0 stages, if FANOUT_SIZE is 4, then
+- for example, let FANOUT_FACTOR = 4; if FANOUT_SIZE is 1, the mathematical ceiling exponent is 0, but this
+  implementation intentionally returns 1 so the unified fanout tree has a row to assign to data_o. If FANOUT_SIZE is 4,
   we need exactly 1 stage, if FANOUT_SIZE is 5, we need 2 stages because the nearest ceiling power is 16 = (4 ** 2)
 - this is what clog_base does, after the sanity checks we ask, where base must be > 1 and value > 0; is my acc value still strictly smaller than the request
   value (FANOUT_SIZE)? if yes, increment the exponent and the corresponding calculation is multiplying the acc by the base
@@ -49,27 +53,22 @@
 [Marc103 - 06/06/26]
 
 "
-    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
+    localparam LATENCY           = multistage_fanout_LATENCY          (REGISTERED_IN, STAGES)
 "
 - defined as
 "
-        int latency; 
-        if(IMMEDIATE_START_FANOUT == 1) begin
-            latency = STAGES - 1;
-        end else begin
-            latency = STAGES + 1;
-        end
-
-        if(latency < 0) latency = 0;
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
         return latency;
 "
 - correct arguments passed in
-- when IMMEDIATE_START_FANOUT == 1, the final fanout stage is now combinationally derived from the previous registered
-  stage, so the observable latency is STAGES - 1, clamped at 0 for STAGES == 0.
-- when IMMEDIATE_START_FANOUT == 0, data_g itself is the registered input, and data_o uses the registered final stage,
-  so the observable latency is STAGES + 1.
-- this was re-tested with immediate and non-immediate fanout cases after the combinational final-stage output path was added.
-[Marc103 + Codex 5.5 - 07/12/26]
+- latency starts at 0, adds one cycle only when REGISTERED_IN == 1, then adds STAGES - 1 pipeline cycles.
+- since multistage_fanout_STAGES now returns 1 for FANOUT_SIZE == 1, STAGES - 1 cannot go negative.
+- the final stage is generated combinationally from either data_g or the previous registered stage, so only the
+  intermediate stages contribute pipeline latency.
+- re-tested registered and unregistered fanout cases after the restructure.
+[Marc103 + Codex 5.5 - 07/13/26]
 
 "
     input clk_i,
@@ -91,20 +90,23 @@
         data <= data_i;
     end
 
-    assign data_g = (IMMEDIATE_START_FANOUT == 1) ? data_i : data;
+    assign data_g = (REGISTERED_IN == 1) ? data : data_i;
 "
 - bit widths correct
 - standard *_g operation
-- assignment condition correct
-[Marc103 - 06/06/26]
+- assignment condition correct: registered mode uses the clocked copy, direct mode uses data_i
+[Marc103 + Codex 5.5 - 07/13/26]
 
 "
-    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages;
+    logic [STAGES : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages; 
+    logic [STAGES - 1 : 0][FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_pipeline;
 "
 - signals present, correct
 - packed types are correct for each signal
     - 'STAGES' instead of 'STAGES - 1' is purposeful
-[Marc103 - 06/06/26]
+- data_stages is the combinational view of each fanout row
+- data_stages_pipeline stores the registered intermediate rows; row 1 through STAGES - 1 are the only rows that need registers
+[Marc103 + Codex 5.5 - 07/13/26]
 
 "
     always@(posedge clk_i) begin
@@ -169,38 +171,48 @@
   - yes, this does mean that data_stages[0] is 'x, we never assign it anything nor intend to. Doing it this way keeps
     the code clean and indexing meaningful wrt to stages.
 [Marc103 + Codex 5.5 - 06/10/26]
+- superseded by the 07/13/26 restructure below, where the fanout tree is combinational and only intermediate
+  rows are registered.
 
 
 "
-    logic [FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_stages_comb_out;
     always_comb begin
-        for(int stage = STAGES; stage <= STAGES; stage++) begin
-            for(int out = 0; out < (FANOUT_FACTOR ** (stage - 1)); out++) begin
+        data_stages[0] = 'x;
+
+        //fanout tree
+        for(int row = 1; row <= STAGES; row++) begin
+            for(int out = 0; out < (FANOUT_FACTOR ** (row - 1)); out++) begin
                 for(int fan_out = 0; fan_out < FANOUT_FACTOR; fan_out++) begin
-                    if(stage == 1) begin 
-                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_g;
+                    if(row == 1) begin
+                        data_stages[row][(out * FANOUT_FACTOR) + fan_out] = data_g;
                     end else begin
-                        data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out] = data_stages[stage - 1][out];
+                        data_stages[row][(out * FANOUT_FACTOR) + fan_out] = data_stages_pipeline[row - 1][out];
                     end
                 end
             end
+        end
+    end
+
+    always@(posedge clk_i) begin
+        for(int row = 1; row < STAGES; row++) begin
+            data_stages_pipeline[row] <= data_stages[row];
         end 
     end
 
-    assign data_o = (STAGES == 0) ? data_g : ((IMMEDIATE_START_FANOUT == 1) ? data_stages_comb_out : data_stages[STAGES]);
+    assign data_o = data_stages[STAGES];
 "
-- in the case that stages == 0, data_g, which is stage 0, should be assigned directly
-    - otherwise, data_stages[STAGES] gives the registered final fanout stage for non-immediate fanout
-- for IMMEDIATE_START_FANOUT == 1, the final stage is generated combinationally from the previous registered stage
-  so that the latency is reduced by one cycle while preserving the staged fanout tree.
-- data_stages_comb_out must be assigned per output lane using
-  data_stages_comb_out[(out * FANOUT_FACTOR) + fan_out]; assigning the whole packed array from one DATA_WIDTH value
-  only drives one effective lane/produces incorrect fanout.
+- data_stages[0] is intentionally unused/'x because row 1 is derived directly from data_g.
+- row 1 fans out data_g; rows 2 and above fan out the previous registered pipeline row.
+- data_stages_pipeline registers only intermediate rows. The final row is always formed combinationally and assigned
+  directly to data_o through data_stages[STAGES].
+- data_o no longer needs a STAGES == 0 special case because multistage_fanout_STAGES returns at least 1.
+- this replaces the older separate data_stages_comb_out final-stage path with a unified combinational tree.
 - tested cases:
-    - FANOUT_SIZE=17, FANOUT_FACTOR=4,  IMMEDIATE_START_FANOUT=1
-    - FANOUT_SIZE=16, FANOUT_FACTOR=4,  IMMEDIATE_START_FANOUT=0
-    - FANOUT_SIZE=3,  FANOUT_FACTOR=10, IMMEDIATE_START_FANOUT=1
-[Marc103 + Codex 5.5 - 07/12/26]
+    - DATA_WIDTH=8,  FANOUT_SIZE=17, FANOUT_FACTOR=4,  REGISTERED_IN=1
+    - DATA_WIDTH=8,  FANOUT_SIZE=16, FANOUT_FACTOR=4,  REGISTERED_IN=0
+    - DATA_WIDTH=8,  FANOUT_SIZE=3,  FANOUT_FACTOR=10, REGISTERED_IN=0
+    - DATA_WIDTH=12, FANOUT_SIZE=33, FANOUT_FACTOR=3,  REGISTERED_IN=1
+[Marc103 + Codex 5.5 - 07/13/26]
 
 ////////////////////////////////////////////////////////////////
 // Trial 1, failed due to:
@@ -387,3 +399,15 @@ defined as
 // - Confirmed the final-stage combinational fanout assigns each output lane explicitly.
 // - Re-tested representative immediate, non-immediate, and small fanout cases.
 // [Marc103 + Codex 5.5 - 07/12/26]
+
+////////////////////////////////////////////////////////////////
+// Change record
+// - Restructured multistage_fanout around REGISTERED_IN instead of IMMEDIATE_START_FANOUT.
+// - multistage_fanout_LATENCY now adds one cycle for REGISTERED_IN and then STAGES - 1 for the intermediate pipeline.
+// - multistage_fanout_STAGES now returns at least 1 for FANOUT_SIZE == 1, so data_o can always use data_stages[STAGES].
+// - Replaced the separate final-stage combinational output path with a unified combinational fanout tree plus
+//   registered intermediate stage storage in data_stages_pipeline.
+// - Confirmed data_g uses the clocked copy only when REGISTERED_IN == 1.
+// - Re-tested representative registered, unregistered, small fanout, and non-power-of-factor fanout cases in Questa;
+//   also ran a Verilator check with REGISTERED_IN=0.
+// [Marc103 + Codex 5.5 - 07/13/26]

@@ -1,67 +1,4 @@
-/*
-Aligner
-Aligns the start of the element as according to a starting symbol. i.e
-[x, x, start, s2] <- [s1, s0, a3, a2] <- [a1, a0, b3, b2] <- [b1, b0, ..., ...] <- ...
-should be rotated and appear as:
-[start, s2, s1, s0] <- [a3, a2, a1, a0] <- [b3, b2, b1, b0] <- ...
-on the output.
-
-DATA_WIDTH:
-- Data width of one element
-
-SIZE:
-- Number of elements that determine a word. I.e if DATA_WIDTH = 8, and SIZE = 4, then
-  a word is defined as having the packed type [3:0][7:0], in other words, in this specific case,
-  a word consists of 4 bytes.
-
-REGISTERED_IN [0, 1]:
-- If 1, inputs are registered, increasing latency by 1 cycle,
-  else, inputs are direct.
-
-LUTX_*:
-- LUTXs of the the respective components in the module
-
-GRADE_*:
-- GRADEs of the respective components in the module
-
-START_SYMBOL_FANOUT_FACTOR:
-- The start symbol could potentially be compared to many elements if SIZE is big, thus we have a fanout module
-  included. Hence this parameter sets the fanout factor desired of the start symbol.
-
-*/
-
-import constant_functions_pkg::*; 
-
-module aligner #(
-    parameter DATA_WIDTH,
-    parameter SIZE,
-    parameter REGISTERED_IN,
-
-    // start symbol fanout
-    parameter START_SYMBOL_FANOUT_FACTOR,
-
-    // REGISTERED_IN respective
-    parameter REGISTERED_IN_START_SYMBOL,
-    parameter REGISTERED_IN_EQUAL,
-    parameter REGISTERED_IN_PRIORITY_ENCODER,
-    parameter REGISTERED_IN_REDUCTION_TREE,
-    parameter REGISTERED_IN_MULTISTAGE_MUX,
-
-    // LUTX respective
-    parameter LUTX_EQUAL,
-    parameter LUTX_PRIORITY_ENCODER,
-    parameter LUTX_REDUCTION_TREE,
-    parameter LUTX_MULTISTAGE_MUX,
-
-    // GRADE respective
-    parameter GRADE_EQUAL,
-    parameter GRADE_PRIORITY_ENCODER,
-    parameter GRADE_REDUCTION_TREE,
-    parameter GRADE_MULTISTAGE_MUX,
-
-    ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
-
+"
     // start symbol fanout
     localparam START_SYMBOL_STAGES            = multistage_fanout_STAGES           (START_SYMBOL_FANOUT_FACTOR, SIZE),
     localparam START_SYMBOL_FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(START_SYMBOL_FANOUT_FACTOR, START_SYMBOL_STAGES),
@@ -93,29 +30,141 @@ module aligner #(
     localparam                                      MULTISTAGE_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH),
     localparam                                      MULTISTAGE_MUX_STAGES               = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SIZE),
     localparam                                      MULTISTAGE_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_IN_MULTISTAGE_MUX, MULTISTAGE_MUX_STAGES),
-    
-    // aligner locals
+"
+- all of these function calls have been verified in their respective modules
+- check that the correct arguments are passed in
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     localparam SIZE_COMBINED   = aligner_SIZE_COMBINED(SIZE),
+"
+- defined as
+"
+    function automatic int aligner_SIZE_COMBINED(int SIZE);
+        int cs = SIZE * 2;
+        return cs;
+    endfunction
+"
+- correct arguments passed in  
+- SIZE_COMBINED refers to the number of elements of two words,  SIZE * 2.
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     localparam FLATTEN_WIDTH   = aligner_FLATTEN_WIDTH(DATA_WIDTH, SIZE),
+"
+- defined as 
+"
+    function automatic int aligner_FLATTEN_WIDTH(int DATA_WIDTH, int SIZE);
+        int f = DATA_WIDTH * SIZE;
+        return f;
+    endfunction
+"
+- correct arguments passed in  
+- FLATTEN_WIDTH refers to the flattened width of a words, DATA_WIDTH * SIZE.
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     localparam PARTIAL_LATENCY = aligner_PARTIAL_LATENCY(
                                     START_SYMBOL_LATENCY,
                                     EQUAL_LATENCY,
                                     PRIORITY_ENCODER_LATENCY,
                                     REDUCTION_TREE_LATENCY
     ),
-    localparam LATENCY =      aligner_LATENCY(REGISTERED_IN, PARTIAL_LATENCY, MULTISTAGE_MUX_LATENCY),
+"
+- defined as
+"
+    function automatic int aligner_PARTIAL_LATENCY(
+        int START_SYMBOL_LATENCY,
+        int EQUAL_LATENCY,
+        int PRIORITY_ENCODER_LATENCY,
+        int REDUCTION_TREE_LATENCY);
 
+        int latency = 0;
+        latency += (START_SYMBOL_LATENCY + EQUAL_LATENCY + max(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY));
+        latency += 1;
+        return latency;
+    endfunction
+"
+- correct arguments passed in
+- PARTIAL_LATENCY refers to the total amount of latency from the input until (inclusive) the registers that feeds into
+  the multistage_mux, so this relative to data_g (which could be data_i or the registered data)
+    - we start with latency = 0
+    - then we add the respective latency since they happen in series
+        - START_SYMBOL_LATENCY, latency of symbol fanout
+        - EQUAL_LATENCY, latency of equal that function using the symbol fanout and pipelined data
+        - max(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY), we take the longest one as both operate on the result from the equal
+          instantiations (later we show that the priority encoder and reduction tree latencies are made the same via pipeline on the 
+          lower latency module of the two)
+        - then +1 for the result to be registered in; overall the aligner needs access to at least 2 words to make rotation possible hence
+          the latency cannot be smaller than 1.
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
+    localparam LATENCY =      aligner_LATENCY(REGISTERED_IN, PARTIAL_LATENCY, MULTISTAGE_MUX_LATENCY),
+"
+- defined as 
+"
+    function automatic int aligner_LATENCY(int REGISTERED_IN, int PARTIAL_LATENCY, int MULTISTAGE_MUX_LATENCY);
+        int latency = PARTIAL_LATENCY;
+        if(REGISTERED_IN == 1) latency++;
+        latency += MULTISTAGE_MUX_LATENCY;
+        return latency;
+    endfunction
+"
+- correct arguments passed in  
+- it is the total LATENCY, and is the PARTIAL_LATENCY + MULTISTAGE_MUX_LATENCY and not to forget
+  the additional cycle added if REGISTERED_IN
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     localparam ADJUST_PRIORITY_ENCODER_LATENCY = aligner_ADJUST_PRIORITY_ENCODER_LATENCY(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY),
+"
+- defined as
+"
+    function automatic int aligner_ADJUST_PRIORITY_ENCODER_LATENCY(int PRIORITY_ENCODER_LATENCY, int REDUCTION_TREE_LATENCY);
+        return max(0, REDUCTION_TREE_LATENCY - PRIORITY_ENCODER_LATENCY);
+    endfunction
+"
+- correct arguments passed in
+- The question being answer is "How many cycles would i need to delay the priority encoder to match the latency
+  of the reduction tree?"
+  - the difference is 'REDUCTION_TREE_LATENCY - PRIORITY_ENCODER_LATENCY' if this is positive it means reduction tree latency
+    is greater and so we need to delay by the additional cycles difference
+  - else if the difference is 0 or negative, it means they are the same latency or the reduction tree has a smaller latency, 
+    and so we should pipeline with 0 additional latency
+  - therefore we max between 0 and the difference
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     localparam ADJUST_REDUCTION_TREE_LATENCY   = aligner_ADJUST_REDUCTION_TREE_LATENCY(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY) 
-) (
+"
+- defined as 
+"
+    function automatic int aligner_ADJUST_REDUCTION_TREE_LATENCY(int PRIORITY_ENCODER_LATENCY, int REDUCTION_TREE_LATENCY);
+        return max(0, PRIORITY_ENCODER_LATENCY - REDUCTION_TREE_LATENCY);
+    endfunction
+"
+- correct arguments passed in
+- The question being answer is "How many cycles would i need to delay the reduction tre to match the latency
+  of the priority_encoder?"
+  - the difference is 'PRIORITY_ENCODER_LATENCY - REDUCTION_TREE_LATENCY' if this is positive it means priority encoder latency
+    is greater and so we need to delay by the additional cycles difference
+  - else if the difference is 0 or negative, it means they are the same latency or the priority encoder has a smaller latency, 
+    and so we should pipeline with 0 additional latency
+  - therefore we max between 0 and the difference
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     input                                     clk_i,
     input  [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
     input                [DATA_WIDTH - 1 : 0] start_symbol_i,
 
     output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o
-);
+"
+- types and no missing signals
+[Marc103 + Codex 5.5 - 07/13/26]
 
-
+"
     logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data;
     logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_g;
 
@@ -129,7 +178,11 @@ module aligner #(
 
     assign data_g = (REGISTERED_IN == 1) ? data : data_i;
     assign start_symbol_g = (REGISTERED_IN == 1) ? start_symbol : start_symbol_i;
+"
+- standard REGISTERED_IN procedure
+[Marc103 + Codex 5.5 - 07/13/26]
 
+"
     // data pipeline
     logic[PARTIAL_LATENCY : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_pipeline;
     always@(posedge clk_i) begin
@@ -141,7 +194,10 @@ module aligner #(
             end
         end
     end
+"
 
+
+"
     // Fanout Start Symbol
     // need to fanout start symbol since it could potentially be compared to many values.
     logic [START_SYMBOL_FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] start_symbol_fanout_o;
@@ -155,7 +211,14 @@ module aligner #(
         .data_i(start_symbol_g),
         .data_o(start_symbol_fanout_o)
     );
+"
+- this is the symbol fanout module
+- check logic type of output
+- correct parameterization
+- correct io signals 
+[Marc103 + Codex 5.5 - 07/13/26]
 
+"
     // Equal 
     // comparing against start_symbol
     logic [SIZE - 1 : 0] start_symbol_eq_o;
@@ -187,7 +250,17 @@ module aligner #(
             end
         end
     endgenerate
+"
+- this is the parallel generation for the equal symbols
+    - each element is compared to the fanoutd symbol at the START_SYMBOL_LATENCY on the main data_pipeline
+    - with the additional check since START_SYMBOL_LATENCY could be 0, in which cause we should directly refer
+      to data_g instead of data_pipeline
+    - otherwise check
+        - parameterization
+        - io and correct indexing
+[Marc103 + Codex 5.5 - 07/13/26]
 
+"
     // Or Tree
     // on the comparison results, to determine at least one match
     logic or_reduced_o;
@@ -212,7 +285,14 @@ module aligner #(
         .data_i(or_reduced_o),
         .data_o(adj_or_reduced_o)
     );
+"
+- this is the or reduction tree that works on the result from the equal modules, then
+  its latency balancing pipeline that uses ADJUST_REDUCTION_TREE_LATENCY
+- correct parameterization
+- correct io
+[Marc103 + Codex 5.5 - 07/13/26]
 
+"
     // Priority Encoder
     // on the comparison results
     logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o;
@@ -236,7 +316,13 @@ module aligner #(
         .data_i(priority_encoded_o),
         .data_o(adj_priority_encoded_o)
     );
-    
+"
+- this is the priority encoder tree that works on the result from the equal modules, then
+  its latency balancing pipeline that uses ADJUST_PRIORITY_ENCODER_LATENCY
+- correct parameterization
+- correct io
+
+"
     // Selector update logic, only update if a match is found.
     logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] sel;
     always@(posedge clk_i) begin
@@ -246,7 +332,12 @@ module aligner #(
             sel <= sel;
         end
     end
-    
+"
+- selector update logic,  no match is found, as determined by the or reduction tree, the sel register should maintain it's value,
+  otherwise it should update with the new sel value determined by the priority decoder
+[Marc103 + Codex 5.5 - 07/13/26]
+
+"
     // Mux
     // mux according to priority encoder out
     logic [SIZE_COMBINED - 1 : 0][DATA_WIDTH - 1 : 0] combine_data;
@@ -294,6 +385,35 @@ module aligner #(
             unflatten_mux_data[i] = mux_data_o[(i * DATA_WIDTH) +: DATA_WIDTH];
         end
     end
+"
+- this logic prepares and formats the data to input into the multistage mux, an example
 
-    assign aligned_o = unflatten_mux_data;
-endmodule
+[s1, s0,    a3, a2] - PARTIAL_LATENCY - 1
+        |
+        V
+[ x,  x, start, s2] - PARTIAL_LATENCY - 0
+
+- mux groups corresponding to the rotations are logically rewired and flattened as
+    - 0 : {s2, s1, s0, a3}
+    - 1 : {start, s2, s1, s0}
+    - 2 : {x, start, s2, s1}
+    - 3 : {x, x, start, s2}
+    - together is : [{x, x, start, s2},{x, start, s2, s1},{start, s2, s1, s0},{s2, s1, s0, a3}]
+- so the priority decoder in this example would give 1, which is {start, s2, s1, s0}
+
+- this is what happens here
+    - 'combined_data' is [SIZE_COMBINED - 1 : 0][DATA_WIDTH - 1 : 0] dimensions (where SIZE_COMBINED = SIZE * 2)
+    - we index into the data_pipeline or data_g in the case PARTIAL_LATENCY == 1 to get
+      [x, x, start, s2, s1, s0, a3, a2] in the first for loop
+    - second for loop we select our mux groups
+        - notice '1 + mux_group + i' instead of 'mux_group + i', this is the correct starting index for the rotation
+        - that gives [[x, x, start, s2],[x, start, s2, s1],[start, s2, s1, s0],[s2, s1, s0, a3]]
+    - third for loop flattens the individual words to 
+      [{x, x, start, s2},{x, start, s2, s1},{start, s2, s1, s0},{s2, s1, s0, a3}]
+    - which we can then feed into our multistage_mux
+- check parameters of multistage_mux
+- check io of multistage_mux
+- we then need to unflatten {m3, m2, m1, m0} output to [m3, m2, m1, m0]
+    - which happens in the unflatten for loop
+- finally we assign aligned_o to this unflattend structure
+[Marc103 + Codex 5.5 - 07/13/26]

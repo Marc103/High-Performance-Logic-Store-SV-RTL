@@ -174,7 +174,7 @@ package constant_functions_pkg;
         int DATA_WIDTH;
         int FANOUT_SIZE;
         int FANOUT_FACTOR;
-        int IMMEDIATE_START_FANOUT;
+        int REGISTERED_IN;
     } multistage_fanout_pt;
 
     typedef struct packed {
@@ -413,7 +413,7 @@ package constant_functions_pkg;
 
         // start symbol fanout
         int START_SYMBOL_FANOUT_FACTOR;
-        int START_SYMBOL_IMMEDIATE_START_FANOUT;
+        int REGISTERED_IN_START_SYMBOL;
 
         // REGISTERED_IN respective
         int REGISTERED_IN_EQUAL;
@@ -502,6 +502,7 @@ package constant_functions_pkg;
     ////////////////////////////////////////////////////////////////
     // multistage_fanout
     function automatic int multistage_fanout_STAGES(int FANOUT_FACTOR, int FANOUT_SIZE);
+        if(FANOUT_SIZE == 1) return 1;
         return clog_base(FANOUT_FACTOR, FANOUT_SIZE);
     endfunction
 
@@ -509,15 +510,10 @@ package constant_functions_pkg;
         return (FANOUT_FACTOR ** STAGES);
     endfunction
 
-    function automatic int multistage_fanout_LATENCY(int IMMEDIATE_START_FANOUT, int STAGES);
-        int latency;
-        if(IMMEDIATE_START_FANOUT == 1) begin
-            latency = STAGES - 1;
-        end else begin
-            latency = STAGES + 1;
-        end
-
-        if(latency < 0) latency = 0;
+    function automatic int multistage_fanout_LATENCY(int REGISTERED_IN, int STAGES);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
         return latency;
     endfunction
 
@@ -766,7 +762,7 @@ package constant_functions_pkg;
     endfunction
 
     ////////////////////////////////////////////////////////////////
-    // reduction tree
+    // aligner
     function automatic int aligner_SIZE_COMBINED(int SIZE);
         int cs = SIZE * 2;
         return cs;
@@ -778,37 +774,28 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int aligner_ADJUST_PRIORITY_ENCODER_LATENCY(int PRIORITY_ENCODER_LATENCY, int REDUCTION_TREE_LATENCY);
-        int latency = 0;
-        if(PRIORITY_ENCODER_LATENCY < REDUCTION_TREE_LATENCY) begin
-            latency = REDUCTION_TREE_LATENCY - PRIORITY_ENCODER_LATENCY;
-        end 
-        return latency;
+        return max(0, REDUCTION_TREE_LATENCY - PRIORITY_ENCODER_LATENCY);
     endfunction
 
     function automatic int aligner_ADJUST_REDUCTION_TREE_LATENCY(int PRIORITY_ENCODER_LATENCY, int REDUCTION_TREE_LATENCY);
-        int latency = 0;
-        if(REDUCTION_TREE_LATENCY < PRIORITY_ENCODER_LATENCY) begin
-            latency = PRIORITY_ENCODER_LATENCY - REDUCTION_TREE_LATENCY;
-        end 
-        return latency;
+        return max(0, PRIORITY_ENCODER_LATENCY - REDUCTION_TREE_LATENCY);
     endfunction
 
     function automatic int aligner_PARTIAL_LATENCY(
-        int REGISTERED_IN,
         int START_SYMBOL_LATENCY,
         int EQUAL_LATENCY,
         int PRIORITY_ENCODER_LATENCY,
         int REDUCTION_TREE_LATENCY);
 
         int latency = 0;
-        if(REGISTERED_IN == 1) latency++;
         latency += (START_SYMBOL_LATENCY + EQUAL_LATENCY + max(PRIORITY_ENCODER_LATENCY, REDUCTION_TREE_LATENCY));
         latency += 1;
         return latency;
     endfunction
 
-    function automatic int aligner_LATENCY(int PARTIAL_LATENCY, int MULTISTAGE_MUX_LATENCY);
+    function automatic int aligner_LATENCY(int REGISTERED_IN, int PARTIAL_LATENCY, int MULTISTAGE_MUX_LATENCY);
         int latency = PARTIAL_LATENCY;
+        if(REGISTERED_IN == 1) latency++;
         latency += MULTISTAGE_MUX_LATENCY;
         return latency;
     endfunction

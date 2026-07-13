@@ -4,13 +4,13 @@ interface multistage_fanout_inf #(
     parameter DATA_WIDTH,
     parameter FANOUT_SIZE,
     parameter FANOUT_FACTOR,
-    parameter IMMEDIATE_START_FANOUT,
+    parameter REGISTERED_IN,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
     localparam STAGES            = multistage_fanout_STAGES           (FANOUT_FACTOR, FANOUT_SIZE),
     localparam FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(FANOUT_FACTOR, STAGES),
-    localparam LATENCY           = multistage_fanout_LATENCY          (IMMEDIATE_START_FANOUT, STAGES)
+    localparam LATENCY           = multistage_fanout_LATENCY          (REGISTERED_IN, STAGES)
 ) (
     input clk_i
 );
