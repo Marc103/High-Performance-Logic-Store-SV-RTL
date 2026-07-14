@@ -6,4 +6,5 @@ package io_pkg;
     `include "MultistageMuxIO.sv"
     `include "EqualIO.sv"
     `include "ReductionTreeIO.sv"
+    `include "AlignerIO.sv"
 endpackage

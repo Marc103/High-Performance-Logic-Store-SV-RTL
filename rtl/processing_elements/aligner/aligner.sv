@@ -112,7 +112,8 @@ module aligner #(
     input  [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
     input                [DATA_WIDTH - 1 : 0] start_symbol_i,
 
-    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o
+    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o,
+    output                                    matched_o
 );
 
 
@@ -246,7 +247,25 @@ module aligner #(
             sel <= sel;
         end
     end
-    
+
+    // Matched tracking, discerns whether a match occured
+    logic matched;
+    always@(posedge clk_i) begin
+        matched <= adj_or_reduced_o;
+    end
+
+    logic matched_pipe_o;
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) matched_pipe (
+        .clk_i(clk_i),
+        .data_i(matched),
+        .data_o(matched_pipe_o)
+    );
+
+    assign matched_o = matched_pipe_o;
+
     // Mux
     // mux according to priority encoder out
     logic [SIZE_COMBINED - 1 : 0][DATA_WIDTH - 1 : 0] combine_data;

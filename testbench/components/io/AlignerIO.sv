@@ -1,0 +1,68 @@
+import constant_functions_pkg::*;
+
+class AlignerIO #(
+    parameter DATA_WIDTH,
+    parameter SIZE,
+    parameter REGISTERED_IN,
+    parameter START_SYMBOL_FANOUT_FACTOR,
+    parameter REGISTERED_IN_START_SYMBOL,
+    parameter REGISTERED_IN_EQUAL,
+    parameter REGISTERED_IN_PRIORITY_ENCODER,
+    parameter REGISTERED_IN_REDUCTION_TREE,
+    parameter REGISTERED_IN_MULTISTAGE_MUX,
+    parameter LUTX_EQUAL,
+    parameter LUTX_PRIORITY_ENCODER,
+    parameter LUTX_REDUCTION_TREE,
+    parameter LUTX_MULTISTAGE_MUX,
+    parameter GRADE_EQUAL,
+    parameter GRADE_PRIORITY_ENCODER,
+    parameter GRADE_REDUCTION_TREE,
+    parameter GRADE_MULTISTAGE_MUX,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam START_SYMBOL_STAGES = multistage_fanout_STAGES(START_SYMBOL_FANOUT_FACTOR, SIZE),
+    localparam START_SYMBOL_LATENCY = multistage_fanout_LATENCY(REGISTERED_IN_START_SYMBOL, START_SYMBOL_STAGES),
+    localparam EQUAL_LATENCY = equal_LATENCY(REGISTERED_IN_EQUAL, GRADE_EQUAL),
+    localparam PRIORITY_ENCODER_ENCODE_GROUPS = priority_encoder_ENCODE_GROUPS(SIZE, LUTX_PRIORITY_ENCODER),
+    localparam PRIORITY_ENCODER_ENCODE_DEPTH = priority_encoder_ENCODE_DEPTH(PRIORITY_ENCODER_ENCODE_GROUPS),
+    localparam PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY = max_LATENCY(1, GRADE_PRIORITY_ENCODER),
+    localparam PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY = max_LATENCY(0, GRADE_PRIORITY_ENCODER),
+    localparam PRIORITY_ENCODER_LATENCY = priority_encoder_LATENCY(
+        REGISTERED_IN_PRIORITY_ENCODER,
+        PRIORITY_ENCODER_ENCODE_DEPTH,
+        PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY,
+        PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY
+    ),
+    localparam REDUCTION_TREE_GROUP_SIZE = reduction_tree_GROUP_SIZE(LUTX_REDUCTION_TREE, GRADE_REDUCTION_TREE),
+    localparam REDUCTION_TREE_STAGES = reduction_tree_STAGES(REDUCTION_TREE_GROUP_SIZE, SIZE),
+    localparam REDUCTION_TREE_LATENCY = reduction_tree_LATENCY(REGISTERED_IN_REDUCTION_TREE, REDUCTION_TREE_STAGES),
+    localparam MULTISTAGE_MUX_SELECTOR_WIDTH = multistage_mux_SELECTOR_WIDTH(SIZE),
+    localparam MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX_MULTISTAGE_MUX, GRADE_MULTISTAGE_MUX),
+    localparam MULTISTAGE_MUX_GROUP_SIZE = multistage_mux_GROUP_SIZE(MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH),
+    localparam MULTISTAGE_MUX_STAGES = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SIZE),
+    localparam MULTISTAGE_MUX_LATENCY = multistage_mux_LATENCY(REGISTERED_IN_MULTISTAGE_MUX, MULTISTAGE_MUX_STAGES),
+    localparam PARTIAL_LATENCY = aligner_PARTIAL_LATENCY(
+        START_SYMBOL_LATENCY,
+        EQUAL_LATENCY,
+        PRIORITY_ENCODER_LATENCY,
+        REDUCTION_TREE_LATENCY
+    ),
+    localparam LATENCY = aligner_LATENCY(REGISTERED_IN, PARTIAL_LATENCY, MULTISTAGE_MUX_LATENCY)
+);
+
+    `ALIGNER_IO_IN_STRUCT(DATA_WIDTH, SIZE)
+    `ALIGNER_IO_OUT_STRUCT(DATA_WIDTH, SIZE)
+
+    aligner_io_in_t aligner_io_in_q[$];
+    aligner_io_out_t aligner_io_out_q[$];
+
+    // Sequencing Info
+    bit idle[$];
+    logic unsigned [7:0] error_state[$];
+    logic end_last_sequence = 0;
+
+    function new();
+    endfunction
+
+endclass

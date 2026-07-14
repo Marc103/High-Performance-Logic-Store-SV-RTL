@@ -7,4 +7,5 @@ package drivers_pkg;
     `include "MultistageMuxDriver.sv"
     `include "EqualDriver.sv"
     `include "ReductionTreeDriver.sv"
+    `include "AlignerDriver.sv"
 endpackage

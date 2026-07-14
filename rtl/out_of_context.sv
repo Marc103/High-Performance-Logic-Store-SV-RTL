@@ -114,7 +114,8 @@ module top #(
     // aligner
     input  [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_data_i,
     input                   [ALIGNER_DATA_WIDTH - 1 : 0]      aligner_start_symbol_i,
-    output [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_aligned_o
+    output [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_aligned_o,
+    output                                                    aligner_matched_o
 );
 
     /*
@@ -228,7 +229,8 @@ module top #(
         .data_i(aligner_data_i),
         .start_symbol_i(aligner_start_symbol_i),
 
-        .aligned_o(aligner_aligned_o)
+        .aligned_o(aligner_aligned_o),
+        .matched_o(aligner_matched_o)
     );
     */
 

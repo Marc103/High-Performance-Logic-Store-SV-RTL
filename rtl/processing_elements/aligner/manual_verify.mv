@@ -338,6 +338,32 @@
 [Marc103 + Codex 5.5 - 07/13/26]
 
 "
+    // Matched tracking, discerns whether a match occured
+    logic matched;
+    always@(posedge clk_i) begin
+        matched <= adj_or_reduced_o;
+    end
+
+    logic matched_pipe_o;
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) matched_pipe (
+        .clk_i(clk_i),
+        .data_i(matched),
+        .data_o(matched_pipe_o)
+    );
+
+    assign matched_o = matched_pipe_o;
+"
+- matched tracking, we want to expose if a match happened to the downstream logic outside of the module 
+- we sample adj_or_reduced_o in matched, then feed into a pipe of latency MULTISTAGE_MUX_LATENCY
+- check parameterization
+- check io
+- then assign match_o
+[Marc103 - 07/14/26]
+
+"
     // Mux
     // mux according to priority encoder out
     logic [SIZE_COMBINED - 1 : 0][DATA_WIDTH - 1 : 0] combine_data;

@@ -7,4 +7,5 @@ package golden_models_pkg;
     `include "MultistageMuxModel.sv"
     `include "EqualModel.sv"
     `include "ReductionTreeModel.sv"
+    `include "AlignerModel.sv"
 endpackage

@@ -7,4 +7,5 @@ package monitors_pkg;
     `include "MultistageMuxMonitor.sv"
     `include "EqualMonitor.sv"
     `include "ReductionTreeMonitor.sv"
+    `include "AlignerMonitor.sv"
 endpackage

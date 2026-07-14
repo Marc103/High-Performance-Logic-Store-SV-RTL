@@ -441,6 +441,7 @@ package constant_functions_pkg;
         logic                [PLANETARY - 1 : 0] start_symbol_i;
 
         logic [LARGE - 1 : 0][PLANETARY - 1 : 0] aligned_o;
+        logic                                    matched_o;
     } aligner_t;
 
     `define ALIGNER_IO_IN_STRUCT(DATA_WIDTH, SIZE) \
@@ -452,6 +453,7 @@ package constant_functions_pkg;
     `define ALIGNER_IO_OUT_STRUCT(DATA_WIDTH, SIZE) \
     typedef struct packed { \
         logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o; \
+        logic                                    matched_o; \
     } aligner_io_out_t;
 
     ////////////////////////////////////////////////////////////////

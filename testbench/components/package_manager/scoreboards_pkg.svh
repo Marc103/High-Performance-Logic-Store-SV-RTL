@@ -7,4 +7,5 @@ package scoreboards_pkg;
     `include "MultistageMuxScoreboard.sv"
     `include "EqualScoreboard.sv"
     `include "ReductionTreeScoreboard.sv"
+    `include "AlignerScoreboard.sv"
 endpackage

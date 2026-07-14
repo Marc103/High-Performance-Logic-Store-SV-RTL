@@ -7,4 +7,5 @@ package generators_pkg;
     `include "MultistageMuxGenerator.sv"
     `include "EqualGenerator.sv"
     `include "ReductionTreeGenerator.sv"
+    `include "AlignerGenerator.sv"
 endpackage
