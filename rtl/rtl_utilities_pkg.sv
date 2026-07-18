@@ -802,4 +802,11 @@ package constant_functions_pkg;
         return latency;
     endfunction
 
+    ////////////////////////////////////////////////////////////////
+    // fsm strider ohe
+    function automatic int fsm_strider_ohe_SYNC_IDX(int STRIDE);
+        if(STRIDE == 1) return 0;
+        return 1;
+    endfunction
+
 endpackage
