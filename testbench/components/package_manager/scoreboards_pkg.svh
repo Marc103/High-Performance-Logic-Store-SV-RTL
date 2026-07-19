@@ -8,4 +8,5 @@ package scoreboards_pkg;
     `include "EqualScoreboard.sv"
     `include "ReductionTreeScoreboard.sv"
     `include "AlignerScoreboard.sv"
+    `include "PackerScoreboard.sv"
 endpackage

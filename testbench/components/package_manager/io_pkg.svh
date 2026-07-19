@@ -7,4 +7,5 @@ package io_pkg;
     `include "EqualIO.sv"
     `include "ReductionTreeIO.sv"
     `include "AlignerIO.sv"
+    `include "PackerIO.sv"
 endpackage

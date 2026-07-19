@@ -457,6 +457,19 @@ package constant_functions_pkg;
     } aligner_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // packer
+    `define PACKER_IO_IN_STRUCT(DATA_WIDTH, INGRESS_SIZE) \
+    typedef struct packed { \
+        logic [INGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] unpacked_i; \
+        logic                                               sync_i; \
+    } packer_io_in_t;
+
+    `define PACKER_IO_OUT_STRUCT(DATA_WIDTH, EGRESS_SIZE) \
+    typedef struct packed { \
+        logic [EGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] packed_o; \
+    } packer_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     //           Module specific constant functions               //
     ////////////////////////////////////////////////////////////////
 
@@ -809,4 +822,18 @@ package constant_functions_pkg;
         return 1;
     endfunction
 
+    ////////////////////////////////////////////////////////////////
+    // packer
+    function automatic int packer_STRIDE(int INGRESS_SIZE, int EGRESS_SIZE);
+        int stride;
+        stride = EGRESS_SIZE / INGRESS_SIZE;
+        return stride;
+    endfunction
+
+    function automatic int packer_LATENCY(int REGISTERED_IN, int STRIDE);
+        int latency;
+        if(REGISTERED_IN == 1) latency++;
+        latency += (STRIDE - 1);
+        return latency;
+    endfunction
 endpackage

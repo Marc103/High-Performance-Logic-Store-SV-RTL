@@ -1,0 +1,123 @@
+"
+    localparam STRIDE = packer_STRIDE(INGRESS_SIZE, EGRESS_SIZE),
+"
+- defined as 
+"
+    function automatic int packer_STRIDE(int INGRESS_SIZE, int EGRESS_SIZE);
+        int stride;
+        stride = EGRESS_SIZE / INGRESS_SIZE;
+        return stride;
+    endfunction
+"
+- correct arguments passed in 
+- STRIDE is how many ingress size fits in a egress size
+    - it is assumed egress % ingress == 0
+    - egress >= ingress
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    localparam LATENCY = packer_LATENCY(REGISTERED_IN, STRIDE)
+"
+- defined as
+"
+    function automatic int packer_LATENCY(int REGISTERED_IN, int STRIDE);
+        int latency;
+        if(REGISTERED_IN == 1) latency++;
+        latency += (STRIDE - 1);
+        return latency;
+    endfunction
+"
+- correct arguments passed in
+- latency is STRIDE - 1, with REGISTERED_IN adding a cycle.
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    input clk_i,
+
+    input [INGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] unpacked_i,
+    input                                    sync_i,
+
+    output [EGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] packed_o,
+    output                                   packer_valid_o
+"
+- types and no missing signals
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    logic [INGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] unpacked;
+    logic [INGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] unpacked_g;
+
+    logic sync;
+    logic sync_g;
+
+    always@(posedge clk_i) begin
+        unpacked <= unpacked_i;
+        sync <= sync_i;
+    end
+
+    assign unpacked_g = (REGISTERED_IN == 1) ? unpacked : unpacked_i;
+    assign sync_g = (REGISTERED_IN == 1) ? sync : sync_i;
+"
+- standard registered in procedure
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    logic strider_valid_o;
+
+    fsm_strider_ohe #(
+        .STRIDE(STRIDE)
+    ) fsm_srider_ohe_inst (
+        .clk_i(clk_i),
+        .sync_i(sync_g),
+        .strider_valid_o(strider_valid_o)
+    );
+"
+- we instantiate an fsm_strider_ohe, that asserts strider_valid_o every STRIDE
+  cycles and is synced using sync_g.
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    logic [STRIDE - 1 : 0][INGRESS_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_pipeline;
+    always@(posedge clk_i) begin
+        data_pipeline[0] <= 'x;
+        for(int r = 1; r < STRIDE; r++) begin
+            if(r == 1) begin
+                data_pipeline[r] <= unpacked_g;
+            end else begin
+                data_pipeline[r] <= data_pipeline[r - 1];
+
+            end
+        end
+    end
+"
+- For a STRIDE == 2, we need the input, which is represented at data_pipeline[0], and register
+  one more stage. In general, we need STRIDE - 1 additional stages, hence [STRIDE - 1 : 0] is correct
+- following that logic, we have the usual if r==1 check and data_pipeline[0] <= 'x
+[Marc103 + Codex 5.6 - 07/19/26]
+
+"
+    logic [EGRESS_SIZE - 1  : 0][DATA_WIDTH - 1 : 0] packed_xkeyword;
+    always_comb begin
+        for(int s = 0; s < STRIDE; s++) begin
+            for(int i = 0; i < INGRESS_SIZE; i++) begin
+                if(s == 0) begin
+                    packed_xkeyword[(s * INGRESS_SIZE) + i] = unpacked_g[i];
+                end else begin
+                    packed_xkeyword[(s * INGRESS_SIZE) + i] = data_pipeline[s][i];
+                end
+            end
+        end
+    end
+
+    assign packed_o       = (STRIDE == 1) ? unpacked_g : packed_xkeyword;
+    assign packer_valid_o = strider_valid_o;
+"
+- here we need to wire the packed data from the pipeline stages
+- the indexing is correct '(s * INGRESS_SIZE) + i' where as usual we check for s == 0,
+  we look at unpacked_g instead of data_pipeline[0]..
+- for packed_o, we also check for STRIDE == 1, for the same reason
+- packer_valid_o is simply assigned the strider_valid_o
+[Marc103 + Codex 5.6 - 07/19/26]
+
+
+

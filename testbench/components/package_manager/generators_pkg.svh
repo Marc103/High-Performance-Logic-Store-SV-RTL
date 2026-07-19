@@ -8,4 +8,5 @@ package generators_pkg;
     `include "EqualGenerator.sv"
     `include "ReductionTreeGenerator.sv"
     `include "AlignerGenerator.sv"
+    `include "PackerGenerator.sv"
 endpackage

@@ -8,4 +8,5 @@ package drivers_pkg;
     `include "EqualDriver.sv"
     `include "ReductionTreeDriver.sv"
     `include "AlignerDriver.sv"
+    `include "PackerDriver.sv"
 endpackage

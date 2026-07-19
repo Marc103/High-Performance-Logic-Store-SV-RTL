@@ -8,4 +8,5 @@ package monitors_pkg;
     `include "EqualMonitor.sv"
     `include "ReductionTreeMonitor.sv"
     `include "AlignerMonitor.sv"
+    `include "PackerMonitor.sv"
 endpackage

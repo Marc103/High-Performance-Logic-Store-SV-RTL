@@ -44,7 +44,7 @@ import constant_functions_pkg::*;
 module fsm_strider_ohe #(
     parameter STRIDE,
 
-    
+
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters 
     localparam SYNC_IDX = fsm_strider_ohe_SYNC_IDX(STRIDE)

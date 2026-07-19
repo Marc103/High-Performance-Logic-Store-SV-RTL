@@ -2,7 +2,7 @@
 
 import constant_functions_pkg::*;
 
-module top #(
+module ooc #(
     ////////////////////////////////////////////////////////////////
     // shared
     localparam CLK_DATA_WIDTH = 12,
@@ -79,7 +79,18 @@ module top #(
     localparam ALIGNER_GRADE_EQUAL = 1,
     localparam ALIGNER_GRADE_PRIORITY_ENCODER = 1,
     localparam ALIGNER_GRADE_REDUCTION_TREE = 1,
-    localparam ALIGNER_GRADE_MULTISTAGE_MUX = 1
+    localparam ALIGNER_GRADE_MULTISTAGE_MUX = 1,
+
+    ////////////////////////////////////////////////////////////////
+    // packer
+    localparam PACKER_REGISTERED_IN = 1,
+    localparam PACKER_DATA_WIDTH = 8,
+    localparam PACKER_INGRESS_SIZE = 2,
+    localparam PACKER_EGRESS_SIZE = 8,
+
+    ////////////////////////////////////////////////////////////////
+    // fsm_strider_ohe
+    localparam FSM_STRIDER_OHE_STRIDE = 4
 )(
     input clk_i,
 
@@ -115,7 +126,19 @@ module top #(
     input  [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_data_i,
     input                   [ALIGNER_DATA_WIDTH - 1 : 0]      aligner_start_symbol_i,
     output [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_aligned_o,
-    output                                                    aligner_matched_o
+    output                                                    aligner_matched_o,
+
+    ////////////////////////////////////////////////////////////////
+    // packer
+    input  [PACKER_INGRESS_SIZE - 1 : 0][PACKER_DATA_WIDTH - 1 : 0] packer_unpacked_i,
+    input                                                          packer_sync_i,
+    output [PACKER_EGRESS_SIZE - 1 : 0][PACKER_DATA_WIDTH - 1 : 0]  packer_packed_o,
+    output                                                         packer_valid_o,
+
+    ////////////////////////////////////////////////////////////////
+    // fsm_strider_ohe
+    input  fsm_strider_ohe_sync_i,
+    output fsm_strider_ohe_strider_valid_o
 );
 
     /*
@@ -231,6 +254,35 @@ module top #(
 
         .aligned_o(aligner_aligned_o),
         .matched_o(aligner_matched_o)
+    );
+    */
+
+    /*
+    packer #(
+        .REGISTERED_IN(PACKER_REGISTERED_IN),
+        .DATA_WIDTH(PACKER_DATA_WIDTH),
+        .INGRESS_SIZE(PACKER_INGRESS_SIZE),
+        .EGRESS_SIZE(PACKER_EGRESS_SIZE)
+    ) dut (
+        .clk_i(clk_i),
+
+        .unpacked_i(packer_unpacked_i),
+        .sync_i(packer_sync_i),
+
+        .packed_o(packer_packed_o),
+        .packer_valid_o(packer_valid_o)
+    );
+    */
+
+    /*
+    fsm_strider_ohe #(
+        .STRIDE(FSM_STRIDER_OHE_STRIDE)
+    ) dut (
+        .clk_i(clk_i),
+
+        .sync_i(fsm_strider_ohe_sync_i),
+
+        .strider_valid_o(fsm_strider_ohe_strider_valid_o)
     );
     */
 

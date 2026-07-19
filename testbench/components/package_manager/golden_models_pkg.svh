@@ -8,4 +8,5 @@ package golden_models_pkg;
     `include "EqualModel.sv"
     `include "ReductionTreeModel.sv"
     `include "AlignerModel.sv"
+    `include "PackerModel.sv"
 endpackage
