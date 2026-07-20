@@ -80,6 +80,8 @@ module ooc #(
     localparam ALIGNER_GRADE_PRIORITY_ENCODER = 1,
     localparam ALIGNER_GRADE_REDUCTION_TREE = 1,
     localparam ALIGNER_GRADE_MULTISTAGE_MUX = 1,
+    localparam ALIGNER_SELECTOR_WIDTH =
+        priority_encoder_OUTPUT_DATA_WIDTH(ALIGNER_SIZE),
 
     ////////////////////////////////////////////////////////////////
     // packer
@@ -127,6 +129,7 @@ module ooc #(
     input                   [ALIGNER_DATA_WIDTH - 1 : 0]      aligner_start_symbol_i,
     output [ALIGNER_SIZE - 1 : 0][ALIGNER_DATA_WIDTH - 1 : 0] aligner_aligned_o,
     output                                                    aligner_matched_o,
+    output [ALIGNER_SELECTOR_WIDTH - 1 : 0]                    aligner_selector_o,
 
     ////////////////////////////////////////////////////////////////
     // packer
@@ -253,7 +256,8 @@ module ooc #(
         .start_symbol_i(aligner_start_symbol_i),
 
         .aligned_o(aligner_aligned_o),
-        .matched_o(aligner_matched_o)
+        .matched_o(aligner_matched_o),
+        .selector_o(aligner_selector_o)
     );
     */
 

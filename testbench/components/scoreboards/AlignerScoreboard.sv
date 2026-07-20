@@ -1,7 +1,7 @@
 import constant_functions_pkg::*;
 
 class AlignerScoreboard #(type T);
-    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE)
+    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE, T::PRIORITY_ENCODER_OUTPUT_DATA_WIDTH)
 
     TriggerableQueue #(T) in_queue_dut;
     TriggerableQueue #(T) in_queue_golden;

@@ -450,10 +450,11 @@ package constant_functions_pkg;
         logic               [DATA_WIDTH - 1 : 0] start_symbol_i; \
     } aligner_io_in_t;
 
-    `define ALIGNER_IO_OUT_STRUCT(DATA_WIDTH, SIZE) \
+    `define ALIGNER_IO_OUT_STRUCT(DATA_WIDTH, SIZE, SELECTOR_WIDTH) \
     typedef struct packed { \
         logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o; \
         logic                                    matched_o; \
+        logic [SELECTOR_WIDTH - 1 : 0]            selector_o; \
     } aligner_io_out_t;
 
     ////////////////////////////////////////////////////////////////

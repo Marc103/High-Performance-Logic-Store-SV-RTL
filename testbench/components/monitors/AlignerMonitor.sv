@@ -1,7 +1,7 @@
 import constant_functions_pkg::*;
 
 class AlignerMonitor #(type T, type I);
-    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE)
+    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE, T::PRIORITY_ENCODER_OUTPUT_DATA_WIDTH)
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
     I inf;
@@ -57,6 +57,7 @@ class AlignerMonitor #(type T, type I);
 
             current_out.aligned_o = inf.aligned_o;
             current_out.matched_o = inf.matched_o;
+            current_out.selector_o = inf.selector_o;
 
             if(T::LATENCY == 0) begin
                 if(inf.start_sequence || active_sequence) begin

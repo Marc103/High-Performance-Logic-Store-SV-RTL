@@ -112,8 +112,9 @@ module aligner #(
     input  [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
     input                [DATA_WIDTH - 1 : 0] start_symbol_i,
 
-    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o,
-    output                                    matched_o
+    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0]                         aligned_o,
+    output                                                            matched_o,
+    output               [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] selector_o
 );
 
 
@@ -247,6 +248,19 @@ module aligner #(
             sel <= sel;
         end
     end
+
+    // Selector tracking
+    logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] sel_pipe_o;
+    pipe #(
+        .DATA_WIDTH(PRIORITY_ENCODER_OUTPUT_DATA_WIDTH),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) sel_pipe (
+        .clk_i(clk_i),
+        .data_i(sel),
+        .data_o(sel_pipe_o)
+    );
+
+    assign selector_o = sel_pipe_o;
 
     // Matched tracking, discerns whether a match occured
     logic matched;

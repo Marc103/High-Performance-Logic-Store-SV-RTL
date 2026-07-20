@@ -150,7 +150,8 @@ module aligner_tb #(
         .data_i(bfm.data_i),
         .start_symbol_i(bfm.start_symbol_i),
         .aligned_o(bfm.aligned_o),
-        .matched_o(bfm.matched_o)
+        .matched_o(bfm.matched_o),
+        .selector_o(bfm.selector_o)
     );
 
     initial begin

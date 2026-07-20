@@ -36,7 +36,7 @@ REGISTERED_IN [0, 1]:
   else, inputs are direct.
 
 INGRESS_SIZE[1,..]:
-- Number of elements per word entering, Two rules that must be followed:
+- Number of elements per word entering, see 'Two rules that must be followed:'
 
 EGRESS_SIZE[1,..]:
 - Number of elements per word exiting, see 'Two rules that must be followed:'

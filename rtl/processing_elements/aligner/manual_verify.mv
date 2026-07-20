@@ -159,10 +159,12 @@
     input  [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
     input                [DATA_WIDTH - 1 : 0] start_symbol_i,
 
-    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o
+    output [SIZE - 1 : 0][DATA_WIDTH - 1 : 0]                         aligned_o,
+    output                                                            matched_o,
+    output               [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] selector_o
 "
 - types and no missing signals
-[Marc103 + Codex 5.5 - 07/13/26]
+[Marc103 + Codex 5.6 - 07/20/26]
 
 "
     logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] data;
@@ -336,6 +338,27 @@
 - selector update logic,  no match is found, as determined by the or reduction tree, the sel register should maintain it's value,
   otherwise it should update with the new sel value determined by the priority decoder
 [Marc103 + Codex 5.5 - 07/13/26]
+
+"
+    // Selector tracking
+    logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] sel_pipe_o;
+    pipe #(
+        .DATA_WIDTH(PRIORITY_ENCODER_OUTPUT_DATA_WIDTH),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) sel_pipe (
+        .clk_i(clk_i),
+        .data_i(sel),
+        .data_o(sel_pipe_o)
+    );
+
+    assign selector_o = sel_pipe_o;
+"
+- pipe for selector, we want to expose the selector to downstream logic
+- input is `sel`, and the output is delayed by the same latency as the multistage mux so `selector_o`
+  identifies the selection used for the corresponding `aligned_o`
+- `sel_pipe_o` and `selector_o` use PRIORITY_ENCODER_OUTPUT_DATA_WIDTH
+- correct parameterization and I/O
+[Marc103 + Codex 5.6 - 07/20/26]
 
 "
     // Matched tracking, discerns whether a match occured

@@ -34,6 +34,7 @@ interface aligner_inf #(
         PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY,
         PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY
     ),
+    localparam PRIORITY_ENCODER_OUTPUT_DATA_WIDTH = priority_encoder_OUTPUT_DATA_WIDTH(SIZE),
     localparam REDUCTION_TREE_GROUP_SIZE = reduction_tree_GROUP_SIZE(LUTX_REDUCTION_TREE, GRADE_REDUCTION_TREE),
     localparam REDUCTION_TREE_STAGES = reduction_tree_STAGES(REDUCTION_TREE_GROUP_SIZE, SIZE),
     localparam REDUCTION_TREE_LATENCY = reduction_tree_LATENCY(REGISTERED_IN_REDUCTION_TREE, REDUCTION_TREE_STAGES),
@@ -57,6 +58,7 @@ interface aligner_inf #(
 
     logic [SIZE - 1 : 0][DATA_WIDTH - 1 : 0] aligned_o;
     logic                                    matched_o;
+    logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] selector_o;
 
     // testbench sequencing signals
     logic start_sequence;

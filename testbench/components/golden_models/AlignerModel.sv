@@ -2,7 +2,7 @@ import constant_functions_pkg::*;
 
 class AlignerModel #(type T);
     `ALIGNER_IO_IN_STRUCT(T::DATA_WIDTH, T::SIZE)
-    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE)
+    `ALIGNER_IO_OUT_STRUCT(T::DATA_WIDTH, T::SIZE, T::PRIORITY_ENCODER_OUTPUT_DATA_WIDTH)
 
     TriggerableQueue #(T) in_queue;
     TriggerableQueueBroadcaster #(T) out_broadcaster;
@@ -47,6 +47,7 @@ class AlignerModel #(type T);
                     matched = update_selection(pending_in);
                     aligner_io_out.aligned_o = align(pending_in.data_i, current_in.data_i, selected_index);
                     aligner_io_out.matched_o = matched;
+                    aligner_io_out.selector_o = selected_index;
 
                     io_obj_out.error_state.push_back(this.error_state);
                     io_obj_out.aligner_io_out_q.push_back(aligner_io_out);
