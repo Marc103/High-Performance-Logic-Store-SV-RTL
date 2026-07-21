@@ -68,9 +68,9 @@ class AlignerModel #(type T);
         logic matched;
         matched = 0;
 
-        for(int i = 0; i < T::SIZE; i++) begin
+        for(int i = T::START_INDEX; i < T::SIZE; i++) begin
             if(aligner_io_in.data_i[i] == aligner_io_in.start_symbol_i) begin
-                this.selected_index = i;
+                this.selected_index = i - T::START_INDEX;
                 matched = 1;
             end
         end
@@ -87,7 +87,7 @@ class AlignerModel #(type T);
         int source_index;
 
         for(int i = 0; i < T::SIZE; i++) begin
-            source_index = sel + 1 + i;
+            source_index = T::START_INDEX + sel + 1 + i;
             if(source_index < T::SIZE) begin
                 aligned[i] = current_data[source_index];
             end else begin

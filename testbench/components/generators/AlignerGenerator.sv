@@ -65,13 +65,19 @@ class AlignerGenerator #(type T);
         start_symbol = data_from_int(8'hA5);
 
         // Start with a match so the DUT selector is initialized before any checked output.
-        add_pattern(io_obj, 1, 0, start_symbol);
+        add_pattern(io_obj, 1, T::START_INDEX, start_symbol);
         add_pattern(io_obj, 17, -1, start_symbol);
         add_pattern(io_obj, 33, -1, start_symbol);
 
+        // A symbol below START_INDEX must not match or replace the retained selector.
+        if(T::START_INDEX > 0) begin
+            add_pattern(io_obj, 41, T::START_INDEX - 1, start_symbol);
+            add_pattern(io_obj, 45, -1, start_symbol);
+        end
+
         // Exercise every rotation and verify that each new match replaces the selection.
-        for(int sel = 0; sel < T::SIZE; sel++) begin
-            add_pattern(io_obj, 49 + (sel * (T::SIZE + 3)), sel, start_symbol);
+        for(int sel = 0; sel < T::SELECTED_SIZE; sel++) begin
+            add_pattern(io_obj, 49 + (sel * (T::SIZE + 3)), T::START_INDEX + sel, start_symbol);
             add_pattern(io_obj, 113 + (sel * (T::SIZE + 5)), -1, start_symbol);
         end
 
@@ -79,7 +85,7 @@ class AlignerGenerator #(type T);
         for(int i = 0; i < T::SIZE; i++) begin
             data[i] = data_from_int(seed + i + 1);
         end
-        data[0] = start_symbol;
+        data[T::START_INDEX] = start_symbol;
         data[T::SIZE - 1] = start_symbol;
         add_io(io_obj, 0, data, start_symbol);
         seed++;
@@ -90,7 +96,7 @@ class AlignerGenerator #(type T);
         add_io(io_obj, 1, '0, start_symbol);
 
         // Re-establish a known selection after the idle gap.
-        add_pattern(io_obj, 229, T::SIZE / 2, start_symbol);
+        add_pattern(io_obj, 229, T::START_INDEX + (T::SELECTED_SIZE / 2), start_symbol);
         add_pattern(io_obj, 251, -1, start_symbol);
 
         // Final idle cycle supplies lookahead for the final valid transaction and flushes it.

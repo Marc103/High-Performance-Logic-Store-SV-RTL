@@ -45,6 +45,7 @@ import scoreboards_pkg::*;
 module aligner_tb #(
     parameter DATA_WIDTH = 8,
     parameter SIZE = 4,
+    parameter START_INDEX = 0,
     parameter REGISTERED_IN = 1,
     parameter START_SYMBOL_FANOUT_FACTOR = 4,
     parameter REGISTERED_IN_START_SYMBOL = 1,
@@ -67,6 +68,7 @@ module aligner_tb #(
     localparam type T = AlignerIO #(
         .DATA_WIDTH(DATA_WIDTH),
         .SIZE(SIZE),
+        .START_INDEX(START_INDEX),
         .REGISTERED_IN(REGISTERED_IN),
         .START_SYMBOL_FANOUT_FACTOR(START_SYMBOL_FANOUT_FACTOR),
         .REGISTERED_IN_START_SYMBOL(REGISTERED_IN_START_SYMBOL),
@@ -87,6 +89,7 @@ module aligner_tb #(
     localparam type I = virtual aligner_inf #(
         .DATA_WIDTH(DATA_WIDTH),
         .SIZE(SIZE),
+        .START_INDEX(START_INDEX),
         .REGISTERED_IN(REGISTERED_IN),
         .START_SYMBOL_FANOUT_FACTOR(START_SYMBOL_FANOUT_FACTOR),
         .REGISTERED_IN_START_SYMBOL(REGISTERED_IN_START_SYMBOL),
@@ -110,6 +113,7 @@ module aligner_tb #(
     aligner_inf #(
         .DATA_WIDTH(DATA_WIDTH),
         .SIZE(SIZE),
+        .START_INDEX(START_INDEX),
         .REGISTERED_IN(REGISTERED_IN),
         .START_SYMBOL_FANOUT_FACTOR(START_SYMBOL_FANOUT_FACTOR),
         .REGISTERED_IN_START_SYMBOL(REGISTERED_IN_START_SYMBOL),
@@ -130,6 +134,7 @@ module aligner_tb #(
     aligner #(
         .DATA_WIDTH(DATA_WIDTH),
         .SIZE(SIZE),
+        .START_INDEX(START_INDEX),
         .REGISTERED_IN(REGISTERED_IN),
         .START_SYMBOL_FANOUT_FACTOR(START_SYMBOL_FANOUT_FACTOR),
         .REGISTERED_IN_START_SYMBOL(REGISTERED_IN_START_SYMBOL),

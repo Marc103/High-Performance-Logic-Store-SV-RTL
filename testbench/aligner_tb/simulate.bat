@@ -19,6 +19,7 @@ vlib work
 REM Parameter defaults. Override with "set NAME=value" before calling this script.
 if not defined DATA_WIDTH set DATA_WIDTH=8
 if not defined SIZE set SIZE=4
+if not defined START_INDEX set START_INDEX=0
 if not defined REGISTERED_IN set REGISTERED_IN=1
 if not defined START_SYMBOL_FANOUT_FACTOR set START_SYMBOL_FANOUT_FACTOR=4
 if not defined REGISTERED_IN_START_SYMBOL set REGISTERED_IN_START_SYMBOL=1
@@ -77,6 +78,7 @@ REM -------------------------------------------------
 vsim -voptargs=+acc -c ^
     -g/aligner_tb/DATA_WIDTH=%DATA_WIDTH% ^
     -g/aligner_tb/SIZE=%SIZE% ^
+    -g/aligner_tb/START_INDEX=%START_INDEX% ^
     -g/aligner_tb/REGISTERED_IN=%REGISTERED_IN% ^
     -g/aligner_tb/START_SYMBOL_FANOUT_FACTOR=%START_SYMBOL_FANOUT_FACTOR% ^
     -g/aligner_tb/REGISTERED_IN_START_SYMBOL=%REGISTERED_IN_START_SYMBOL% ^

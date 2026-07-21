@@ -35,6 +35,103 @@
 - check that the correct arguments are passed in
 [Marc103 + Codex 5.5 - 07/13/26]
 
+////////////////////////////////////////////////////////////////
+// START_INDEX update - 07/21/26
+
+"
+    parameter DATA_WIDTH,
+    parameter SIZE,
+    parameter START_INDEX,
+    parameter REGISTERED_IN,
+"
+- START_INDEX defines the lowest data_i index included in start-symbol comparisons
+- the intended range is 0 <= START_INDEX < SIZE
+- verify that every legal value leaves the instantiated encoder and mux with supported widths
+[Marc103 + Codex 5.6 - 07/21/26]
+
+"
+    localparam SELECTED_SIZE = aligner_SELECTED_SIZE(SIZE, START_INDEX),
+"
+- defined as
+"
+    function automatic int aligner_SELECTED_SIZE(int SIZE, START_INDEX);
+        int s;
+        s = SIZE - START_INDEX;
+        return s;
+    endfunction
+"
+- SELECTED_SIZE is the number of searchable elements and therefore the number of possible rotations
+- START_INDEX = 0 preserves the original SIZE-wide behavior
+- START_INDEX > 0 decouples the word width from the number of searched rotations
+[Marc103 + Codex 5.6 - 07/21/26]
+
+"
+    localparam START_SYMBOL_STAGES =
+        multistage_fanout_STAGES(START_SYMBOL_FANOUT_FACTOR, SELECTED_SIZE),
+    ...
+    localparam PRIORITY_ENCODER_ENCODE_GROUPS =
+        priority_encoder_ENCODE_GROUPS(SELECTED_SIZE, LUTX_PRIORITY_ENCODER),
+    localparam PRIORITY_ENCODER_OUTPUT_DATA_WIDTH =
+        priority_encoder_OUTPUT_DATA_WIDTH(SELECTED_SIZE),
+    ...
+    localparam REDUCTION_TREE_STAGES =
+        reduction_tree_STAGES(REDUCTION_TREE_GROUP_SIZE, SELECTED_SIZE),
+    ...
+    localparam MULTISTAGE_MUX_SELECTOR_WIDTH =
+        multistage_mux_SELECTOR_WIDTH(SELECTED_SIZE),
+    localparam MULTISTAGE_MUX_STAGES =
+        multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SELECTED_SIZE),
+"
+- fanout, equality reduction, priority encoding, and mux selection now scale with SELECTED_SIZE
+- data storage, flattening, and aligned_o remain SIZE elements wide
+- selector_o is relative to the selected window: selector_o = 0 represents data_i[START_INDEX]
+[Marc103 + Codex 5.6 - 07/21/26]
+
+"
+    logic [SELECTED_SIZE - 1 : 0] start_symbol_eq_o;
+    generate
+        for(genvar i = 0; i < SELECTED_SIZE; i++) begin
+            ...
+            .data_b_i(data_g[START_INDEX + i]),
+            ...
+            .data_b_i(data_pipeline[START_SYMBOL_LATENCY][START_INDEX + i]),
+            ...
+        end
+    endgenerate
+"
+- only data indices START_INDEX through SIZE - 1 are compared
+- start_symbol_eq_o index i corresponds to absolute data index START_INDEX + i
+- the priority encoder therefore returns a selector relative to START_INDEX
+[Marc103 + Codex 5.6 - 07/21/26]
+
+"
+    logic [SELECTED_SIZE - 1 : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] mux_data;
+    logic [SELECTED_SIZE - 1 : 0][FLATTEN_WIDTH - 1 : 0] mux_flatten_data;
+    ...
+    for(int mux_group = 0; mux_group < SELECTED_SIZE; mux_group++) begin
+        for(int i = 0; i < SIZE; i++) begin
+            mux_data[mux_group][i] = combine_data[1 + mux_group + i + START_INDEX];
+        end
+    end
+    ...
+    multistage_mux #(
+        .DATA_WIDTH(FLATTEN_WIDTH),
+        .SIZE(SELECTED_SIZE),
+        ...
+    ) multistage_mux_inst (...);
+"
+- mux candidate mux_group corresponds to an absolute match index of START_INDEX + mux_group
+- adding START_INDEX to the combined-data offset preserves the original rotation relationship
+- all mux declarations, loops, and the multistage_mux SIZE parameter use SELECTED_SIZE
+[Marc103 + Codex 5.6 - 07/21/26]
+
+- START_INDEX = SIZE - 1 produces SELECTED_SIZE = 1
+- priority_encoder_ENCODE_DEPTH(1), priority_encoder_OUTPUT_DATA_WIDTH(1), and
+  multistage_mux_SELECTOR_WIDTH(1) are guarded to return 1
+- the one-entry path therefore retains valid array and selector widths
+- Questa simulation with SIZE = 4 and START_INDEX = 3 passed the aligned, matched, and selector checks
+[Marc103 + Codex 5.6 - 07/21/26]
+
 "
     localparam SIZE_COMBINED   = aligner_SIZE_COMBINED(SIZE),
 "

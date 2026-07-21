@@ -6,6 +6,15 @@ should be rotated and appear as:
 [start, s2, s1, s0] <- [a3, a2, a1, a0] <- [b3, b2, b1, b0] <- ...
 on the output.
 
+The LSB index that the start symbol is looked for is also configurable, I.e
+  [e1, e0, start, s2] <- [s1, s0, a3, a2]
+    3   2    1    0
+        ^
+        |
+  if START_INDEX = 2, we look at elements [3:2], meaning no rotation happens here in this example
+since the start symbol is at index [1]. This decouples the number of elements from the context that
+ we perform alignment in.
+
 DATA_WIDTH:
 - Data width of one element
 
@@ -13,6 +22,9 @@ SIZE:
 - Number of elements that determine a word. I.e if DATA_WIDTH = 8, and SIZE = 4, then
   a word is defined as having the packed type [3:0][7:0], in other words, in this specific case,
   a word consists of 4 bytes.
+
+START_INDEX [0,SIZE):
+- At what LSB index should we start looking for the start symbol from? Must be smaller than SIZE.
 
 REGISTERED_IN [0, 1]:
 - If 1, inputs are registered, increasing latency by 1 cycle,
@@ -35,6 +47,7 @@ import constant_functions_pkg::*;
 module aligner #(
     parameter DATA_WIDTH,
     parameter SIZE,
+    parameter START_INDEX,
     parameter REGISTERED_IN,
 
     // start symbol fanout
@@ -62,8 +75,11 @@ module aligner #(
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
 
+    // aligner pre-locals
+    localparam SELECTED_SIZE = aligner_SELECTED_SIZE(SIZE, START_INDEX),
+
     // start symbol fanout
-    localparam START_SYMBOL_STAGES            = multistage_fanout_STAGES           (START_SYMBOL_FANOUT_FACTOR, SIZE),
+    localparam START_SYMBOL_STAGES            = multistage_fanout_STAGES           (START_SYMBOL_FANOUT_FACTOR, SELECTED_SIZE),
     localparam START_SYMBOL_FINAL_FANOUT_SIZE = multistage_fanout_FINAL_FANOUT_SIZE(START_SYMBOL_FANOUT_FACTOR, START_SYMBOL_STAGES),
     localparam START_SYMBOL_LATENCY           = multistage_fanout_LATENCY          (REGISTERED_IN_START_SYMBOL, START_SYMBOL_STAGES),
 
@@ -71,7 +87,7 @@ module aligner #(
     localparam EQUAL_LATENCY = equal_LATENCY(REGISTERED_IN_EQUAL, GRADE_EQUAL),
 
     // priority encoder
-    localparam                                     PRIORITY_ENCODER_ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS      (SIZE, LUTX_PRIORITY_ENCODER),
+    localparam                                     PRIORITY_ENCODER_ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS      (SELECTED_SIZE, LUTX_PRIORITY_ENCODER),
     localparam                                     PRIORITY_ENCODER_ENCODE_DEPTH               = priority_encoder_ENCODE_DEPTH       (PRIORITY_ENCODER_ENCODE_GROUPS),
     localparam                                     PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY = max_LATENCY                         (1, GRADE_PRIORITY_ENCODER),
     localparam                                     PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY = max_LATENCY                         (0, GRADE_PRIORITY_ENCODER),
@@ -80,21 +96,21 @@ module aligner #(
                                                                                                      PRIORITY_ENCODER_ENCODE_DEPTH, 
                                                                                                      PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, 
                                                                                                      PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
-    localparam                                     PRIORITY_ENCODER_OUTPUT_DATA_WIDTH          = priority_encoder_OUTPUT_DATA_WIDTH  (SIZE),
+    localparam                                     PRIORITY_ENCODER_OUTPUT_DATA_WIDTH          = priority_encoder_OUTPUT_DATA_WIDTH  (SELECTED_SIZE),
 
     // reduction tree
     localparam                                      REDUCTION_TREE_GROUP_SIZE           = reduction_tree_GROUP_SIZE(LUTX_REDUCTION_TREE, GRADE_REDUCTION_TREE),
-    localparam                                      REDUCTION_TREE_STAGES               = reduction_tree_STAGES (REDUCTION_TREE_GROUP_SIZE, SIZE),
+    localparam                                      REDUCTION_TREE_STAGES               = reduction_tree_STAGES (REDUCTION_TREE_GROUP_SIZE, SELECTED_SIZE),
     localparam                                      REDUCTION_TREE_LATENCY              = reduction_tree_LATENCY(REGISTERED_IN_REDUCTION_TREE, REDUCTION_TREE_STAGES),
 
     // multistage mux
-    localparam                                      MULTISTAGE_MUX_SELECTOR_WIDTH       = multistage_mux_SELECTOR_WIDTH(SIZE),
+    localparam                                      MULTISTAGE_MUX_SELECTOR_WIDTH       = multistage_mux_SELECTOR_WIDTH(SELECTED_SIZE),
     localparam                                      MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX_MULTISTAGE_MUX, GRADE_MULTISTAGE_MUX),
     localparam                                      MULTISTAGE_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH),
-    localparam                                      MULTISTAGE_MUX_STAGES               = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SIZE),
+    localparam                                      MULTISTAGE_MUX_STAGES               = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, SELECTED_SIZE),
     localparam                                      MULTISTAGE_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_IN_MULTISTAGE_MUX, MULTISTAGE_MUX_STAGES),
     
-    // aligner locals
+    // aligner post-locals
     localparam SIZE_COMBINED   = aligner_SIZE_COMBINED(SIZE),
     localparam FLATTEN_WIDTH   = aligner_FLATTEN_WIDTH(DATA_WIDTH, SIZE),
     localparam PARTIAL_LATENCY = aligner_PARTIAL_LATENCY(
@@ -149,7 +165,7 @@ module aligner #(
     logic [START_SYMBOL_FINAL_FANOUT_SIZE - 1 : 0][DATA_WIDTH - 1 : 0] start_symbol_fanout_o;
     multistage_fanout #(
         .DATA_WIDTH(DATA_WIDTH),
-        .FANOUT_SIZE(SIZE),
+        .FANOUT_SIZE(SELECTED_SIZE),
         .FANOUT_FACTOR(START_SYMBOL_FANOUT_FACTOR),
         .REGISTERED_IN(REGISTERED_IN_START_SYMBOL)
     ) symbol_fanout_inst (
@@ -160,9 +176,9 @@ module aligner #(
 
     // Equal 
     // comparing against start_symbol
-    logic [SIZE - 1 : 0] start_symbol_eq_o;
+    logic [SELECTED_SIZE - 1 : 0] start_symbol_eq_o;
     generate
-        for(genvar i = 0; i < SIZE; i++) begin
+        for(genvar i = 0; i < SELECTED_SIZE; i++) begin
             for(genvar cond = (START_SYMBOL_LATENCY == 0); cond == 1; cond = 0) begin
                 equal #(
                     .DATA_WIDTH(DATA_WIDTH),
@@ -171,7 +187,7 @@ module aligner #(
                 ) equal_inst (
                     .clk_i(clk_i),
                     .data_a_i(start_symbol_fanout_o[i]),
-                    .data_b_i(data_g[i]),
+                    .data_b_i(data_g[START_INDEX + i]),
                     .eq_o(start_symbol_eq_o[i])
                 );  
             end
@@ -183,7 +199,7 @@ module aligner #(
                 ) equal_inst (
                     .clk_i(clk_i),
                     .data_a_i(start_symbol_fanout_o[i]),
-                    .data_b_i(data_pipeline[START_SYMBOL_LATENCY][i]),
+                    .data_b_i(data_pipeline[START_SYMBOL_LATENCY][START_INDEX + i]),
                     .eq_o(start_symbol_eq_o[i])
                 );  
             end
@@ -194,7 +210,7 @@ module aligner #(
     // on the comparison results, to determine at least one match
     logic or_reduced_o;
     reduction_tree #(
-        .DATA_WIDTH(SIZE),
+        .DATA_WIDTH(SELECTED_SIZE),
         .GATE(1),
         .REGISTERED_IN(REGISTERED_IN_REDUCTION_TREE),
         .LUTX(LUTX_REDUCTION_TREE),
@@ -219,7 +235,7 @@ module aligner #(
     // on the comparison results
     logic [PRIORITY_ENCODER_OUTPUT_DATA_WIDTH - 1 : 0] priority_encoded_o;
     priority_encoder #(
-        .INPUT_DATA_WIDTH(SIZE),
+        .INPUT_DATA_WIDTH(SELECTED_SIZE),
         .REGISTERED_IN(REGISTERED_IN_PRIORITY_ENCODER),
         .LUTX(LUTX_PRIORITY_ENCODER),
         .GRADE(GRADE_PRIORITY_ENCODER)
@@ -283,8 +299,8 @@ module aligner #(
     // Mux
     // mux according to priority encoder out
     logic [SIZE_COMBINED - 1 : 0][DATA_WIDTH - 1 : 0] combine_data;
-    logic [SIZE - 1 : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] mux_data;
-    logic [SIZE - 1 : 0][FLATTEN_WIDTH - 1 : 0] mux_flatten_data;
+    logic [SELECTED_SIZE - 1 : 0][SIZE - 1 : 0][DATA_WIDTH - 1 : 0] mux_data;
+    logic [SELECTED_SIZE - 1 : 0][FLATTEN_WIDTH - 1 : 0] mux_flatten_data;
     always_comb begin
         for(int i = 0; i < SIZE; i++) begin
             if(PARTIAL_LATENCY == 1) begin
@@ -295,12 +311,12 @@ module aligner #(
                 combine_data[SIZE + i] = data_pipeline[PARTIAL_LATENCY - 0][i];
             end
         end
-        for(int mux_group = 0; mux_group < SIZE; mux_group++) begin
+        for(int mux_group = 0; mux_group < SELECTED_SIZE; mux_group++) begin
             for(int i = 0; i < SIZE; i++) begin
-                mux_data[mux_group][i] = combine_data[1 + mux_group + i];
+                mux_data[mux_group][i] = combine_data[1 + mux_group + i + START_INDEX];
             end
         end
-        for(int mux_group = 0; mux_group < SIZE; mux_group++) begin
+        for(int mux_group = 0; mux_group < SELECTED_SIZE; mux_group++) begin
             for(int i = 0; i < SIZE; i++)
             mux_flatten_data[mux_group][(i * DATA_WIDTH) +: DATA_WIDTH] = mux_data[mux_group][i];
         end
@@ -310,7 +326,7 @@ module aligner #(
 
     multistage_mux #(
         .DATA_WIDTH(FLATTEN_WIDTH),
-        .SIZE(SIZE),
+        .SIZE(SELECTED_SIZE),
         .REGISTERED_IN(REGISTERED_IN_MULTISTAGE_MUX),
         .LUTX(LUTX_MULTISTAGE_MUX),
         .GRADE(GRADE_MULTISTAGE_MUX)

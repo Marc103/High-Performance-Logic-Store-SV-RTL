@@ -40,7 +40,7 @@ module ooc #(
 
     ////////////////////////////////////////////////////////////////
     // priority_encoder
-    localparam PRIORITY_ENCODER_INPUT_DATA_WIDTH = 17,
+    localparam PRIORITY_ENCODER_INPUT_DATA_WIDTH = 1,
     localparam PRIORITY_ENCODER_REGISTERED_IN = 1,
     localparam PRIORITY_ENCODER_LUTX = 6,
     localparam PRIORITY_ENCODER_GRADE = 1,
@@ -49,8 +49,8 @@ module ooc #(
 
     ////////////////////////////////////////////////////////////////
     // multistage_mux
-    localparam MULTISTAGE_MUX_DATA_WIDTH = 12,
-    localparam MULTISTAGE_MUX_SIZE = 17,
+    localparam MULTISTAGE_MUX_DATA_WIDTH = 8,
+    localparam MULTISTAGE_MUX_SIZE = 1,
     localparam MULTISTAGE_MUX_REGISTERED_IN = 1,
     localparam MULTISTAGE_MUX_LUTX = 6,
     localparam MULTISTAGE_MUX_GRADE = 1,
@@ -59,29 +59,32 @@ module ooc #(
 
     ////////////////////////////////////////////////////////////////
     // aligner
-    localparam ALIGNER_DATA_WIDTH = 12,
-    localparam ALIGNER_SIZE = 17,
+    localparam ALIGNER_DATA_WIDTH = 8,
+    localparam ALIGNER_SIZE = 4,
+    localparam ALIGNER_START_INDEX = 2,
+    localparam ALIGNER_SELECTED_SIZE =
+        aligner_SELECTED_SIZE(ALIGNER_SIZE, ALIGNER_START_INDEX),
     localparam ALIGNER_REGISTERED_IN = 1,
 
     localparam ALIGNER_START_SYMBOL_FANOUT_FACTOR = 4,
     
-    localparam ALIGNER_REGISTERED_IN_START_SYMBOL = 1,
-    localparam ALIGNER_REGISTERED_IN_EQUAL = 1,
-    localparam ALIGNER_REGISTERED_IN_PRIORITY_ENCODER = 1,
-    localparam ALIGNER_REGISTERED_IN_REDUCTION_TREE = 1,
-    localparam ALIGNER_REGISTERED_IN_MULTISTAGE_MUX = 1,
+    localparam ALIGNER_REGISTERED_IN_START_SYMBOL =0,
+    localparam ALIGNER_REGISTERED_IN_EQUAL = 0,
+    localparam ALIGNER_REGISTERED_IN_PRIORITY_ENCODER = 0,
+    localparam ALIGNER_REGISTERED_IN_REDUCTION_TREE = 0,
+    localparam ALIGNER_REGISTERED_IN_MULTISTAGE_MUX = 0,
 
     localparam ALIGNER_LUTX_EQUAL = 6,
     localparam ALIGNER_LUTX_PRIORITY_ENCODER = 6,
     localparam ALIGNER_LUTX_REDUCTION_TREE = 6,
     localparam ALIGNER_LUTX_MULTISTAGE_MUX = 6,
 
-    localparam ALIGNER_GRADE_EQUAL = 1,
+    localparam ALIGNER_GRADE_EQUAL = 2,
     localparam ALIGNER_GRADE_PRIORITY_ENCODER = 1,
     localparam ALIGNER_GRADE_REDUCTION_TREE = 1,
     localparam ALIGNER_GRADE_MULTISTAGE_MUX = 1,
     localparam ALIGNER_SELECTOR_WIDTH =
-        priority_encoder_OUTPUT_DATA_WIDTH(ALIGNER_SIZE),
+        priority_encoder_OUTPUT_DATA_WIDTH(ALIGNER_SELECTED_SIZE),
 
     ////////////////////////////////////////////////////////////////
     // packer
@@ -190,7 +193,7 @@ module ooc #(
     );
     */
 
-    /*
+    
     priority_encoder #(
         .INPUT_DATA_WIDTH(PRIORITY_ENCODER_INPUT_DATA_WIDTH),
         .REGISTERED_IN(PRIORITY_ENCODER_REGISTERED_IN),
@@ -203,7 +206,7 @@ module ooc #(
 
         .priority_encoded_o(priority_encoder_priority_encoded_o)
     );
-    */
+    
 
     /*
     multistage_mux #(
@@ -226,6 +229,7 @@ module ooc #(
     aligner #(
         .DATA_WIDTH(ALIGNER_DATA_WIDTH),
         .SIZE(ALIGNER_SIZE),
+        .START_INDEX(ALIGNER_START_INDEX),
         .REGISTERED_IN(ALIGNER_REGISTERED_IN),
 
         // start symbol fanout

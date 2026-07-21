@@ -657,12 +657,14 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int priority_encoder_OUTPUT_DATA_WIDTH(int INPUT_DATA_WIDTH);
+        if(INPUT_DATA_WIDTH == 1) return 1;
         return $clog2(INPUT_DATA_WIDTH);
     endfunction
 
     ////////////////////////////////////////////////////////////////
     // multistage mux
     function automatic int multistage_mux_SELECTOR_WIDTH(int SIZE);
+        if(SIZE == 1) return 1;
         return $clog2(SIZE);
     endfunction
 
@@ -814,6 +816,12 @@ package constant_functions_pkg;
         if(REGISTERED_IN == 1) latency++;
         latency += MULTISTAGE_MUX_LATENCY;
         return latency;
+    endfunction
+
+    function automatic int aligner_SELECTED_SIZE(int SIZE, START_INDEX);
+        int s;
+        s = SIZE - START_INDEX;
+        return s;
     endfunction
 
     ////////////////////////////////////////////////////////////////
