@@ -1,0 +1,72 @@
+"
+    localparam COUNTER_WIDTH = fsm_timeout_COUNTER_WIDTH(TIMEOUT)
+"
+- defined as
+"
+    function automatic int fsm_timeout_COUNTER_WIDTH(int TIMEOUT);
+        if (TIMEOUT == 0) return 2;
+        return $clog2(TIMEOUT) + 2;
+    endfunction
+"
+- correct arguments passed in 
+- if guard aswell if timeout is 0
+- we calculate the desired width, then add +2 more bits to account for 
+    - inclusive end value, TIMEOUT=4, 0,1,2,3,4 not just 0,1,2,3
+    - deal with latent increment (explained further down)
+[Marc103 + Codex 5.6 - 07/22/26]
+
+"
+    input  clk_i,
+    input  reset_timer_i,
+    output timeout_o
+"
+- no missing signals
+- corret types
+[Marc103 + Codex 5.6 - 07/22/26]
+
+
+"
+    always@(posedge clk_i) begin
+        // see manual verify about the correctness of this latent timer_increment
+        if(reset_timer_i) begin
+            timer_increment <= 1;
+        end else begin
+            timer_increment <= timer > (TIMEOUT - 1);
+        end
+        
+        if(reset_timer_i) begin
+            timer <= 1; // timer resets to 1 (not 0)
+        end else begin
+            if(timer_increment) begin 
+                timer <= timer;     // sits on timeout condition
+            end else begin
+                timer <= timer + 1; // timer increments
+            end
+        end
+    end
+
+    assign timeout_o = (TIMEOUT == 0) || (TIMEOUT == 1) ? 1 : timer > (TIMEOUT - 1);
+"
+- the basic logic is timer should increment until its timeout value and reset
+  (interruptable) when reset_timer_i is asserted
+  - the reset state to 1 instead of 0 is intentional, timeout is wrt to the cycle
+    in which reset_timer_i is asserted 
+- here is the explanation for the timer_increment (why it's delayed behavior is fine)
+    Delayed timer increment to stop +1 is intentional and does not affect functionality
+    because:
+    1. COUNTER_WIDTH is sufficiently large enough to absorb an additional(s) +1 cycles.
+
+    2. timeout_o is dependent on 'timer > (TIMEOUT - 1)'
+
+    3. Upon reset_timer_i, the timer_increment is <= 1 without delay.
+
+    This relieves pressure on the select line so we don't have to do something like
+    if(timer > (TIMEOUT - 1)) begin
+        timer <= timer;
+    else begin
+        timer <= timer + 1;
+    end
+    Where the select is 'timer > (TIMEOUT - 1)' is essentially an adder in series with mux.
+- finally we assign timeout_o with the guard check for TIMEOUT == 0 and TIMEOUT == 1
+[Marc103 + Codex 5.6 - 07/22/26]
+
