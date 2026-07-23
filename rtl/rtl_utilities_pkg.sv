@@ -845,4 +845,11 @@ package constant_functions_pkg;
         latency += (STRIDE - 1);
         return latency;
     endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // fsm timeout
+    function automatic int fsm_timeout_COUNTER_WIDTH(int TIMEOUT);
+        if (TIMEOUT == 0) return 2;
+        return $clog2(TIMEOUT) + 2;
+    endfunction
 endpackage

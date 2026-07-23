@@ -60,8 +60,8 @@ module ooc #(
     ////////////////////////////////////////////////////////////////
     // aligner
     localparam ALIGNER_DATA_WIDTH = 8,
-    localparam ALIGNER_SIZE = 4,
-    localparam ALIGNER_START_INDEX = 2,
+    localparam ALIGNER_SIZE = 8,
+    localparam ALIGNER_START_INDEX = 4,
     localparam ALIGNER_SELECTED_SIZE =
         aligner_SELECTED_SIZE(ALIGNER_SIZE, ALIGNER_START_INDEX),
     localparam ALIGNER_REGISTERED_IN = 1,
@@ -193,7 +193,7 @@ module ooc #(
     );
     */
 
-    
+    /*
     priority_encoder #(
         .INPUT_DATA_WIDTH(PRIORITY_ENCODER_INPUT_DATA_WIDTH),
         .REGISTERED_IN(PRIORITY_ENCODER_REGISTERED_IN),
@@ -206,7 +206,7 @@ module ooc #(
 
         .priority_encoded_o(priority_encoder_priority_encoded_o)
     );
-    
+    */
 
     /*
     multistage_mux #(
@@ -225,7 +225,7 @@ module ooc #(
     );
     */
 
-    /*
+    
     aligner #(
         .DATA_WIDTH(ALIGNER_DATA_WIDTH),
         .SIZE(ALIGNER_SIZE),
@@ -263,7 +263,7 @@ module ooc #(
         .matched_o(aligner_matched_o),
         .selector_o(aligner_selector_o)
     );
-    */
+    
 
     /*
     packer #(
