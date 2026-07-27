@@ -1,25 +1,34 @@
+==============================================================================
+pipe.sv
+==============================================================================
+
 "
+module pipe #(
+    parameter DATA_WIDTH,
+    parameter LATENCY
+) (
     input clk_i,
 
     input  [DATA_WIDTH - 1 : 0] data_i,
     output [DATA_WIDTH - 1 : 0] data_o
+);
 "
 - ports and respective bit widths are correct
 [Marc103 + Codex 5.5 - 06/17/26]
 
 "
     generate
-        if(LATENCY == 0) begin
+        for(genvar cond = (LATENCY == 0); cond == 1; cond = 0) begin
             assign data_o = data_i;
-        end else begin
+        end
+        for(genvar cond = (LATENCY != 0); cond == 1; cond = 0) begin
             logic [LATENCY : 1][DATA_WIDTH - 1 : 0] data;
 "
-- packed widths are correct
-    - latency 0 is a direct passthrough
-    - 'LATENCY : 1' is intentional for latency greater than 0, where [1]
-      represents 1 cycle later, [2] represents 2 cycles later, etc.
-[Marc103 + Codex 5.5 - 06/17/26]
-
+- exactly one generate loop elaborates for any supported LATENCY
+- LATENCY == 0 is a direct passthrough and does not declare an invalid pipeline range
+- for LATENCY greater than 0, data contains LATENCY registered stages
+- every stage preserves all DATA_WIDTH bits
+[Marc103 + Codex 5.5 - 06/17/26; Codex 5 - 07/27/26]
 
 "
             always@(posedge clk_i) begin
@@ -30,13 +39,125 @@
             end
 
             assign data_o = data[LATENCY];
-        end
-    endgenerate
 "
-- clk_i used
-- for loop conditions are correct, start at 2 -> LATENCY (inclusive)
-    - [1] captures data_i directly, later stages set [i] to [i - 1]
-- final assign data_o points to [LATENCY], with a direct data_i passthrough for LATENCY == 0
-- all outputs assigned
-[Marc103 + Codex 5.5 - 06/17/26]
+- clk_i is used
+- nonblocking assignments shift all stages concurrently
+- stage 1 captures data_i; stages 2 through LATENCY capture their preceding stage
+- the inclusive loop bounds are correct for LATENCY == 1 and LATENCY greater than 1
+- data_o selects the final stage, so the delay is exactly LATENCY rising edges
+- all outputs are assigned in both elaboration cases
+[Marc103 + Codex 5.5 - 06/17/26; Codex 5 - 07/27/26]
 
+
+==============================================================================
+pipe_1d.sv
+==============================================================================
+
+"
+module pipe_1d #(
+    parameter DATA_WIDTH,
+    parameter FIRST_DIMENSION,
+    parameter LATENCY
+) (
+    input clk_i,
+
+    input  [FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
+    output [FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data_o
+);
+"
+- module name matches pipe_1d.sv and does not collide with the scalar pipe module
+- ports and respective packed bit widths are correct
+    - FIRST_DIMENSION elements are present
+    - every element is DATA_WIDTH bits wide
+- FIRST_DIMENSION is required to be at least 1
+[Marc103 + Codex 5 - 07/27/26]
+
+"
+    generate
+        for(genvar cond = (LATENCY == 0); cond == 1; cond = 0) begin
+            assign data_o = data_i;
+        end
+        for(genvar cond = (LATENCY != 0); cond == 1; cond = 0) begin
+            logic [LATENCY : 1][FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data;
+"
+- exactly one generate loop elaborates for any supported LATENCY
+- LATENCY == 0 is a direct passthrough and does not declare an invalid pipeline range
+- for LATENCY greater than 0, data contains LATENCY registered stages
+- every stage preserves the complete FIRST_DIMENSION by DATA_WIDTH packed value
+[Marc103 + Codex 5 - 07/27/26]
+
+"
+            always@(posedge clk_i) begin
+                data[1] <= data_i;
+                for(int i = 2; i <= LATENCY; i++) begin
+                    data[i] <= data[i - 1];
+                end
+            end
+
+            assign data_o = data[LATENCY];
+"
+- clk_i is used
+- nonblocking assignments shift all stages concurrently
+- stage 1 captures data_i; stages 2 through LATENCY capture their preceding stage
+- the inclusive loop bounds are correct for LATENCY == 1 and LATENCY greater than 1
+- data_o selects the final stage, so the delay is exactly LATENCY rising edges
+- all outputs are assigned in both elaboration cases
+[Marc103 + Codex 5 - 07/27/26]
+
+
+==============================================================================
+pipe_2d.sv
+==============================================================================
+
+"
+module pipe_2d #(
+    parameter DATA_WIDTH,
+    parameter FIRST_DIMENSION,
+    parameter SECOND_DIMENSION,
+    parameter LATENCY
+) (
+    input clk_i,
+
+    input  [SECOND_DIMENSION - 1 : 0][FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data_i,
+    output [SECOND_DIMENSION - 1 : 0][FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data_o
+);
+"
+- module name matches pipe_2d.sv
+- ports and respective packed bit widths are correct
+    - SECOND_DIMENSION groups are present
+    - every group contains FIRST_DIMENSION elements
+    - every element is DATA_WIDTH bits wide
+- FIRST_DIMENSION and SECOND_DIMENSION are required to be at least 1
+[Marc103 + Codex 5 - 07/27/26]
+
+"
+    generate
+        for(genvar cond = (LATENCY == 0); cond == 1; cond = 0) begin
+            assign data_o = data_i;
+        end
+        for(genvar cond = (LATENCY != 0); cond == 1; cond = 0) begin
+            logic [LATENCY : 1][SECOND_DIMENSION - 1 : 0][FIRST_DIMENSION - 1 : 0][DATA_WIDTH - 1 : 0] data;
+"
+- exactly one generate loop elaborates for any supported LATENCY
+- LATENCY == 0 is a direct passthrough and does not declare an invalid pipeline range
+- for LATENCY greater than 0, data contains LATENCY registered stages
+- every stage preserves the complete SECOND_DIMENSION by FIRST_DIMENSION by DATA_WIDTH packed value
+[Marc103 + Codex 5 - 07/27/26]
+
+"
+            always@(posedge clk_i) begin
+                data[1] <= data_i;
+                for(int i = 2; i <= LATENCY; i++) begin
+                    data[i] <= data[i - 1];
+                end
+            end
+
+            assign data_o = data[LATENCY];
+"
+- clk_i is used
+- nonblocking assignments shift all stages concurrently
+- stage 1 captures data_i; stages 2 through LATENCY capture their preceding stage
+- the inclusive loop bounds are correct for LATENCY == 1 and LATENCY greater than 1
+- data_o selects the final stage, so the delay is exactly LATENCY rising edges
+- all outputs are assigned in both elaboration cases
+[Marc103 + Codex 5 - 07/27/26]
