@@ -9,4 +9,5 @@ package scoreboards_pkg;
     `include "ReductionTreeScoreboard.sv"
     `include "AlignerScoreboard.sv"
     `include "PackerScoreboard.sv"
+    `include "ReservoirScoreboard.sv"
 endpackage

@@ -8,4 +8,5 @@ package io_pkg;
     `include "ReductionTreeIO.sv"
     `include "AlignerIO.sv"
     `include "PackerIO.sv"
+    `include "ReservoirIO.sv"
 endpackage

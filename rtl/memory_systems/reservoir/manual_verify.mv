@@ -1,0 +1,243 @@
+"
+    localparam ENTRIES = reservoir_ENTRIES(WATERMARK_ENTRIES, BACKPRESSURE_ENTRIES)
+"
+- defined as
+"
+    function automatic int reservoir_ENTRIES(int WATERMARK_ENTRIES, int BACKPRESSURE_ENTRIES);
+        return (WATERMARK_ENTRIES + BACKPRESSURE_ENTRIES);
+    endfunction
+"
+- correct arguments passed in
+
+"
+    input clk_i,
+    input rst_i,
+
+    // Fill side
+    input [DATA_WIDTH - 1 : 0] fill_data_i,
+    input                      fill_valid_i,
+
+    output                     fill_ready_o,
+
+    // Drain side
+    input                       drain_ready_i,
+
+    output [DATA_WIDTH - 1 : 0] drain_data_o,
+    output                      drain_valid_o,
+    output                      drain_burstmark_o
+"
+- correct io signals, types
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+    logic [ENTRIES - 1 : 0][DATA_WIDTH - 1 : 0] reservoir;
+    logic [ENTRIES - 1 : 0][DATA_WIDTH - 1 : 0] reservoir_next;
+    logic [ENTRIES - 1 : 0]                     reservoir_ce;
+
+    logic [ENTRIES - 1 : 0] occupied;
+    logic [ENTRIES - 1 : 0] occupied_next;
+    logic [ENTRIES - 1 : 0] occupied_ce;
+
+    logic [ENTRIES - 1 : 0] bottom_most_free;
+    logic [ENTRIES - 1 : 0] top_most_occupied;
+"
+- correct types, respective CEs and next
+- rest of signals without CEs and next are derived purely
+  combinatorially
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+    always@(posedge clk_i) begin
+        for(int i = 0; i < ENTRIES; i++) begin
+            if(reservoir_ce[i]) begin
+                reservoir[i] <= reservoir_next[i];
+            end else begin
+                reservoir[i] <= reservoir[i];
+            end
+
+            if(occupied_ce[i]) begin
+                occupied[i] <= occupied_next[i];
+            end else begin
+                occupied[i] <= occupied[i];
+            end
+        end
+    end
+"
+- correct sampling of stateful variables, 'reservoir' and 'occupied',
+  using their respect CEs and *_next
+
+"
+    // assumes BACKPRESSURE_ENTRIES sufficiently large enough to handle backpressure.
+    assign fill = fill_valid_i;
+    // can't drain if the reservoir is empty.
+    assign drain = occupied[ENTRIES - 1] & drain_ready_i;
+"
+- fill represents the filling action of the reservoir
+- drain represents the draining action of the reservoir
+- fill is just assigned fill_valid_i
+    - the assumption is even when 'fill_ready_o' is not asserted and we receive a 'fill_valid_i',
+      we have enough BACKPRESSURE_ENTRIES to absorb backpressure
+- drain happens when the device we are draining to is ready, that is, when 'drain_ready_i'
+  is asserted, and our reservoir most bottom entry is not empty (is occupied)
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+    always_comb begin
+        // determine the bottom most free, used for (fill, !drain)
+            // if:
+            // unoccupied and most bottom entry (index [ENTRIES - 1])
+            // else:
+            // unoccupied and just below is occupied
+        for(int i = 0; i < ENTRIES; i++) begin
+            if(i == (ENTRIES - 1)) begin
+                bottom_most_free[i] = !occupied[i];
+            end else begin
+                bottom_most_free[i] = (!occupied[i]) & occupied[i + 1];
+            end
+        end
+
+        // determine the top most occupied, used for simultaneous Fill & Drain
+            // if:
+            // occupied and top most entry (index [0])
+            // else:
+            // occupied and just above is unoccupied
+        for(int i = 0; i < ENTRIES; i++) begin
+            if(i == 0) begin
+                top_most_occupied[i] = occupied[i];
+            end else begin
+                top_most_occupied[i] = occupied[i] & (!occupied[i - 1]);
+            end
+        end
+"
+- Let's consider the case when the reservoir will fill but not drain (fill, !drain)
+    - we need to determine whether an entry is the 'bottom_most_free' to fill with the next data
+    - the logic is simple, "Am I free and is just below me occupied?"
+    - With the exception of the bottom most entry, it is "Am I free?"
+0 - [ ]         "Am I free and is just below me occupied?" - "No"
+1 - [ ]         "Am I free and is just below me occupied?" - "No"
+2 - [ ]         "Am I free and is just below me occupied?" - "Yes, therefore i am the bottom most free"
+3 - [occupied]  "Am I free and is just below me occupied?" - "No"
+4 - [occupied]  "Am I free?"                               - "No"
+    - empty reservoir,
+0 - [ ] "No"
+1 - [ ] "No"
+2 - [ ] "No"
+3 - [ ] "No"
+4 - [ ] "Yes, therefore i am the bottom most free"
+    - At most we look at our own occupied and the one below, allowing for local and in parallel condition computation
+
+- Let's consider case when the reservoir will fill and also drain (fill, drain)
+    - we need to determine whether an entry is the 'top_most_occupied' to just in time replace with next data
+    - the logic is simple, "Am I occupied and is just above me free?"
+    - With the exception of the top most entry, it is "Am I occupied?"
+0 - [ ]         "Am I occupied?"                           - "No"
+1 - [ ]         "Am I occupied and is just above me free?" - "No"
+2 - [ ]         "Am I occupied and is just above me free?" - "No"
+3 - [occupied]  "Am I occupied and is just above me free?" - "Yes, therefore i am the top most occupied"
+4 - [occupied]  "Am I occupied and is just above me free?" - "No"
+    - full reservoir,
+0 - [occupied] - "Yes"
+1 - [occupied] - "No"
+2 - [occupied] - "No"
+3 - [occupied] - "No"
+4 - [occupied] - "No"
+    - At most we look at our own occupied and the one above, allowing for local and in parallel condition computation
+- Fill but not drain should not be asserted when the reservoir is full
+    - this can happen only if not enough BACKPRESSURE_ENTRIES were alloted (misconfiguration), in that case, an overflow
+      will happen, leading to data loss
+    - otherwise, it is correct and expected that all 'bottom_most_free' entries are false when the reservoir is full
+- Similarily, fill & drain will never be asserted if the reservoir is empty from prior reasoning,
+    - hence it is correct and expected that all 'top_most_occupied' entries will be false when the reservoir is empty
+[Marc103 + Codex 5.6 - 08/06/26]
+
+
+"
+        // CE value,
+        // if draining everything gets active
+        // otherwise, in the case of just fill, only bottom_most_free gets active
+        for(int i = 0; i < ENTRIES; i++) begin
+            reservoir_ce[i] = drain | (fill & bottom_most_free[i]);
+            occupied_ce[i]  = drain | (fill & bottom_most_free[i]) | rst_i;
+        end
+"
+- the logic is, if a drain happens, then all CEs get active
+- if a drain doesn't happen, but a fill does (fill, !drain), then only the
+  bottom most entry will be update with the new data
+- but we add one more condition for occupied ce, the reset signal
+    - in this case, as we will see in the reset logic, all the occupied flags
+      need to be reset (but not the data)
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+        // Mux Selector
+        for(int i = 0; i < ENTRIES; i++) begin
+            // default, point to above entry, with exception to the top
+            // most entry, which points to fill_data_i
+            if(i == 0) begin
+                reservoir_next[i] = fill_data_i;
+                occupied_next[i]  = 0;
+            end else begin
+                reservoir_next[i] = reservoir[i - 1];
+                occupied_next[i]  = occupied[i - 1];
+            end
+
+            // We only need to change if Fill is active, so we look at
+                // fill & (!drain) - bottom most free gets fill_data_i
+                // fill & drain    - preemptive bottom most free gets fill_data_i
+            if(fill & (!drain)) begin         // Fill Only
+                if(bottom_most_free[i]) begin
+                    reservoir_next[i] = fill_data_i;
+                    occupied_next[i] = fill_valid_i;
+                end
+            end else if (fill & drain) begin // Fill & Drain
+                if(top_most_occupied[i]) begin
+                    reservoir_next[i] = fill_data_i;
+                    occupied_next[i] = fill_valid_i;
+                end
+            end
+        end
+"
+- the default position is to look at the above entry, accept for the top most entry,
+  which is set at fill_data_i for the reservoir next but 0 for occupied next so as not
+  to propagate erroneous occupied signals.
+- otherwise, as prior reasoning of the CE signals determined, we only need to switch the selector in 2 cases
+    1. Fill and no Drain, only CE of bottom most free enabled
+    2. Fill and Drain, all CEs enabled
+1. We flip the selector on the bottom most free, as this is where the new data will arrive
+2. We flip the selector on the top most occupied, as this is where the new data will arrive
+   but for the rest of the pipeline flow the default selector is correct and all CEs are enabled
+- so, if we are just draining and no fill, the default selector is correct, all CEs are enabled
+- and finally no drain no fill, the default selector is correct, as all CEs are disabled anyway (no change)
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+        // reset, clear occupied flags.
+        if(rst_i) begin
+            for(int i = 0; i < ENTRIES; i++) begin
+                occupied_next[i] = 0;
+            end
+        end
+"
+- reset is simple, when asserted, all occupied_next is set to 0
+    - from prior reasoning, we are assured that the CEs for the occupied will be enabled during reset
+[Marc103 + Codex 5.6 - 08/06/26]
+
+"
+    assign fill_ready_o = !occupied[ENTRIES - WATERMARK_ENTRIES];
+
+    assign drain_data_o      = reservoir[ENTRIES - 1];
+    assign drain_valid_o     = occupied[ENTRIES - 1];
+    assign drain_burstmark_o = occupied[ENTRIES - BURSTMARK];
+"
+- fill ready
+    - asserted so long as the top most water mark entry is not occupied
+    - index is correct, i.e [4 - 2] = [2], indices 0,1,2,3 for 4 entries,
+      2 watermark entries, 2 backpressure entires, 2 + 2 total entries, 2 is correct
+- drain data
+    - simply to data of bottom most entry
+- drain valid
+    - simply set to occupied of bottom most entry
+- drain burst mark
+    - asserted so long as the top most burst mark entry is occupied
+    - indexing correct just as above
+[Marc103 + Codex 5.6 - 08/06/26]

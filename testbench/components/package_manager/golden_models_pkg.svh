@@ -9,4 +9,5 @@ package golden_models_pkg;
     `include "ReductionTreeModel.sv"
     `include "AlignerModel.sv"
     `include "PackerModel.sv"
+    `include "ReservoirModel.sv"
 endpackage

@@ -95,7 +95,14 @@ module ooc #(
 
     ////////////////////////////////////////////////////////////////
     // fsm_strider_ohe
-    localparam FSM_STRIDER_OHE_STRIDE = 4
+    localparam FSM_STRIDER_OHE_STRIDE = 4,
+
+    ////////////////////////////////////////////////////////////////
+    // reservoir
+    localparam RESERVOIR_DATA_WIDTH = 8,
+    localparam RESERVOIR_WATERMARK_ENTRIES = 4,
+    localparam RESERVOIR_BACKPRESSURE_ENTRIES = 2,
+    localparam RESERVOIR_BURSTMARK = 2
 )(
     input clk_i,
 
@@ -144,7 +151,18 @@ module ooc #(
     ////////////////////////////////////////////////////////////////
     // fsm_strider_ohe
     input  fsm_strider_ohe_sync_i,
-    output fsm_strider_ohe_strider_valid_o
+    output fsm_strider_ohe_strider_valid_o,
+
+    ////////////////////////////////////////////////////////////////
+    // reservoir
+    input                              reservoir_rst_i,
+    input  [RESERVOIR_DATA_WIDTH - 1 : 0] reservoir_fill_data_i,
+    input                              reservoir_fill_valid_i,
+    output                             reservoir_fill_ready_o,
+    input                              reservoir_drain_ready_i,
+    output [RESERVOIR_DATA_WIDTH - 1 : 0] reservoir_drain_data_o,
+    output                             reservoir_drain_valid_o,
+    output                             reservoir_drain_burstmark_o
 );
 
     /*
@@ -291,6 +309,27 @@ module ooc #(
         .sync_i(fsm_strider_ohe_sync_i),
 
         .strider_valid_o(fsm_strider_ohe_strider_valid_o)
+    );
+    */
+
+    /*
+    reservoir #(
+        .DATA_WIDTH(RESERVOIR_DATA_WIDTH),
+        .WATERMARK_ENTRIES(RESERVOIR_WATERMARK_ENTRIES),
+        .BACKPRESSURE_ENTRIES(RESERVOIR_BACKPRESSURE_ENTRIES),
+        .BURSTMARK(RESERVOIR_BURSTMARK)
+    ) dut (
+        .clk_i(clk_i),
+        .rst_i(reservoir_rst_i),
+
+        .fill_data_i(reservoir_fill_data_i),
+        .fill_valid_i(reservoir_fill_valid_i),
+        .fill_ready_o(reservoir_fill_ready_o),
+
+        .drain_ready_i(reservoir_drain_ready_i),
+        .drain_data_o(reservoir_drain_data_o),
+        .drain_valid_o(reservoir_drain_valid_o),
+        .drain_burstmark_o(reservoir_drain_burstmark_o)
     );
     */
 

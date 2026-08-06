@@ -9,4 +9,5 @@ package generators_pkg;
     `include "ReductionTreeGenerator.sv"
     `include "AlignerGenerator.sv"
     `include "PackerGenerator.sv"
+    `include "ReservoirGenerator.sv"
 endpackage

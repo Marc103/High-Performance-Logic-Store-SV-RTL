@@ -22,7 +22,8 @@ module rptr_empty
     reg  [ADDRSIZE:0] rbin;
     reg  [ADDRSIZE:0] rq3_wptr;
     reg  [ADDRSIZE:0] rgrayp1;
-    wire [ADDRSIZE:0] rgraynext, rgraynextp1, rbinnext;
+    wire [ADDRSIZE:0] rgraynext, rgraynextp1;
+    wire [ADDRSIZE:0] rbinnext, rbinp1next;
 
     //-------------------
     // GRAYSTYLE2 pointer
@@ -40,10 +41,12 @@ module rptr_empty
     end
 
     // Memory read-address pointer (okay to use binary to address memory)
+    // The caller must not assert rinc while rempty is high.
     assign raddr       = rbin[ADDRSIZE-1:0];
-    assign rbinnext    = rbin + ((rinc & ~rempty) ? 1 : 0);
+    assign rbinnext    = rbin + (rinc ? 1 : 0);
+    assign rbinp1next  = rbin + (rinc ? 2 : 1);
     assign rgraynext   = (rbinnext >> 1) ^ rbinnext;
-    assign rgraynextp1 = ((rbinnext + 1'b1) >> 1) ^ (rbinnext + 1'b1);
+    assign rgraynextp1 = (rbinp1next >> 1) ^ rbinp1next;
 
     //---------------------------------------------------------------
     // FIFO empty when rptr == the aligned synchronized wptr.

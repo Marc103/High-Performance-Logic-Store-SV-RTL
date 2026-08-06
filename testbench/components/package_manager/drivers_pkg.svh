@@ -9,4 +9,5 @@ package drivers_pkg;
     `include "ReductionTreeDriver.sv"
     `include "AlignerDriver.sv"
     `include "PackerDriver.sv"
+    `include "ReservoirDriver.sv"
 endpackage

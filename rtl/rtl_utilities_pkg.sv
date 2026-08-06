@@ -27,7 +27,8 @@ package constant_functions_pkg;
         MULTISTAGE_MUX,
         EQUAL,
         REDUCTION_TREE,
-        ALIGNER
+        ALIGNER,
+        RESERVOIR
     } module_id_e;
     
     typedef logic signed [31:0] int_t;
@@ -122,7 +123,6 @@ package constant_functions_pkg;
     function automatic int max(int a, int b);
         return (a > b) ? a : b;
     endfunction
-
     ////////////////////////////////////////////////////////////////
     //            Module specific oversized structs               //
     //////////////////////////////////////////////////////////////// 
@@ -257,6 +257,24 @@ package constant_functions_pkg;
         logic                 less_than_o; \
         logic                 more_than_o; \
     } queue_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
+    // reservoir
+    `define RESERVOIR_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic [DATA_WIDTH - 1 : 0] fill_data_i; \
+        logic fill_valid_i; \
+        logic drain_ready_i; \
+    } reservoir_io_in_t;
+
+    `define RESERVOIR_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic fill_ready_o; \
+        logic [DATA_WIDTH - 1 : 0] drain_data_o; \
+        logic drain_valid_o; \
+        logic drain_burstmark_o; \
+    } reservoir_io_out_t;
 
     ////////////////////////////////////////////////////////////////
     // alternate base fp
@@ -851,5 +869,10 @@ package constant_functions_pkg;
     function automatic int fsm_timeout_COUNTER_WIDTH(int TIMEOUT);
         if (TIMEOUT == 0) return 2;
         return $clog2(TIMEOUT) + 2;
+    endfunction
+    ////////////////////////////////////////////////////////////////
+    // reservoir
+    function automatic int reservoir_ENTRIES(int WATERMARK_ENTRIES, int BACKPRESSURE_ENTRIES);
+        return (WATERMARK_ENTRIES + BACKPRESSURE_ENTRIES);
     endfunction
 endpackage

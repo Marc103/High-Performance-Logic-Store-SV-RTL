@@ -9,4 +9,5 @@ package monitors_pkg;
     `include "ReductionTreeMonitor.sv"
     `include "AlignerMonitor.sv"
     `include "PackerMonitor.sv"
+    `include "ReservoirMonitor.sv"
 endpackage
