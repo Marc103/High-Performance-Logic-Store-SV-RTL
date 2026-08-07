@@ -28,7 +28,8 @@ package constant_functions_pkg;
         EQUAL,
         REDUCTION_TREE,
         ALIGNER,
-        RESERVOIR
+        RESERVOIR,
+        QUEUE_ASYNC
     } module_id_e;
     
     typedef logic signed [31:0] int_t;
@@ -870,9 +871,22 @@ package constant_functions_pkg;
         if (TIMEOUT == 0) return 2;
         return $clog2(TIMEOUT) + 2;
     endfunction
+
     ////////////////////////////////////////////////////////////////
     // reservoir
     function automatic int reservoir_ENTRIES(int WATERMARK_ENTRIES, int BACKPRESSURE_ENTRIES);
         return (WATERMARK_ENTRIES + BACKPRESSURE_ENTRIES);
     endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // queue async
+    function automatic int queue_async_WRITE_LATENCY();
+        return 1;
+    endfunction
+
+    function automatic int queue_async_READ_LATENCY(int REGISTERED_OUT_BRAM);
+        if(REGISTERED_OUT_BRAM) return 2;
+        return 1;
+    endfunction;
+
 endpackage

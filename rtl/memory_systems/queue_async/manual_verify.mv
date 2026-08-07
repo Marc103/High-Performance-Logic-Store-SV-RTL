@@ -1,0 +1,105 @@
+"
+    localparam WRITE_LATENCY = queue_async_WRITE_LATENCY(),
+"
+- defined as
+"
+    function automatic int queue_async_WRITE_LATENCY();
+        return 1;
+    endfunction
+"
+- no arguments passed in
+- from write side domain, takes 1 cycle for the data to enter bram
+[Marc103 + Codex 5.6 - 08/07/26]
+
+"
+    localparam READ_LATENCY  = queue_async_READ_LATENCY(REGISTERED_OUT_BRAM)
+"
+- defined as 
+"
+    function automatic int queue_async_READ_LATENCY(int REGISTERED_OUT_BRAM);
+        if(REGISTERED_OUT_BRAM) return 2;
+        return 1;
+    endfunction;
+"
+- correct arguments passed in
+- from read side domain, takes 2 if registered else 1 cycles for data to be fetched
+  from bram
+[Marc103 + Codex 5.6 - 08/07/26]
+
+"
+    // Write Side
+    input wr_clk_i,
+    input wr_rst_i,
+
+    input                      push_i,
+    input [DATA_WIDTH - 1 : 0] wr_data_i,
+    output                     full_o,
+    output                     one_space_left_o,
+
+    // Read Side
+    input rd_clk_i,
+    input rd_rst_i,
+
+    input                       pop_i,
+    output [DATA_WIDTH - 1 : 0] rd_data_o,
+    output                      empty_o,
+    output                      one_item_left_o
+"
+- correct io signals, types
+[Marc103 + Codex 5.6 - 08/07/26]
+
+"
+    logic wr_rst_n;
+    always@(posedge wr_clk_i) begin
+        wr_rst_n <= ~wr_rst_i;
+    end
+
+    logic rd_rst_n;
+    always@(posedge rd_clk_i) begin
+        rd_rst_n <= ~rd_rst_i;
+    end
+"
+- write and read reset are inverted, registered
+  to ensure stability sync they drive asynchronous
+  resets internally.
+[Marc103 + Codex 5.6 - 08/07/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] rd_data;
+
+    async_fifo #(
+        .DSIZE(DATA_WIDTH),
+        .ASIZE(ADDR_WIDTH),
+        .FALLTHROUGH("FALSE"),
+        .SYNC_STAGES(SYNC_STAGES)
+    ) afifo (
+        // Write Side
+        .wclk  (wr_clk_i),
+        .wrst_n(wr_rst_n),
+        .winc  (push_i),
+        .wdata (wr_data_i),
+        .wfull (full_o),
+        .awfull(one_space_left_o),
+
+        // Read Side
+        .rclk(rd_clk_i),
+        .rrst_n(rd_rst_n),
+        .rinc(pop_i),
+        .rdata(rd_data),
+        .rempty(empty_o),
+        .arempty(one_item_left_o)
+    );
+
+    logic [DATA_WIDTH - 1 : 0] rd_data_reg;
+    always@(posedge rd_clk_i) begin
+        rd_data_reg <= rd_data;
+    end
+
+    assign rd_data_o = (REGISTERED_OUT_BRAM == 1) ? rd_data_reg : rd_data;
+"
+- we instantiate an afifo
+    - check parameterization
+    - check IO 
+- with the registered_out_bram option
+[Marc103 + Codex 5.6 - 08/07/26]
+

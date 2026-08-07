@@ -243,7 +243,7 @@ module ooc #(
     );
     */
 
-    
+    /*
     aligner #(
         .DATA_WIDTH(ALIGNER_DATA_WIDTH),
         .SIZE(ALIGNER_SIZE),
@@ -281,7 +281,7 @@ module ooc #(
         .matched_o(aligner_matched_o),
         .selector_o(aligner_selector_o)
     );
-    
+    */
 
     /*
     packer #(
@@ -312,7 +312,7 @@ module ooc #(
     );
     */
 
-    /*
+    
     reservoir #(
         .DATA_WIDTH(RESERVOIR_DATA_WIDTH),
         .WATERMARK_ENTRIES(RESERVOIR_WATERMARK_ENTRIES),
@@ -331,6 +331,6 @@ module ooc #(
         .drain_valid_o(reservoir_drain_valid_o),
         .drain_burstmark_o(reservoir_drain_burstmark_o)
     );
-    */
+    
 
 endmodule
