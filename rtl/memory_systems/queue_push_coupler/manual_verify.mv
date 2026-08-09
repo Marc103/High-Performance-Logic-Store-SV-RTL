@@ -1,0 +1,313 @@
+"
+    localparam RESERVOIR_BACKPRESSURE_ENTRIES = queue_push_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(BURST_SIZE),
+"
+- defined as
+"
+    function automatic int queue_push_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int BURST_SIZE);
+        return (BURST_SIZE - 1);
+    endfunction
+"
+- correct argument passed in
+- we need burst_size - 1 backpressure entries, as the top most watermark entry acts
+  as the first item consumed in the burst.
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    localparam DATA_DEPTH                     = queue_DATA_DEPTH(ADDR_WIDTH)
+"
+- correct argument passed in, using queue_DATA_DEPTH() function to calculate
+  the capacity of the queue (this works for queue_async as well)
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    input wr_clk_i,
+    input wr_rst_i,
+
+    // fill side
+    input [DATA_WIDTH - 1 : 0] wr_data_i,
+    input                      wr_valid_i,
+    output                     ready_o,
+    output                     burstready_o,
+
+    // drain side / queue side
+    input full_i,
+    input lookahead_i,
+
+    output [DATA_WIDTH - 1 : 0] wr_data_o,
+    output                      push_o,
+    output [ADDR_WIDTH : 0]     more_than_or_eq_o
+"
+- wr_clk_i, wr_rst_i correct
+- fill side, interface with upstream device with the queue_push_coupler
+    - wr_data_i, wr_valid_i from the upstream device, hence input
+    - ready_o, burstready_o, to the upstream device, hence output
+- drain side / queue side, interface between queue_push_coupler and downstream queue
+    - full_i, lookahead_i from the dowstream queue, hence input
+    - wr_data_o, push_o, more_than_or_eq_o to the downstream queue, hence output
+- types correct, in particular wr_data_i, and '[ADDR_WIDTH : 0]' is intentional for
+  more_than_or_eq_o
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    // Fill side
+    logic                     fill_ready_o;
+
+    // Drain side
+    logic [DATA_WIDTH - 1 : 0] drain_data_o;
+    logic                      drain_valid_o;
+    logic                      drain_burstmark_o;
+"
+- this is reservoir interfacing signals, but some are omitted as we directly
+  wire the IO into the reservoir rather than renaming (perhaps this is not best coding practice?)
+- fill side is effectively
+    - fill_data_i  <-> wr_data_i
+    - fill_valid_i <-> wr_valid_i
+    - fill_ready_o <-> fill_ready_o
+- read side is
+    - drain_ready_i     <-> queue_push
+    - drain_data_o      <-> wr_data_o
+    - drain_valid_o     <-> drain_valid_o
+    - drain_burstmark_o <-> drain_burstmark_o
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    // control state
+    logic queue_push;
+    logic queue_push_next;
+
+    logic reservoir_at_least_two_left;
+    logic reservoir_one_left;
+
+    assign reservoir_at_least_two_left = drain_burstmark_o; // BURSTMARK == 2
+    assign reservoir_one_left          = (!drain_burstmark_o) & drain_valid_o;
+
+    // More than equal to DATA_DEPTH - 1, aka at most one space left
+    // but if SIMPLE is enabled, we set it to DATA_DEPTH - BURST_SIZE + 1 in case
+    // it can be directly used with the synchronous queue.
+    assign more_than_or_eq_o = (SIMPLE == 1) ? DATA_DEPTH - BURST_SIZE + 1 : DATA_DEPTH - 1;
+"
+- we have queue_push, queue_push_next
+- reservoir at least 2 and one respective
+    - since the BURSTMARK == 2, at least 2 = drain_burstmark_o
+    - not at least two and at least one left means one left, hence '(!drain_burstmark_o) & drain_valid_o'
+- from the queue side, we need to know full, and at most one space left
+- if SIMPLE is enabled, DATA_DEPTH - BURST_SIZE + 1 is the first occupancy with insufficient
+  room for a complete burst; inverting the queue's more_than_o result therefore indicates that
+  at least BURST_SIZE entries are free. Otherwise, it is a 1-entry lookahead: exactly one space,
+  or one space or full, depending if ASYNC is enabled
+    - we've already noted bursts larger than one are not available with SIMPLE and ASYNC enabled
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    // Reservoir Instantiation or if SIMPLE enabled direct wiring
+    generate
+        if(SIMPLE == 1) begin
+            assign ready_o = !full_i;
+            assign burstready_o = (ASYNC == 1)
+                ? ((BURST_SIZE == 1) ? !full_i : 1'b0)
+                : !lookahead_i;
+
+            assign wr_data_o    = wr_data_i;
+            assign push_o       = wr_valid_i & (!full_i);
+        end else begin
+            reservoir #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .WATERMARK_ENTRIES(3),
+                .BACKPRESSURE_ENTRIES(RESERVOIR_BACKPRESSURE_ENTRIES),
+                .BURSTMARK(2)
+            ) push_coupler (
+                .clk_i(wr_clk_i),
+                .rst_i(wr_rst_i),
+
+                .fill_data_i (wr_data_i),
+                .fill_valid_i(wr_valid_i),
+                .fill_ready_o(fill_ready_o),
+
+                .drain_ready_i(queue_push),
+                .drain_data_o(wr_data_o),
+                .drain_valid_o(drain_valid_o),
+                .drain_burstmark_o(drain_burstmark_o)
+            );
+
+            assign ready_o      = fill_ready_o;
+            assign burstready_o = fill_ready_o;
+
+            assign push_o = queue_push;
+        end
+    endgenerate
+"
+- if SIMPLE enabled, we do direct wiring
+    - ready_o is !full_i of the queue
+    - if ASYNC == 1, burstready_o follows !full_i for a single-item burst; bursts larger
+      than one are unavailable and burstready_o is set to 0
+    - otherwise, with how more_than_or_eq_o is configured, !lookahead_i means the queue
+      has capacity to receive the complete burst
+    - wr_data_o wired to wr_data_i
+    - push_o to the queue when write data is valid and the queue is not full
+- if SIMPLE disabled, we instantiate a reservoir
+    - check parameterization, io, 3 watermark entries, 2 for the burstmark
+- for the upstream device / reservoir interface:
+    - fill_data_i  <-> wr_data_i
+    - fill_valid_i <-> wr_valid_i
+    - fill_ready_o <-> fill_ready_o
+- for the reservoir / queue interface:
+    - ready_o is set to fill_ready_o which is from the reservoir
+    - burstready_o is also set to fill_ready_o
+        - with how the backpressure entries are configured, a fill_ready_o also
+          means there's enough backpressure entries to handle a burst
+    - wr_data_o wired to reservoir drain_data_o
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    // if ASYNC == 1, the lookahead_i condition means 'one space left'
+    // else         , the lookahead_i condition means 'one space left or full'
+    /*
+    This logic is equivalent for the cases
+        1. (!full_i) & (!lookahead_i) - Not full, more than one space left
+        2. (!full_i) & lookahead_i    - Not full, but one space left
+    and differs for
+        3. (full & (!lookahead_i))
+            - the ASYNC meaning is - Full and not one space left,
+            - the SYNC meaning is - Full and not at most one space left, not possible
+        4. (full & lookahead_i)
+            - the ASYNC meaning - Full and one space left, not possible
+            - the SYNC meaning - Full and at most one space left
+    - but this is not an issue, as we don't need cases 3. and 4. to make our decisions anyway
+    */
+
+    always_comb begin
+        if((!full_i) & (!lookahead_i))          // Not full, more than one space left
+
+            if(reservoir_at_least_two_left) begin // reservoir two left
+                if(queue_push) begin // already about to queue_push
+                    queue_push_next = 1;
+                end else begin
+                    queue_push_next = 1;
+                end
+
+            end else if (reservoir_one_left) begin // reservoir one left
+                if(queue_push) begin // already about to queue_push
+                    queue_push_next = 0;
+                end else begin
+                    queue_push_next = 1;
+                end
+
+            end else begin                         // reservoir empty
+                if(queue_push) begin // already about to queue_push, this shouldn't be reachable by prior logic
+                    queue_push_next = 0;
+                end else begin
+                    queue_push_next = 0;
+                end
+            end
+
+        else if((!full_i) & lookahead_i) begin // Not full, but one space left
+
+            if(reservoir_at_least_two_left) begin // reservoir two left
+                if(queue_push) begin // already about to queue_push
+                    queue_push_next = 0;
+                end else begin
+                    queue_push_next = 1;
+                end
+
+            end else if (reservoir_one_left) begin // reservoir one left
+                if(queue_push) begin // already about to queue_push
+                    queue_push_next = 0;
+                end else begin
+                    queue_push_next = 1;
+                end
+
+            end else begin                         // reservoir empty
+                if(queue_push) begin // already about to queue_push
+                    queue_push_next = 0;
+                end else begin
+                    queue_push_next = 0;
+                end
+            end
+
+        end else begin                       // Full
+            queue_push_next = 0;
+        end
+
+        if(wr_rst_i) begin
+            queue_push_next = 0;
+        end
+    end
+"
+- this encapsulates the entire push_next logic, first see the comments about why we only
+  consider the 1. and 2. cases explicitly then else, otherwise, we walk through each case:
+  - (!full_i) & (!lookahead_i) -> reservoir_at_least_two_left -> queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir has at least 2 available
+    - the current push is high, meaning a push is about to happen
+    -> queue_push_next = 1
+- (!full_i) & (!lookahead_i) -> reservoir_at_least_two_left -> !queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir has at least 2 available
+    - the current push is low, meaning a push isn't about to happen
+    -> queue_push_next = 1
+  - (!full_i) & (!lookahead_i) -> reservoir_one_left -> queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir has 1 available
+    - the current push is 1, meaning a push is about to happen
+    -> queue_push_next = 0, the last available entry is about to be consumed
+- (!full_i) & (!lookahead_i) -> reservoir_one_left -> !queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir has 1 available
+    - the current push is 0, meaning no push is about to happen
+    -> queue_push_next = 1, the available entry is not about to be consumed, there set queue_push_next high
+- (!full_i) & (!lookahead_i) -> reservoir is empty -> queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir is empty
+    - the current push is high, meaning a push is about to happen
+        - from prior logic, this should not be reachable
+    -> queue_push_next = 0, either way set queue_push_next to 0
+- (!full_i) & (!lookahead_i) -> reservoir is empty -> !queue_push
+    - the queue is not full and has more than one space left,
+    - the reservoir is empty
+    - the current push is low meaning a push is about to happen
+    -> queue_push_next = 0, reservoir is empty
+
+- (!full_i) & lookahead_i -> reservoir_at_least_two_left -> queue_push
+    - the queue is not full and has one space left
+    - the reservoir has at least 2 available
+    - the current push is high, meaning a push is about to happen
+   -> queue_push_next = 0, the last empty spot on the queue is already about to be consumed
+- (!full_i) & lookahead_i -> reservoir_at_least_two_left -> !queue_push
+    - the queue is not full and has one space left
+    - the reservoir has at least 2 available
+    - the current push is low, meaning a push is not about to happen
+    -> queue_push_next = 1, to consume the last empty spot
+- (!full_i) & lookahead_i -> reservoir_one_left -> queue_push
+    - the queue is not full and has one space left
+    - the reservoir has 1 available
+    - the current push is high,
+    -> queue_push_next = 0, the last empty spot on the queue is about to be filled and the last
+       reservoir entry is about to be consumed
+- (!full_i) & lookahead_i -> reservoir_one_left -> !queue_push
+    - the queue is not full and has one space left
+    - the reservoir has 1 available
+    - the current push is low
+    -> queue_push_next = 1, consuming the remaining reservoir entry into the final queue space
+- (!full_i) & lookahead_i -> reservoir empty -> queue_push
+    - the queue is not full and has one space left
+    - the reservoir is empty
+    - the current push is high,
+        - from prior logic, this should not be reachable
+    -> queue_push_next = 0, reservoir is empty
+- (!full_i) & lookahead_i -> reservoir empty -> !queue_push
+    - the queue is not full and has one space left
+    - the reservoir is empty
+    - the current push is low,
+    -> queue_push_next = 0, reservoir is empty
+
+- else the queue is full, queue_push_next is 0
+- finally we have the wr_rst_i check, which overrides and sets queue_push_next to 0
+[Marc103 + Codex 5.6 - 08/09/26]
+
+"
+    always@(posedge wr_clk_i) begin
+        queue_push <= queue_push_next;
+    end
+"
+- queue_push update
+[Marc103 + Codex 5.6 - 08/09/26]

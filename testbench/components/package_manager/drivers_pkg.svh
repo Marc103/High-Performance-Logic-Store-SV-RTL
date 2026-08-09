@@ -10,4 +10,5 @@ package drivers_pkg;
     `include "AlignerDriver.sv"
     `include "PackerDriver.sv"
     `include "ReservoirDriver.sv"
+    `include "QueuePushCouplerDriver.sv"
 endpackage

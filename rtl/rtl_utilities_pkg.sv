@@ -278,6 +278,26 @@ package constant_functions_pkg;
     } reservoir_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // queue push coupler
+    `define QUEUE_PUSH_COUPLER_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic [DATA_WIDTH - 1 : 0] wr_data_i; \
+        logic wr_valid_i; \
+        logic full_i; \
+        logic lookahead_i; \
+    } queue_push_coupler_io_in_t;
+
+    `define QUEUE_PUSH_COUPLER_IO_OUT_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        logic ready_o; \
+        logic burstready_o; \
+        logic [DATA_WIDTH - 1 : 0] wr_data_o; \
+        logic push_o; \
+        logic [ADDR_WIDTH : 0] more_than_or_eq_o; \
+    } queue_push_coupler_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // alternate base fp
 
 
@@ -888,5 +908,14 @@ package constant_functions_pkg;
         if(REGISTERED_OUT_BRAM) return 2;
         return 1;
     endfunction;
+
+    ////////////////////////////////////////////////////////////////
+    // queue push coupler
+    function automatic int queue_push_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int BURST_SIZE);
+        return (BURST_SIZE - 1);
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // queue pop coupler
 
 endpackage

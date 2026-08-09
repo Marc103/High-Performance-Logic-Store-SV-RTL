@@ -102,7 +102,15 @@ module ooc #(
     localparam RESERVOIR_DATA_WIDTH = 8,
     localparam RESERVOIR_WATERMARK_ENTRIES = 4,
     localparam RESERVOIR_BACKPRESSURE_ENTRIES = 2,
-    localparam RESERVOIR_BURSTMARK = 2
+    localparam RESERVOIR_BURSTMARK = 2,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_push_coupler
+    localparam QUEUE_PUSH_COUPLER_DATA_WIDTH = 8,
+    localparam QUEUE_PUSH_COUPLER_SIMPLE = 0,
+    localparam QUEUE_PUSH_COUPLER_ASYNC = 0,
+    localparam QUEUE_PUSH_COUPLER_BURST_SIZE = 1,
+    localparam QUEUE_PUSH_COUPLER_ADDR_WIDTH = 4
 )(
     input clk_i,
 
@@ -162,7 +170,20 @@ module ooc #(
     input                              reservoir_drain_ready_i,
     output [RESERVOIR_DATA_WIDTH - 1 : 0] reservoir_drain_data_o,
     output                             reservoir_drain_valid_o,
-    output                             reservoir_drain_burstmark_o
+    output                             reservoir_drain_burstmark_o,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_push_coupler
+    input                                      queue_push_coupler_wr_rst_i,
+    input  [QUEUE_PUSH_COUPLER_DATA_WIDTH - 1 : 0] queue_push_coupler_wr_data_i,
+    input                                      queue_push_coupler_wr_valid_i,
+    output                                     queue_push_coupler_ready_o,
+    output                                     queue_push_coupler_burstready_o,
+    input                                      queue_push_coupler_full_i,
+    input                                      queue_push_coupler_lookahead_i,
+    output [QUEUE_PUSH_COUPLER_DATA_WIDTH - 1 : 0] queue_push_coupler_wr_data_o,
+    output                                     queue_push_coupler_push_o,
+    output [QUEUE_PUSH_COUPLER_ADDR_WIDTH : 0] queue_push_coupler_more_than_or_eq_o
 );
 
     /*
@@ -312,7 +333,7 @@ module ooc #(
     );
     */
 
-    
+    /*
     reservoir #(
         .DATA_WIDTH(RESERVOIR_DATA_WIDTH),
         .WATERMARK_ENTRIES(RESERVOIR_WATERMARK_ENTRIES),
@@ -331,6 +352,31 @@ module ooc #(
         .drain_valid_o(reservoir_drain_valid_o),
         .drain_burstmark_o(reservoir_drain_burstmark_o)
     );
+    */
+    
+    /*
+    queue_push_coupler #(
+        .DATA_WIDTH(QUEUE_PUSH_COUPLER_DATA_WIDTH),
+        .SIMPLE(QUEUE_PUSH_COUPLER_SIMPLE),
+        .ASYNC(QUEUE_PUSH_COUPLER_ASYNC),
+        .BURST_SIZE(QUEUE_PUSH_COUPLER_BURST_SIZE),
+        .ADDR_WIDTH(QUEUE_PUSH_COUPLER_ADDR_WIDTH)
+    ) dut (
+        .wr_clk_i(clk_i),
+        .wr_rst_i(queue_push_coupler_wr_rst_i),
+
+        .wr_data_i(queue_push_coupler_wr_data_i),
+        .wr_valid_i(queue_push_coupler_wr_valid_i),
+        .ready_o(queue_push_coupler_ready_o),
+        .burstready_o(queue_push_coupler_burstready_o),
+
+        .full_i(queue_push_coupler_full_i),
+        .lookahead_i(queue_push_coupler_lookahead_i),
+        .wr_data_o(queue_push_coupler_wr_data_o),
+        .push_o(queue_push_coupler_push_o),
+        .more_than_or_eq_o(queue_push_coupler_more_than_or_eq_o)
+    );
+    */
     
 
 endmodule

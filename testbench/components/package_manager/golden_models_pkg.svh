@@ -10,4 +10,5 @@ package golden_models_pkg;
     `include "AlignerModel.sv"
     `include "PackerModel.sv"
     `include "ReservoirModel.sv"
+    `include "QueuePushCouplerModel.sv"
 endpackage

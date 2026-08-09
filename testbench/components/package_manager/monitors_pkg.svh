@@ -10,4 +10,5 @@ package monitors_pkg;
     `include "AlignerMonitor.sv"
     `include "PackerMonitor.sv"
     `include "ReservoirMonitor.sv"
+    `include "QueuePushCouplerMonitor.sv"
 endpackage

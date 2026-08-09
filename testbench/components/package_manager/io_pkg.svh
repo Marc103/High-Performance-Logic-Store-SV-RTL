@@ -9,4 +9,5 @@ package io_pkg;
     `include "AlignerIO.sv"
     `include "PackerIO.sv"
     `include "ReservoirIO.sv"
+    `include "QueuePushCouplerIO.sv"
 endpackage
