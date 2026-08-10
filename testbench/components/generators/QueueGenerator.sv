@@ -1,7 +1,7 @@
 import constant_functions_pkg::*;
 
 class QueueGenerator #(type T);
-    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
+    `QUEUE_IO_IN_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
@@ -26,10 +26,8 @@ class QueueGenerator #(type T);
 
         queue_io_in.rst_i       = rst;
         queue_io_in.push_i      = push;
-        for(int i = 0; i < T::NUMBER_OF_QUEUES; i++) begin
-            queue_io_in.wr_data_i[i] = this.seed;
-            this.seed++;
-        end
+        queue_io_in.wr_data_i   = this.seed;
+        this.seed++;
         queue_io_in.pop_i       = pop;
         queue_io_in.less_than_i = less_than_i;
         queue_io_in.more_than_i = more_than_i;

@@ -2,7 +2,7 @@ import constant_functions_pkg::*;
 
 class QueueDriver #(type T, type I);
 
-    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
+    `QUEUE_IO_IN_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
 
     TriggerableQueue #(T) in_queue;
     I inf;

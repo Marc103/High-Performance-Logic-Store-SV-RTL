@@ -5,8 +5,17 @@ Reservoir, a ready/valid fifo cache.
 'spool up' cycles: Minimum number of cycles it takes from the cycle that the 'fill_ready_o' is asserted
 for upstream logic to provide data.
 
-'spool down' cycles: Maximum number of cycles it takes from the cycle that the 'fill_ready_o' is deasserted
-for upstream logic to stop providing data.
+'spool down' cycles: Maximum additional number of cycles it takes from the cycle that the 'fill_ready_o' is 
+deasserted for upstream logic to stop providing data. 
+
+This includes burst size coming from upstream. I.e. +1 'reaction' cycles of stop signal to reach but 
+upstream burst size is 4, so worst case is we need 4 backpressure entries. However, if it's the case that the 
+reaction is so slow that a secondary burst from upstream could be triggered, the appropriate formula is 
+(reaction / upstream burst size + upstream burst size), using floor division.
+If during the reaction time, single items could be issued before the final late one ushers a burst, then add
+an additional (reaction - 1) backpressure entries, making the safest calculation
+(reaction / upstream burst size + upstream burst size + reaction - 1).
+
 -------------------------------------------------------------------------------------------------------------
 
 There are 3 issues that this module solves:

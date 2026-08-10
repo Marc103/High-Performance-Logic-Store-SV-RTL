@@ -204,7 +204,6 @@ package constant_functions_pkg;
         int REGISTERED_IN;
         int REGISTERED_IN_BRAM;
         int READ_THEN_WRITE;
-        int NUMBER_OF_QUEUES;
     } queue_pt;
 
     typedef struct packed {
@@ -230,13 +229,13 @@ package constant_functions_pkg;
         logic                  more_than_o; // more than 'more_than_i' elements on the queue
     } queue_t;
 
-    `define QUEUE_IO_IN_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH) \
+    `define QUEUE_IO_IN_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
     typedef struct packed { \
         logic rst_i; \
         \
         /* write port */ \
         logic push_i; \
-        logic [NUMBER_OF_QUEUES-1:0][DATA_WIDTH-1:0] wr_data_i; \
+        logic [DATA_WIDTH-1:0] wr_data_i; \
         \
         /* read port */ \
         logic pop_i; \
@@ -246,10 +245,10 @@ package constant_functions_pkg;
         logic [ADDR_WIDTH:0] more_than_i; \
     } queue_io_in_t;
 
-    `define QUEUE_IO_OUT_STRUCT(NUMBER_OF_QUEUES, DATA_WIDTH, ADDR_WIDTH) \
+    `define QUEUE_IO_OUT_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
     typedef struct packed { \
         /* read port */ \
-        logic [NUMBER_OF_QUEUES-1:0][DATA_WIDTH-1:0] rd_data_o; \
+        logic [DATA_WIDTH-1:0] rd_data_o; \
         \
         /* conditions */ \
         logic full_o; \
@@ -578,14 +577,14 @@ package constant_functions_pkg;
         return (2 ** ADDR_WIDTH);
     endfunction
 
-    function automatic int queue_READ_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+    function automatic int queue_READ_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, int REGISTERED_IN_BRAM, int REGISTERED_OUT_BRAM);
         int latency = bram_dual_port_simple_READ_LATENCY(REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
         if(CONFLICT_PROOF == 1) latency++;
         if(REGISTERED_IN == 1)  latency++;
         return latency;
     endfunction
 
-    function automatic int queue_WRITE_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, REGISTERED_IN_BRAM);
+    function automatic int queue_WRITE_LATENCY(int CONFLICT_PROOF, int REGISTERED_IN, int REGISTERED_IN_BRAM);
         int latency = bram_dual_port_simple_WRITE_LATENCY(REGISTERED_IN_BRAM);
         if(CONFLICT_PROOF == 1) latency++;
         if(REGISTERED_IN == 1)  latency++;
@@ -917,5 +916,26 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // queue pop coupler
+    function automatic int queue_pop_coupler_SPOOL_UP(ASYNC, CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+        // +1 to assert pop
+        // + read latency to fetch data
+        if(ASYNC == 1) return (1 + 1);
+        return (1 + queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM));
+    endfunction
+
+    function automatic int queue_pop_coupler_SPOOL_DOWN();
+        // +1 to deassert pop
+        return 1;
+    endfunction
+
+    function automatic int queue_pop_coupler_RESERVOIR_WATERMARK_ENTRIES(int SPOOL_UP, int BURSTMARK);
+        // following reservoir formula : (spool up cycles + 1 + BURSTMARK)
+        return (SPOOL_UP + 1 + BURSTMARK);
+    endfunction
+
+    function automatic int queue_pop_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int SPOOL_UP, int SPOOL_DOWN);
+        // follwing reservoir formula: (spool up cycles + spool down cycles - 1)
+        return (SPOOL_UP + SPOOL_DOWN - 1);
+    endfunction
 
 endpackage

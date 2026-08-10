@@ -43,12 +43,6 @@ REGISTERED_OUT_BRAM [0, 1]:
 - If 1, outputs of internal bram are registered to an additional pipelined register, greatly
   reducing routing pressure to CLB fabric.
 
-NUMBER_OF_QUEUES [1,..]:
-- Specify how many queues to run in parallel. If > 1, allows for pushing to multiple queues that 
-  share the same control state. Hence multiple corresponding read/write ports for push/pop. This
-  assumes that fanout isn't an issue, otherwise its best to instantiate multiple queue modules with 
-  separate control states or keep the number of queues low.
-
 */
 
 import constant_functions_pkg::*; 
@@ -60,7 +54,6 @@ module queue #(
     parameter REGISTERED_IN,        // [0, 1]
     parameter REGISTERED_IN_BRAM,   // [0, 1]
     parameter REGISTERED_OUT_BRAM,  // [0, 1]
-    parameter NUMBER_OF_QUEUES,     // [1,..]
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
@@ -73,12 +66,12 @@ module queue #(
     input rst_i,
 
     // write port
-    input                                                 push_i,
-    input  [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_i,
+    input                      push_i,
+    input [DATA_WIDTH - 1 : 0] wr_data_i,
 
     // read port
-    input                                                 pop_i,
-    output [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data_o,
+    input                       pop_i,
+    output [DATA_WIDTH - 1 : 0] rd_data_o,
 
     // conditions
     output                      full_o,
@@ -92,11 +85,11 @@ module queue #(
 );
 
     // read/write port setting for REGISTERED_IN
-    logic                                                push;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data;
-    logic                                                pop;
-    logic                                                full;
-    logic                                                empty;
+    logic                      push;
+    logic [DATA_WIDTH - 1 : 0] wr_data;
+    logic                      pop;
+    logic                      full;
+    logic                      empty;
 
     always@(posedge clk_i) begin
         push     <= push_i;
@@ -106,11 +99,11 @@ module queue #(
         empty    <= empty_o;
     end
 
-    logic                                                push_g;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_g;
-    logic                                                pop_g;
-    logic                                                full_g;
-    logic                                                empty_g;
+    logic                      push_g;
+    logic [DATA_WIDTH - 1 : 0] wr_data_g;
+    logic                      pop_g;
+    logic                      full_g;
+    logic                      empty_g;
 
     generate
         if(REGISTERED_IN == 1) begin
@@ -131,38 +124,38 @@ module queue #(
 
 
     // write state
-    logic                                                bram_forward_en_0;
-    logic                                                bram_forward_wr_en;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_wr_addr;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_wr_addr_next;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_forward_wr_data;
+    logic                        bram_forward_en_0;
+    logic                        bram_forward_wr_en;
+    logic [ADDR_WIDTH - 1 : 0]   bram_forward_wr_addr;
+    logic [ADDR_WIDTH - 1 : 0]   bram_forward_wr_addr_next;
+    logic [DATA_WIDTH - 1 : 0]   bram_forward_wr_data;
 
-    logic                                                bram_normal_en_0;
-    logic                                                bram_normal_wr_en;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_normal_wr_addr;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_normal_wr_data;
+    logic                        bram_normal_en_0;
+    logic                        bram_normal_wr_en;
+    logic [ADDR_WIDTH - 1 : 0]   bram_normal_wr_addr;
+    logic [DATA_WIDTH - 1 : 0]   bram_normal_wr_data;
 
-    logic                                                bram_mux_en_0;
-    logic                                                bram_mux_wr_en;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_mux_wr_addr;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_mux_wr_data;
+    logic                        bram_mux_en_0;
+    logic                        bram_mux_wr_en;
+    logic [ADDR_WIDTH - 1 : 0]   bram_mux_wr_addr;
+    logic [DATA_WIDTH - 1 : 0]   bram_mux_wr_data;
 
     // read state
-    logic                                                bram_forward_en_1;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr_next;
+    logic                      bram_forward_en_1;
+    logic [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr;
+    logic [ADDR_WIDTH - 1 : 0] bram_forward_rd_addr_next;
 
-    logic                                                bram_normal_en_1;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_normal_rd_addr;
+    logic                      bram_normal_en_1;
+    logic [ADDR_WIDTH - 1 : 0] bram_normal_rd_addr;
 
-    logic                                                bram_mux_en_1;
-    logic                           [ADDR_WIDTH - 1 : 0] bram_mux_rd_addr;
+    logic                      bram_mux_en_1;
+    logic [ADDR_WIDTH - 1 : 0] bram_mux_rd_addr;
 
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_normal_rd_data;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] bram_backward_rd_data;
-    
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0]    bram_mux_rd_data;
-    logic                           [READ_LATENCY_BRAM : 0] bram_backward_rd_data_valid; 
+    logic [DATA_WIDTH - 1 : 0] bram_normal_rd_data;
+    logic [DATA_WIDTH - 1 : 0] bram_backward_rd_data;
+
+    logic [DATA_WIDTH - 1 : 0]          bram_mux_rd_data;
+    logic [READ_LATENCY_BRAM : 0]       bram_backward_rd_data_valid;
 
     // control state
     logic unsigned [ADDR_WIDTH : 0] element_count;
@@ -309,32 +302,28 @@ module queue #(
         end
     end
 
-    // Queue BRAM instantiations.
-    generate
-        for(genvar i = 0; i < NUMBER_OF_QUEUES; i++) begin
-            bram_dual_port_simple #(
-                .ADDR_WIDTH(ADDR_WIDTH),
-                .DATA_WIDTH(DATA_WIDTH),
-                .REGISTERED_IN(REGISTERED_IN_BRAM),
-                .REGISTERED_OUT(REGISTERED_OUT_BRAM)
-            ) queue_memory (
-                // write port
-                .clk_0_i  (clk_i),
-            
-                .en_0_i   (bram_mux_en_0),
-                .wr_en_i  (bram_mux_wr_en),
-                .wr_addr_i(bram_mux_wr_addr),
-                .wr_data_i(bram_mux_wr_data[i]),
+    // Queue BRAM instantiation.
+    bram_dual_port_simple #(
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .REGISTERED_IN(REGISTERED_IN_BRAM),
+        .REGISTERED_OUT(REGISTERED_OUT_BRAM)
+    ) queue_memory (
+        // write port
+        .clk_0_i  (clk_i),
 
-                // read port
-                .clk_1_i(clk_i),
+        .en_0_i   (bram_mux_en_0),
+        .wr_en_i  (bram_mux_wr_en),
+        .wr_addr_i(bram_mux_wr_addr),
+        .wr_data_i(bram_mux_wr_data),
 
-                .en_1_i   (bram_mux_en_1),
-                .rd_addr_i(bram_mux_rd_addr),
-                .rd_data_o(bram_normal_rd_data[i])
-            );
-        end
-    endgenerate
+        // read port
+        .clk_1_i(clk_i),
+
+        .en_1_i   (bram_mux_en_1),
+        .rd_addr_i(bram_mux_rd_addr),
+        .rd_data_o(bram_normal_rd_data)
+    );
 
     logic unsigned [ADDR_WIDTH : 0] more_than_g_u;
     logic unsigned [ADDR_WIDTH : 0] less_than_g_u;

@@ -7,7 +7,6 @@ interface queue_inf #(
     parameter REGISTERED_IN,        // [0, 1]
     parameter REGISTERED_IN_BRAM,   // [0, 1]
     parameter REGISTERED_OUT_BRAM,  // [0, 1]
-    parameter NUMBER_OF_QUEUES,     // [1,..]
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
@@ -21,12 +20,12 @@ interface queue_inf #(
     logic                                                 rst_i;
     
     // write port
-    logic                                                 push_i;
-    logic  [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] wr_data_i;
+    logic                      push_i;
+    logic [DATA_WIDTH - 1 : 0] wr_data_i;
 
     // read port
-    logic                                                pop_i;
-    logic [NUMBER_OF_QUEUES - 1 : 0][DATA_WIDTH - 1 : 0] rd_data_o;
+    logic                      pop_i;
+    logic [DATA_WIDTH - 1 : 0] rd_data_o;
 
     // conditions
     logic                      full_o;
@@ -44,4 +43,4 @@ interface queue_inf #(
     logic end_last_sequence;
     logic idle;
 endinterface
-`endif 
+`endif

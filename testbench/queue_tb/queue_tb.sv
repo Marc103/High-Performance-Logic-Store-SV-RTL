@@ -42,8 +42,7 @@ module queue_tb #(
     parameter CONFLICT_PROOF = 1,
     parameter REGISTERED_IN = 1,
     parameter REGISTERED_IN_BRAM = 1,
-    parameter REGISTERED_OUT_BRAM = 1,
-    parameter NUMBER_OF_QUEUES = 3
+    parameter REGISTERED_OUT_BRAM = 1
 ) ();
 
     ////////////////////////////////////////////////////////////////
@@ -56,8 +55,7 @@ module queue_tb #(
         .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
-        .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
     );
 
     localparam type I = virtual queue_inf #(
@@ -66,8 +64,7 @@ module queue_tb #(
         .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
-        .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
     );
 
     ////////////////////////////////////////////////////////////////
@@ -83,8 +80,7 @@ module queue_tb #(
         .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
-        .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
     ) bfm (.clk_i(clk)); // bfm, "bus functional model"
     
     ////////////////////////////////////////////////////////////////
@@ -95,8 +91,7 @@ module queue_tb #(
         .CONFLICT_PROOF(CONFLICT_PROOF),
         .REGISTERED_IN(REGISTERED_IN),
         .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
-        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
-        .NUMBER_OF_QUEUES(NUMBER_OF_QUEUES)
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
     ) dut (
         .clk_i(clk),
 

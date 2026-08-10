@@ -4,8 +4,8 @@ class QueueScoreboard #(type T);
     TriggerableQueue #(T) in_queue_dut;
     TriggerableQueue #(T) in_queue_golden;
 
-    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
-    `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH)
+    `QUEUE_IO_IN_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
+    `QUEUE_IO_OUT_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
 
     function new(
         TriggerableQueue #(T) in_queue_dut,

@@ -1,14 +1,14 @@
 import constant_functions_pkg::*;
 
 class QueueModel #(type T);
-    `QUEUE_IO_IN_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
-    `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
+    `QUEUE_IO_IN_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
+    `QUEUE_IO_OUT_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
 
     TriggerableQueue #(T) in_queue;
     TriggerableQueueBroadcaster #(T) out_broadcaster;
 
-    protected logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] queue [$];
-    protected logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] last_read;
+    protected logic [T::DATA_WIDTH - 1 : 0] queue [$];
+    protected logic [T::DATA_WIDTH - 1 : 0] last_read;
     protected logic unsigned [T::ADDR_WIDTH : 0] element_count;
     protected logic unsigned [T::ADDR_WIDTH : 0] element_max;
     protected logic [T::ADDR_WIDTH : 0] less_than;
@@ -95,7 +95,7 @@ class QueueModel #(type T);
     ////////////////////////////////////////////////////////////////
     // Main Functions
 
-    function automatic void push(logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] wr_data);
+    function automatic void push(logic [T::DATA_WIDTH - 1 : 0] wr_data);
         if(element_count < element_max) begin
             this.queue.push_back(wr_data);
             this.element_count++;
@@ -105,8 +105,8 @@ class QueueModel #(type T);
         end
     endfunction
 
-    function automatic logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] pop();
-        logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] rd_data;
+    function automatic logic [T::DATA_WIDTH - 1 : 0] pop();
+        logic [T::DATA_WIDTH - 1 : 0] rd_data;
         if(this.element_count > $unsigned(0)) begin
             rd_data = this.queue.pop_front();
             this.element_count--;
@@ -117,8 +117,8 @@ class QueueModel #(type T);
         return rd_data;
     endfunction
 
-    function automatic logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] pop_push(logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] wr_data);
-        logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] rd_data;
+    function automatic logic [T::DATA_WIDTH - 1 : 0] pop_push(logic [T::DATA_WIDTH - 1 : 0] wr_data);
+        logic [T::DATA_WIDTH - 1 : 0] rd_data;
         if(((this.element_count == 0) || (this.element_count == this.element_max)) && (T::CONFLICT_PROOF != 1)) begin
             rd_data = 'x;
             this.error_state = 30;    
@@ -134,7 +134,7 @@ class QueueModel #(type T);
         return rd_data;
     endfunction
 
-    function automatic logic [T::NUMBER_OF_QUEUES - 1 : 0][T::DATA_WIDTH - 1 : 0] peek();
+    function automatic logic [T::DATA_WIDTH - 1 : 0] peek();
         if(this.queue.size() > 0) begin
             return this.queue[this.queue.size() - 1];
         end else begin

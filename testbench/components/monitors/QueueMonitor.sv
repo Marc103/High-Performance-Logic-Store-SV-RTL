@@ -1,7 +1,7 @@
 import constant_functions_pkg::*;
 
 class QueueMonitor #(type T, type I);
-    `QUEUE_IO_OUT_STRUCT(T::NUMBER_OF_QUEUES, T::DATA_WIDTH, T::ADDR_WIDTH) 
+    `QUEUE_IO_OUT_STRUCT(T::DATA_WIDTH, T::ADDR_WIDTH)
 
     TriggerableQueueBroadcaster #(T) out_broadcaster;
     I inf;
