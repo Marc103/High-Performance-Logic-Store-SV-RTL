@@ -1,0 +1,199 @@
+"
+    localparam SPOOL_UP                       = queue_pop_coupler_SPOOL_UP(ASYNC, CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM),
+"
+- defined as
+"
+    function automatic int queue_pop_coupler_SPOOL_UP(
+        int ASYNC,
+        int CONFLICT_PROOF,
+        int REGISTERED_IN,
+        int REGISTERED_IN_BRAM,
+        int REGISTERED_OUT_BRAM
+    );
+        // +1 to assert pop
+        // + read latency to fetch data
+        if(ASYNC == 1) return (1 + queue_async_READ_LATENCY(REGISTERED_OUT_BRAM));
+        return (1 + queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM));
+    endfunction
+"
+- correct arguments passed in
+- correct arguments passed into 'queue_READ_LATENCY()' and 'queue_async_READ_LATENCY()'
+- from the time that ready is asserted, it takes one cycle to assert pop, then the respective read latency
+  - so its 1 + respective sync/async read latency 
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    localparam SPOOL_DOWN                     = queue_pop_coupler_SPOOL_DOWN(),
+"
+- defined as
+"
+    function automatic int queue_pop_coupler_SPOOL_DOWN();
+        // +1 to deassert pop
+        return 1;
+    endfunction
+"
+- takes one control cycle to deassert pop
+- data from earlier accepted pops can still be in the queue read pipeline; SPOOL_UP accounts for that
+  pipeline when the reservoir backpressure depth is calculated
+- this is correct because each queue pop requests one item
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    localparam RESERVOIR_WATERMARK_ENTRIES    = queue_pop_coupler_RESERVOIR_WATERMARK_ENTRIES(SPOOL_UP, BURSTMARK),
+"
+- defined as 
+"
+    function automatic int queue_pop_coupler_RESERVOIR_WATERMARK_ENTRIES(int SPOOL_UP, int BURSTMARK);
+        // following reservoir formula : (spool up cycles + 1 + BURSTMARK)
+        return (SPOOL_UP + 1 + BURSTMARK);
+    endfunction
+"
+- correct arguments passed in
+- we simply follow the reservoir formula for optimal generation
+- WATERMARK_ENTRIES = SPOOL_UP + 1 + BURSTMARK follows the reservoir's continuous-burst formula
+- BURSTMARK is necessarily no larger than this calculated watermark
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    localparam RESERVOIR_BACKPRESSURE_ENTRIES = queue_pop_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(SPOOL_UP, SPOOL_DOWN)
+"
+- defined as
+"
+    function automatic int queue_pop_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int SPOOL_UP, int SPOOL_DOWN);
+        // following reservoir formula: (spool up cycles + spool down cycles - 1)
+        return (SPOOL_UP + SPOOL_DOWN - 1);
+    endfunction
+"
+- correct arguments passed in
+- we simply follow the reservoir formula for optimal generation
+- with SPOOL_DOWN = 1, the result is SPOOL_UP entries, covering the read pipeline and the final
+  pop accepted while queue_pop is being deasserted
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    input rd_clk_i,
+    input rd_rst_i,
+
+    // fill side / queue side
+    input                      empty_i,
+    input                      lookahead_i,
+    input [DATA_WIDTH - 1 : 0] rd_data_i,
+    input                      rd_valid_i,
+
+    output                  pop_o,
+    output [ADDR_WIDTH : 0] less_than_or_eq_o,
+
+    // drain side
+    output [DATA_WIDTH - 1 : 0] rd_data_o,
+    output                      rd_valid_o,
+    output                      burstvalid_o,
+
+    input ready_i // drivable with burstready
+"
+- rd_clk_i, rd_rst_i correct
+- fill side, interface with upstream queue
+    - empty_i, lookahead_i and rd_data_i come from the upstream queue, hence input
+    - rd_valid_i must be supplied by integration logic and aligned with rd_data_i by delaying each
+      accepted pop through the selected queue's read latency; queue and queue_async do not expose it directly
+    - pop_o, less_than_or_eq to upstream queue, hence output
+- drain side, interface with dowstream device 
+    - ready_i comes from the downstream device and can be driven with burstready if necessary
+    - rd_data_o, rd_valid_o, burstvalid_o, to downstream device, output
+        - perhaps rd_burstvalid_o is more appropriate name? To be honest I don't know why I followed
+          this inconsistent naming scheme, leave it be.
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    // Fill side
+    logic fill_ready_o;
+
+    // control state
+    logic queue_pop;
+    logic queue_pop_next;
+
+    always@(posedge rd_clk_i) begin
+        queue_pop <= queue_pop_next;
+    end
+
+    assign pop_o = queue_pop;
+    assign less_than_or_eq_o = 1;
+
+    reservoir #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .WATERMARK_ENTRIES(RESERVOIR_WATERMARK_ENTRIES),
+        .BACKPRESSURE_ENTRIES(RESERVOIR_BACKPRESSURE_ENTRIES),
+        .BURSTMARK(BURSTMARK)
+    ) pop_coupler (
+        .clk_i(rd_clk_i),
+        .rst_i(rd_rst_i),
+
+        .fill_data_i (rd_data_i),
+        .fill_valid_i(rd_valid_i),
+        .fill_ready_o(fill_ready_o),
+
+        .drain_ready_i(ready_i),
+        .drain_data_o(rd_data_o),
+        .drain_valid_o(rd_valid_o),
+        .drain_burstmark_o(burstvalid_o)
+    );
+"
+- wire fill_ready_o
+- queue_pop state and update
+- assign pop_o to queue_pop
+- less_than_or_eq_o is set to one for a synchronous queue's less_than_i threshold; in asynchronous
+  use, lookahead_i instead connects to queue_async.one_item_left_o
+- reservoir instantiation
+    - BURSTMARK is passed to the matching reservoir parameter
+    - rd_valid_i is the actual reservoir fill action, allowing already-issued queue reads to arrive
+      after fill_ready_o deasserts
+    - ready_i controls reservoir drain
+[Marc103 + Codex 5.6 - 08/11/26]
+
+"
+    always_comb begin
+        if((!empty_i) & (!lookahead_i))         // Not empty, more than one item left
+
+            if(fill_ready_o) begin // reservoir ready
+                queue_pop_next = 1;
+            end else begin
+                queue_pop_next = 0;
+            end
+
+        else if((!empty_i) & lookahead_i) begin // Not empty, but one item left
+
+            if(fill_ready_o) begin // reservoir ready
+                if(queue_pop) begin // already about to queue_pop
+                    queue_pop_next = 0;
+                end else begin
+                    queue_pop_next = 1;
+                end
+            end else begin
+                queue_pop_next = 0;
+            end
+
+        end else begin                         // Empty
+            queue_pop_next = 0;
+        end
+
+        if(rd_rst_i) begin
+            queue_pop_next = 0;
+        end
+    end
+"
+- firstly a reminder of sync versus async behavior of the 'lookahead_i'
+    - async -> exactly one item left
+    - sync -> one item or no items left
+- for the proceeding logic, this doesn't make a difference, see more elaborate
+  explanation in the queue_push_coupler's manual verify file, actually, the conditions
+  here are simpler:
+- if not empty and more than one item left
+    - if the reservoir can request more data, set queue_pop_next to 1, otherwise 0
+- if not empty and one item left
+    - if the reservoir can request more data
+        - if the pop is already asserted, then set the next to 0, as the last item will be consumed
+        - otherwise, we can safely set pop_next to 1
+- if the queue is empty set pop next to 0, pop state as asserted in this condition should not be reachable
+- finally we have the rd_rst_i override, which sets pop next to 0
+- queue_pop is registered, so the final asserted cycle is included in the backpressure sizing
+[Marc103 + Codex 5.6 - 08/11/26]
+

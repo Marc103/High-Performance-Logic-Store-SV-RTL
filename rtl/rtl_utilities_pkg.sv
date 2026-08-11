@@ -297,6 +297,27 @@ package constant_functions_pkg;
     } queue_push_coupler_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // queue pop coupler
+    `define QUEUE_POP_COUPLER_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic empty_i; \
+        logic lookahead_i; \
+        logic [DATA_WIDTH - 1 : 0] rd_data_i; \
+        logic rd_valid_i; \
+        logic ready_i; \
+    } queue_pop_coupler_io_in_t;
+
+    `define QUEUE_POP_COUPLER_IO_OUT_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        logic pop_o; \
+        logic [ADDR_WIDTH : 0] less_than_or_eq_o; \
+        logic [DATA_WIDTH - 1 : 0] rd_data_o; \
+        logic rd_valid_o; \
+        logic burstvalid_o; \
+    } queue_pop_coupler_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // alternate base fp
 
 
@@ -904,7 +925,7 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int queue_async_READ_LATENCY(int REGISTERED_OUT_BRAM);
-        if(REGISTERED_OUT_BRAM) return 2;
+        if(REGISTERED_OUT_BRAM == 1) return 2;
         return 1;
     endfunction;
 
@@ -916,10 +937,16 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // queue pop coupler
-    function automatic int queue_pop_coupler_SPOOL_UP(ASYNC, CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+    function automatic int queue_pop_coupler_SPOOL_UP(
+        int ASYNC,
+        int CONFLICT_PROOF,
+        int REGISTERED_IN,
+        int REGISTERED_IN_BRAM,
+        int REGISTERED_OUT_BRAM
+    );
         // +1 to assert pop
         // + read latency to fetch data
-        if(ASYNC == 1) return (1 + 1);
+        if(ASYNC == 1) return (1 + queue_async_READ_LATENCY(REGISTERED_OUT_BRAM));
         return (1 + queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM));
     endfunction
 
@@ -934,7 +961,7 @@ package constant_functions_pkg;
     endfunction
 
     function automatic int queue_pop_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int SPOOL_UP, int SPOOL_DOWN);
-        // follwing reservoir formula: (spool up cycles + spool down cycles - 1)
+        // following reservoir formula: (spool up cycles + spool down cycles - 1)
         return (SPOOL_UP + SPOOL_DOWN - 1);
     endfunction
 

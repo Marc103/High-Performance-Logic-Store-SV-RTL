@@ -110,7 +110,18 @@ module ooc #(
     localparam QUEUE_PUSH_COUPLER_SIMPLE = 0,
     localparam QUEUE_PUSH_COUPLER_ASYNC = 0,
     localparam QUEUE_PUSH_COUPLER_BURST_SIZE = 1,
-    localparam QUEUE_PUSH_COUPLER_ADDR_WIDTH = 4
+    localparam QUEUE_PUSH_COUPLER_ADDR_WIDTH = 4,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_pop_coupler
+    localparam QUEUE_POP_COUPLER_DATA_WIDTH = 8,
+    localparam QUEUE_POP_COUPLER_ADDR_WIDTH = 4,
+    localparam QUEUE_POP_COUPLER_ASYNC = 0,
+    localparam QUEUE_POP_COUPLER_BURSTMARK = 4,
+    localparam QUEUE_POP_COUPLER_CONFLICT_PROOF = 1,
+    localparam QUEUE_POP_COUPLER_REGISTERED_IN = 1,
+    localparam QUEUE_POP_COUPLER_REGISTERED_IN_BRAM = 1,
+    localparam QUEUE_POP_COUPLER_REGISTERED_OUT_BRAM = 1
 )(
     input clk_i,
 
@@ -183,7 +194,21 @@ module ooc #(
     input                                      queue_push_coupler_lookahead_i,
     output [QUEUE_PUSH_COUPLER_DATA_WIDTH - 1 : 0] queue_push_coupler_wr_data_o,
     output                                     queue_push_coupler_push_o,
-    output [QUEUE_PUSH_COUPLER_ADDR_WIDTH : 0] queue_push_coupler_more_than_or_eq_o
+    output [QUEUE_PUSH_COUPLER_ADDR_WIDTH : 0] queue_push_coupler_more_than_or_eq_o,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_pop_coupler
+    input                                          queue_pop_coupler_rd_rst_i,
+    input                                          queue_pop_coupler_empty_i,
+    input                                          queue_pop_coupler_lookahead_i,
+    input  [QUEUE_POP_COUPLER_DATA_WIDTH - 1 : 0] queue_pop_coupler_rd_data_i,
+    input                                          queue_pop_coupler_rd_valid_i,
+    output                                         queue_pop_coupler_pop_o,
+    output [QUEUE_POP_COUPLER_ADDR_WIDTH : 0]      queue_pop_coupler_less_than_or_eq_o,
+    output [QUEUE_POP_COUPLER_DATA_WIDTH - 1 : 0] queue_pop_coupler_rd_data_o,
+    output                                         queue_pop_coupler_rd_valid_o,
+    output                                         queue_pop_coupler_burstvalid_o,
+    input                                          queue_pop_coupler_ready_i
 );
 
     /*
@@ -375,6 +400,34 @@ module ooc #(
         .wr_data_o(queue_push_coupler_wr_data_o),
         .push_o(queue_push_coupler_push_o),
         .more_than_or_eq_o(queue_push_coupler_more_than_or_eq_o)
+    );
+    */
+
+    /*
+    queue_pop_coupler #(
+        .DATA_WIDTH(QUEUE_POP_COUPLER_DATA_WIDTH),
+        .ADDR_WIDTH(QUEUE_POP_COUPLER_ADDR_WIDTH),
+        .ASYNC(QUEUE_POP_COUPLER_ASYNC),
+        .BURSTMARK(QUEUE_POP_COUPLER_BURSTMARK),
+        .CONFLICT_PROOF(QUEUE_POP_COUPLER_CONFLICT_PROOF),
+        .REGISTERED_IN(QUEUE_POP_COUPLER_REGISTERED_IN),
+        .REGISTERED_IN_BRAM(QUEUE_POP_COUPLER_REGISTERED_IN_BRAM),
+        .REGISTERED_OUT_BRAM(QUEUE_POP_COUPLER_REGISTERED_OUT_BRAM)
+    ) dut (
+        .rd_clk_i(clk_i),
+        .rd_rst_i(queue_pop_coupler_rd_rst_i),
+
+        .empty_i(queue_pop_coupler_empty_i),
+        .lookahead_i(queue_pop_coupler_lookahead_i),
+        .rd_data_i(queue_pop_coupler_rd_data_i),
+        .rd_valid_i(queue_pop_coupler_rd_valid_i),
+        .pop_o(queue_pop_coupler_pop_o),
+        .less_than_or_eq_o(queue_pop_coupler_less_than_or_eq_o),
+
+        .rd_data_o(queue_pop_coupler_rd_data_o),
+        .rd_valid_o(queue_pop_coupler_rd_valid_o),
+        .burstvalid_o(queue_pop_coupler_burstvalid_o),
+        .ready_i(queue_pop_coupler_ready_i)
     );
     */
     

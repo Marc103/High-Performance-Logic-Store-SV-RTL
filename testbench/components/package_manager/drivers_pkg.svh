@@ -11,4 +11,5 @@ package drivers_pkg;
     `include "PackerDriver.sv"
     `include "ReservoirDriver.sv"
     `include "QueuePushCouplerDriver.sv"
+    `include "QueuePopCouplerDriver.sv"
 endpackage

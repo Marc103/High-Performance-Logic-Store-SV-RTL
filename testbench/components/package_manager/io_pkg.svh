@@ -10,4 +10,5 @@ package io_pkg;
     `include "PackerIO.sv"
     `include "ReservoirIO.sv"
     `include "QueuePushCouplerIO.sv"
+    `include "QueuePopCouplerIO.sv"
 endpackage
