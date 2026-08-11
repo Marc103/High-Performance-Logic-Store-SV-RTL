@@ -12,4 +12,5 @@ package scoreboards_pkg;
     `include "ReservoirScoreboard.sv"
     `include "QueuePushCouplerScoreboard.sv"
     `include "QueuePopCouplerScoreboard.sv"
+    `include "QueueCarriageScoreboard.sv"
 endpackage

@@ -1,0 +1,305 @@
+"
+    localparam QUEUE_READ_LATENCY = queue_carriage_READ_LATENCY(
+        ASYNC,
+        CONFLICT_PROOF,
+        REGISTERED_IN,
+        REGISTERED_IN_BRAM,
+        REGISTERED_OUT_BRAM
+    )
+"
+- defined as
+"
+    function automatic int queue_carriage_READ_LATENCY(
+        int ASYNC,
+        int CONFLICT_PROOF,
+        int REGISTERED_IN,
+        int REGISTERED_IN_BRAM,
+        int REGISTERED_OUT_BRAM
+    );
+        if(ASYNC == 1) return queue_async_READ_LATENCY(REGISTERED_OUT_BRAM);
+        return queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+    endfunction
+"
+- all arguments required by the selected queue latency function are passed correctly
+- when ASYNC is 1, queue_async_READ_LATENCY() only requires REGISTERED_OUT_BRAM because
+  the asynchronous queue does not expose REGISTERED_IN or REGISTERED_IN_BRAM options
+- when ASYNC is 0, queue_READ_LATENCY() receives the synchronous queue's complete read
+  pipeline configuration
+- both latency functions return at least one cycle, so the later packed range
+  '[QUEUE_READ_LATENCY - 1 : 0]' always has a valid positive width
+- this localparam must remain consistent with the selected queue instantiation because it
+  aligns queue_pop with queue_rd_data before the data enters queue_pop_coupler
+[Marc103 - 08/11/26]
+
+"
+    // Write side
+    input wr_clk_i,
+    input wr_rst_i,
+
+    input  [DATA_WIDTH - 1 : 0] wr_data_i,
+    input                       wr_valid_i,
+    output                      wr_ready_o,
+    output                      wr_burstready_o,
+
+    // Read side
+    input rd_clk_i,
+    input rd_rst_i,
+
+    output [DATA_WIDTH - 1 : 0] rd_data_o,
+    output                      rd_valid_o,
+    output                      rd_burstvalid_o,
+    input                       rd_ready_i
+"
+- the write side matches the upstream-facing interface of queue_push_coupler
+    - wr_data_i and wr_valid_i enter the carriage
+    - wr_ready_o and wr_burstready_o return flow-control information upstream
+- the read side matches the downstream-facing interface of queue_pop_coupler
+    - rd_data_o, rd_valid_o and rd_burstvalid_o leave the carriage
+    - rd_ready_i supplies downstream flow control
+- both datapaths are exactly DATA_WIDTH bits wide
+- separate write and read clocks/resets are required for queue_async
+- when ASYNC is 0, wr_clk_i and rd_clk_i must be the same clock and both reset inputs
+  must represent the same reset; the synchronous queue itself is clocked by wr_clk_i
+- reset must be held for several cycles and followed by idle cycles before traffic starts;
+  this is especially important because queue_async registers its internal reset release
+[Marc103 - 08/11/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] queue_wr_data;
+    logic                      queue_push;
+    logic                      queue_full;
+    logic                      queue_write_lookahead;
+    logic [ADDR_WIDTH : 0]     queue_more_than_or_eq;
+
+    logic [DATA_WIDTH - 1 : 0] queue_rd_data;
+    logic                      queue_rd_valid;
+    logic                      queue_pop;
+    logic                      queue_empty;
+    logic                      queue_read_lookahead;
+    logic [ADDR_WIDTH : 0]     queue_less_than_or_eq;
+"
+- queue_wr_data and queue_push carry write transactions from queue_push_coupler into the
+  selected queue
+- queue_full and queue_write_lookahead carry write-side occupancy information back to
+  queue_push_coupler
+- queue_more_than_or_eq is ADDR_WIDTH + 1 bits because it represents an occupancy value
+  from zero through the complete queue depth, not a queue address
+- queue_rd_data and queue_pop connect the selected queue to queue_pop_coupler
+- queue_rd_valid is generated locally because neither queue nor queue_async exposes a
+  read-valid output
+- queue_empty and queue_read_lookahead carry read-side occupancy information into
+  queue_pop_coupler
+- queue_less_than_or_eq is also intentionally ADDR_WIDTH + 1 bits because it is an
+  occupancy threshold
+- the threshold signals are consumed by queue in synchronous mode; in asynchronous mode,
+  queue_async supplies fixed one-entry lookahead outputs instead
+[Marc103 - 08/11/26]
+
+"
+    queue_push_coupler #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .SIMPLE(PUSH_SIMPLE),
+        .ASYNC(ASYNC),
+        .BURST_SIZE(PUSH_BURST_SIZE),
+        .ADDR_WIDTH(ADDR_WIDTH)
+    ) push_coupler (
+        .wr_clk_i(wr_clk_i),
+        .wr_rst_i(wr_rst_i),
+
+        .wr_data_i(wr_data_i),
+        .wr_valid_i(wr_valid_i),
+        .ready_o(wr_ready_o),
+        .burstready_o(wr_burstready_o),
+
+        .full_i(queue_full),
+        .lookahead_i(queue_write_lookahead),
+
+        .wr_data_o(queue_wr_data),
+        .push_o(queue_push),
+        .more_than_or_eq_o(queue_more_than_or_eq)
+    );
+"
+- all queue_push_coupler parameters are mapped to the corresponding carriage parameters
+- the upstream carriage write interface connects directly to the coupler fill side
+- the selected queue's full and lookahead outputs control the coupler drain side
+- queue_wr_data and queue_push are the only write data/control signals presented to the
+  selected queue
+- queue_more_than_or_eq supplies the programmable occupancy threshold required by queue
+  in synchronous mode
+- in asynchronous mode, queue_write_lookahead instead comes directly from
+  queue_async.one_space_left_o; queue_more_than_or_eq is then intentionally unused
+- there is no additional full/reset gating on queue_push, preserving the coupler's purpose
+  of avoiding added combinational logic in the queue control path
+- when ASYNC and PUSH_SIMPLE are both 1, PUSH_BURST_SIZE must be 1 for a usable
+  wr_burstready_o because queue_async only supplies one-entry write lookahead
+[Marc103 - 08/11/26]
+
+"
+        if(ASYNC == 1) begin : queue_async_g
+            queue_async #(
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .DATA_WIDTH(DATA_WIDTH),
+                .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
+                .SYNC_STAGES(SYNC_STAGES)
+            ) queue_inst (
+                .wr_clk_i(wr_clk_i),
+                .wr_rst_i(wr_rst_i),
+
+                .push_i(queue_push),
+                .wr_data_i(queue_wr_data),
+                .full_o(queue_full),
+                .one_space_left_o(queue_write_lookahead),
+
+                .rd_clk_i(rd_clk_i),
+                .rd_rst_i(rd_rst_i),
+
+                .pop_i(queue_pop),
+                .rd_data_o(queue_rd_data),
+                .empty_o(queue_empty),
+                .one_item_left_o(queue_read_lookahead)
+            );
+"
+- this branch is elaborated only when ASYNC is 1
+- ADDR_WIDTH, DATA_WIDTH, REGISTERED_OUT_BRAM and SYNC_STAGES are passed to queue_async
+  without modification
+- the write and read sides use their respective clocks and resets
+- queue_push, queue_wr_data, queue_full and queue_write_lookahead form the complete
+  queue_async write-side connection
+- queue_pop, queue_rd_data, queue_empty and queue_read_lookahead form the complete
+  queue_async read-side connection
+- one_space_left_o and one_item_left_o are the exact fixed lookahead signals expected by
+  the push and pop couplers in asynchronous mode
+- queue_async CDC bus-coherence constraints remain required outside the RTL
+[Marc103 - 08/11/26]
+
+"
+        end else begin : queue_sync_g
+            queue #(
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .DATA_WIDTH(DATA_WIDTH),
+                .CONFLICT_PROOF(CONFLICT_PROOF),
+                .REGISTERED_IN(REGISTERED_IN),
+                .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
+                .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
+            ) queue_inst (
+                .clk_i(wr_clk_i),
+                .rst_i(wr_rst_i),
+
+                .push_i(queue_push),
+                .wr_data_i(queue_wr_data),
+
+                .pop_i(queue_pop),
+                .rd_data_o(queue_rd_data),
+
+                .full_o(queue_full),
+                .empty_o(queue_empty),
+
+                .less_than_i(queue_less_than_or_eq),
+                .less_than_o(queue_read_lookahead),
+
+                .more_than_i(queue_more_than_or_eq),
+                .more_than_o(queue_write_lookahead)
+            );
+"
+- this branch is elaborated only when ASYNC is 0
+- all synchronous queue parameters are passed without modification
+- queue is clocked and reset from wr_clk_i/wr_rst_i; therefore rd_clk_i/rd_rst_i must be
+  driven identically in synchronous mode so queue_pop_coupler remains in the same domain
+- queue_push and queue_wr_data connect the push coupler to the queue write port
+- queue_pop and queue_rd_data connect the queue read port to the pop coupler
+- queue_more_than_or_eq drives queue.more_than_i, and queue.more_than_o returns the
+  write-side lookahead result expected by queue_push_coupler
+- queue_less_than_or_eq drives queue.less_than_i, and queue.less_than_o returns the
+  read-side lookahead result expected by queue_pop_coupler
+- queue's threshold comparisons are inclusive despite their legacy less_than/more_than
+  names, matching the couplers' less_than_or_eq/more_than_or_eq meanings
+[Marc103 - 08/11/26]
+
+"
+    logic [QUEUE_READ_LATENCY - 1 : 0] queue_rd_valid_pipeline;
+    always@(posedge rd_clk_i) begin
+        if(rd_rst_i) begin
+            queue_rd_valid_pipeline <= '0;
+        end else begin
+            queue_rd_valid_pipeline[0] <= queue_pop;
+            for(int stage = 1; stage < QUEUE_READ_LATENCY; stage++) begin
+                queue_rd_valid_pipeline[stage] <= queue_rd_valid_pipeline[stage - 1];
+            end
+        end
+    end
+
+    assign queue_rd_valid = queue_rd_valid_pipeline[QUEUE_READ_LATENCY - 1];
+"
+- queue_pop represents each read request accepted by the selected queue because
+  queue_pop_coupler only asserts it while its empty/lookahead control permits a pop
+- queue_pop is intentionally not combined with queue_empty here; adding queue_empty would
+  create an unnecessary combinational path into the read-valid pipeline and undermine the
+  reservoir-based timing isolation
+- the valid bit is delayed by exactly QUEUE_READ_LATENCY read-clock cycles, aligning it
+  with queue_rd_data for both queue and queue_async
+- stage zero captures queue_pop, and every later stage shifts the captured validity by one
+  additional cycle
+- nonblocking assignments preserve the old value of each preceding stage during a shift
+- rd_rst_i clears every pipeline stage, preventing pre-reset pop history from being marked
+  valid after reset
+- the required post-reset idle cycles allow the selected queue and this validity pipeline
+  to settle before new traffic begins
+- queue_rd_valid selects the final pipeline stage, which is aligned with queue_rd_data and
+  is supplied to queue_pop_coupler as its fill-valid signal
+[Marc103 - 08/11/26]
+
+"
+    queue_pop_coupler #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .ASYNC(ASYNC),
+        .BURSTMARK(POP_BURSTMARK),
+        .CONFLICT_PROOF(CONFLICT_PROOF),
+        .REGISTERED_IN(REGISTERED_IN),
+        .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
+        .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM)
+    ) pop_coupler (
+        .rd_clk_i(rd_clk_i),
+        .rd_rst_i(rd_rst_i),
+
+        .empty_i(queue_empty),
+        .lookahead_i(queue_read_lookahead),
+        .rd_data_i(queue_rd_data),
+        .rd_valid_i(queue_rd_valid),
+
+        .pop_o(queue_pop),
+        .less_than_or_eq_o(queue_less_than_or_eq),
+
+        .rd_data_o(rd_data_o),
+        .rd_valid_o(rd_valid_o),
+        .burstvalid_o(rd_burstvalid_o),
+
+        .ready_i(rd_ready_i)
+    );
+"
+- all queue_pop_coupler parameters are mapped to the corresponding carriage parameters
+- ASYNC and the queue registration parameters also determine the coupler's calculated
+  spool-up and reservoir depths, so they must match the selected queue configuration
+- queue_empty, queue_read_lookahead, queue_rd_data and the locally aligned queue_rd_valid
+  form the complete queue-side fill interface
+- queue_pop requests data from the selected queue
+- queue_less_than_or_eq supplies the synchronous queue occupancy threshold; it is
+  intentionally unused by queue_async, whose one_item_left_o supplies lookahead directly
+- rd_data_o, rd_valid_o and rd_burstvalid_o expose the pop reservoir drain interface
+- rd_ready_i controls downstream consumption and may be driven from a downstream
+  burst-ready condition when complete bursts are required
+- the pop reservoir absorbs the selected queue's read latency and stop latency, allowing
+  queue_pop to remain a registered control signal without adding queue_empty gating here
+[Marc103 - 08/11/26]
+
+////////////////////////////////////////////////////////////////
+// AI verification summary
+- every external output is driven in both ASYNC generate configurations
+- only one queue implementation is elaborated for a given ASYNC value
+- write-side and read-side data widths remain DATA_WIDTH throughout the carriage
+- occupancy values use [ADDR_WIDTH : 0], while queue memory addresses remain internal to
+  the selected queue at [ADDR_WIDTH - 1 : 0]
+- synchronous mode requires common clocks/resets; asynchronous mode requires CDC constraints
+- reset and post-reset idle requirements are part of the module integration contract
+- parameter legality is inherited from the instantiated modules and is not guarded locally
+[Marc103 - 08/11/26]

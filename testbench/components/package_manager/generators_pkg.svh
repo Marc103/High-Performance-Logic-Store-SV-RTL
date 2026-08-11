@@ -12,4 +12,5 @@ package generators_pkg;
     `include "ReservoirGenerator.sv"
     `include "QueuePushCouplerGenerator.sv"
     `include "QueuePopCouplerGenerator.sv"
+    `include "QueueCarriageGenerator.sv"
 endpackage

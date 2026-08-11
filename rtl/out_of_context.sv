@@ -121,7 +121,21 @@ module ooc #(
     localparam QUEUE_POP_COUPLER_CONFLICT_PROOF = 1,
     localparam QUEUE_POP_COUPLER_REGISTERED_IN = 1,
     localparam QUEUE_POP_COUPLER_REGISTERED_IN_BRAM = 1,
-    localparam QUEUE_POP_COUPLER_REGISTERED_OUT_BRAM = 1
+    localparam QUEUE_POP_COUPLER_REGISTERED_OUT_BRAM = 1,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_carriage
+    localparam QUEUE_CARRIAGE_DATA_WIDTH = 8,
+    localparam QUEUE_CARRIAGE_ADDR_WIDTH = 4,
+    localparam QUEUE_CARRIAGE_ASYNC = 0,
+    localparam QUEUE_CARRIAGE_PUSH_SIMPLE = 0,
+    localparam QUEUE_CARRIAGE_PUSH_BURST_SIZE = 4,
+    localparam QUEUE_CARRIAGE_POP_BURSTMARK = 4,
+    localparam QUEUE_CARRIAGE_CONFLICT_PROOF = 1,
+    localparam QUEUE_CARRIAGE_REGISTERED_IN = 1,
+    localparam QUEUE_CARRIAGE_REGISTERED_IN_BRAM = 1,
+    localparam QUEUE_CARRIAGE_REGISTERED_OUT_BRAM = 1,
+    localparam QUEUE_CARRIAGE_SYNC_STAGES = 2
 )(
     input clk_i,
 
@@ -208,7 +222,22 @@ module ooc #(
     output [QUEUE_POP_COUPLER_DATA_WIDTH - 1 : 0] queue_pop_coupler_rd_data_o,
     output                                         queue_pop_coupler_rd_valid_o,
     output                                         queue_pop_coupler_burstvalid_o,
-    input                                          queue_pop_coupler_ready_i
+    input                                          queue_pop_coupler_ready_i,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_carriage
+    input                                           queue_carriage_wr_clk_i,
+    input                                           queue_carriage_wr_rst_i,
+    input  [QUEUE_CARRIAGE_DATA_WIDTH - 1 : 0]     queue_carriage_wr_data_i,
+    input                                           queue_carriage_wr_valid_i,
+    output                                          queue_carriage_wr_ready_o,
+    output                                          queue_carriage_wr_burstready_o,
+    input                                           queue_carriage_rd_clk_i,
+    input                                           queue_carriage_rd_rst_i,
+    output [QUEUE_CARRIAGE_DATA_WIDTH - 1 : 0]     queue_carriage_rd_data_o,
+    output                                          queue_carriage_rd_valid_o,
+    output                                          queue_carriage_rd_burstvalid_o,
+    input                                           queue_carriage_rd_ready_i
 );
 
     /*
@@ -428,6 +457,36 @@ module ooc #(
         .rd_valid_o(queue_pop_coupler_rd_valid_o),
         .burstvalid_o(queue_pop_coupler_burstvalid_o),
         .ready_i(queue_pop_coupler_ready_i)
+    );
+    */
+
+    /*
+    queue_carriage #(
+        .DATA_WIDTH(QUEUE_CARRIAGE_DATA_WIDTH),
+        .ADDR_WIDTH(QUEUE_CARRIAGE_ADDR_WIDTH),
+        .ASYNC(QUEUE_CARRIAGE_ASYNC),
+        .PUSH_SIMPLE(QUEUE_CARRIAGE_PUSH_SIMPLE),
+        .PUSH_BURST_SIZE(QUEUE_CARRIAGE_PUSH_BURST_SIZE),
+        .POP_BURSTMARK(QUEUE_CARRIAGE_POP_BURSTMARK),
+        .CONFLICT_PROOF(QUEUE_CARRIAGE_CONFLICT_PROOF),
+        .REGISTERED_IN(QUEUE_CARRIAGE_REGISTERED_IN),
+        .REGISTERED_IN_BRAM(QUEUE_CARRIAGE_REGISTERED_IN_BRAM),
+        .REGISTERED_OUT_BRAM(QUEUE_CARRIAGE_REGISTERED_OUT_BRAM),
+        .SYNC_STAGES(QUEUE_CARRIAGE_SYNC_STAGES)
+    ) dut (
+        .wr_clk_i(queue_carriage_wr_clk_i),
+        .wr_rst_i(queue_carriage_wr_rst_i),
+        .wr_data_i(queue_carriage_wr_data_i),
+        .wr_valid_i(queue_carriage_wr_valid_i),
+        .wr_ready_o(queue_carriage_wr_ready_o),
+        .wr_burstready_o(queue_carriage_wr_burstready_o),
+
+        .rd_clk_i(queue_carriage_rd_clk_i),
+        .rd_rst_i(queue_carriage_rd_rst_i),
+        .rd_data_o(queue_carriage_rd_data_o),
+        .rd_valid_o(queue_carriage_rd_valid_o),
+        .rd_burstvalid_o(queue_carriage_rd_burstvalid_o),
+        .rd_ready_i(queue_carriage_rd_ready_i)
     );
     */
     

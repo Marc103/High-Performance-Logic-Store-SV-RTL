@@ -11,4 +11,5 @@ package io_pkg;
     `include "ReservoirIO.sv"
     `include "QueuePushCouplerIO.sv"
     `include "QueuePopCouplerIO.sv"
+    `include "QueueCarriageIO.sv"
 endpackage

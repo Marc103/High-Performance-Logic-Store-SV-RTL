@@ -318,6 +318,26 @@ package constant_functions_pkg;
     } queue_pop_coupler_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // queue carriage
+    `define QUEUE_CARRIAGE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic wr_rst_i; \
+        logic rd_rst_i; \
+        logic [DATA_WIDTH - 1 : 0] wr_data_i; \
+        logic wr_valid_i; \
+        logic rd_ready_i; \
+    } queue_carriage_io_in_t;
+
+    `define QUEUE_CARRIAGE_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic wr_ready_o; \
+        logic wr_burstready_o; \
+        logic [DATA_WIDTH - 1 : 0] rd_data_o; \
+        logic rd_valid_o; \
+        logic rd_burstvalid_o; \
+    } queue_carriage_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // alternate base fp
 
 
@@ -963,6 +983,19 @@ package constant_functions_pkg;
     function automatic int queue_pop_coupler_RESERVOIR_BACKPRESSURE_ENTRIES(int SPOOL_UP, int SPOOL_DOWN);
         // following reservoir formula: (spool up cycles + spool down cycles - 1)
         return (SPOOL_UP + SPOOL_DOWN - 1);
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // queue carriage
+    function automatic int queue_carriage_READ_LATENCY(
+        int ASYNC,
+        int CONFLICT_PROOF,
+        int REGISTERED_IN,
+        int REGISTERED_IN_BRAM,
+        int REGISTERED_OUT_BRAM
+    );
+        if(ASYNC == 1) return queue_async_READ_LATENCY(REGISTERED_OUT_BRAM);
+        return queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
     endfunction
 
 endpackage
