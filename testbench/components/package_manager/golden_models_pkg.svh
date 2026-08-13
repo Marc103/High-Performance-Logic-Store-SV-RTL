@@ -13,4 +13,6 @@ package golden_models_pkg;
     `include "QueuePushCouplerModel.sv"
     `include "QueuePopCouplerModel.sv"
     `include "QueueCarriageModel.sv"
+    `include "QueueTrainModel.sv"
+    `include "ReservoirNoBackpressureModel.sv"
 endpackage

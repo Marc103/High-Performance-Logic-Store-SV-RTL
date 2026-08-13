@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SIM_DIR="$SCRIPT_DIR/simulate_verilator"
+SIM_DIR="${SIM_DIR:-$SCRIPT_DIR/simulate_verilator}"
 
 TOP_MODULE="queue_push_coupler_tb"
 THREADS="${THREADS:-1}"

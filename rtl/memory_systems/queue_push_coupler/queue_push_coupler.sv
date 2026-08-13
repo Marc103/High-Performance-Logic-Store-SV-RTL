@@ -16,11 +16,11 @@ SIMPLE [0,1]:
   Instead, SIMPLE must be disabled, and thus a reservoir is used. If this is misconfigured,
   burstready is simple set to 0.
 
-- With SIMPLE disabled, a minimum 3-entry 'reservoir' is also instantiated, allowing
-  for valid data to be recieved on the cycle it is ushered, provides the necessary
-  lookahead to correctly control the push_i signal and in the process, breaks
-  up the logic allowing for a completely clean (free of logic) push_i signal into
-  the queue, solving the main issue with the simple model.
+- With SIMPLE disabled, a minimum 3-entry 'reservoir_no_backpressure' is instantiated.
+  Its capacity scales to BURST_SIZE + 2 entries so burstready_o can advertise a complete
+  upstream burst while retaining the two entries used by the queue-side control. Inputs
+  are accepted only while ready_o is asserted. The reservoir provides the lookahead used
+  to register push_o, breaking up the queue's combinational input path.
 
 ASYNC [0, 1]:
 - Is the queue that this would be attached to asynchronous?
@@ -68,9 +68,9 @@ module queue_push_coupler #(
 
     // Fill side
     logic                     fill_ready_o;
+    logic                     fill_burstready_o;
 
     // Drain side
-    logic [DATA_WIDTH - 1 : 0] drain_data_o;
     logic                      drain_valid_o;
     logic                      drain_burstmark_o;
 
@@ -100,11 +100,11 @@ module queue_push_coupler #(
             assign wr_data_o    = wr_data_i;
             assign push_o       = wr_valid_i & (!full_i);
         end else begin
-            reservoir #(
+            reservoir_no_backpressure #(
                 .DATA_WIDTH(DATA_WIDTH),
-                .WATERMARK_ENTRIES(3),
-                .BACKPRESSURE_ENTRIES(RESERVOIR_BACKPRESSURE_ENTRIES),
-                .BURSTMARK(2)
+                .WATERMARK_ENTRIES(3 + RESERVOIR_BACKPRESSURE_ENTRIES),
+                .BURSTMARK(2),
+                .FILLMARK(BURST_SIZE)
             ) push_coupler (
                 .clk_i(wr_clk_i),
                 .rst_i(wr_rst_i),
@@ -112,6 +112,7 @@ module queue_push_coupler #(
                 .fill_data_i (wr_data_i),
                 .fill_valid_i(wr_valid_i),
                 .fill_ready_o(fill_ready_o),
+                .fill_burstready_o(fill_burstready_o),
 
                 .drain_ready_i(queue_push),
                 .drain_data_o(wr_data_o),
@@ -120,7 +121,7 @@ module queue_push_coupler #(
             );
 
             assign ready_o      = fill_ready_o;
-            assign burstready_o = fill_ready_o;
+            assign burstready_o = fill_burstready_o;
 
             assign push_o = queue_push;
         end

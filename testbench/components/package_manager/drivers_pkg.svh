@@ -13,4 +13,6 @@ package drivers_pkg;
     `include "QueuePushCouplerDriver.sv"
     `include "QueuePopCouplerDriver.sv"
     `include "QueueCarriageDriver.sv"
+    `include "QueueTrainDriver.sv"
+    `include "ReservoirNoBackpressureDriver.sv"
 endpackage

@@ -12,4 +12,6 @@ package io_pkg;
     `include "QueuePushCouplerIO.sv"
     `include "QueuePopCouplerIO.sv"
     `include "QueueCarriageIO.sv"
+    `include "QueueTrainIO.sv"
+    `include "ReservoirNoBackpressureIO.sv"
 endpackage

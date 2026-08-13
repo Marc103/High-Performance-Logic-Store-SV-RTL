@@ -22,6 +22,9 @@ ASYNC [0, 1]:
 
 PUSH_SIMPLE [0, 1]:
 - Selects the queue_push_coupler simple or reservoir-backed implementation.
+- If PUSH_SIMPLE is 1, ASYNC is 1, and PUSH_BURST_SIZE is greater than 1,
+  burst admission is unsupported and wr_burstready_o remains 0. Normal
+  single-item transfers using wr_ready_o remain available.
 
 PUSH_BURST_SIZE [1, 2 ** ADDR_WIDTH]:
 - Sets the queue_push_coupler burst-ready burst size.

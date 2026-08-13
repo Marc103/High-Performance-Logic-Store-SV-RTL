@@ -5,7 +5,7 @@ import constant_functions_pkg::*;
 
 ////////////////////////////////////////////////////////////////
 // interface include
-`include "queue_carriage_inf.svh"
+`include "queue_train_inf.svh"
 
 ////////////////////////////////////////////////////////////////
 // package includes
@@ -42,15 +42,18 @@ import scoreboards_pkg::*;
 `include "memory_systems/queue_push_coupler/queue_push_coupler.sv"
 `include "memory_systems/queue_pop_coupler/queue_pop_coupler.sv"
 `include "memory_systems/queue_carriage/queue_carriage.sv"
+`include "memory_systems/queue_train/queue_train.sv"
 
 ////////////////////////////////////////////////////////////////
 // timescale
 `timescale 1ns / 1ns
 
-module queue_carriage_tb #(
+module queue_train_tb #(
     parameter DATA_WIDTH = 8,
     parameter ADDR_WIDTH = 4,
-    parameter ASYNC = 0,
+    parameter NUMBER_OF_CARRIAGES = 3,
+    parameter FRONT_ASYNC = 0,
+    parameter END_ASYNC = 0,
     parameter PUSH_SIMPLE = 0,
     parameter PUSH_BURST_SIZE = 4,
     parameter POP_BURSTMARK = 4,
@@ -62,11 +65,14 @@ module queue_carriage_tb #(
 ) ();
     localparam real WR_CLK_PERIOD = 10;
     localparam real RD_CLK_PERIOD = 14;
+    localparam ASYNC = (FRONT_ASYNC == 1) || (END_ASYNC == 1);
 
-    localparam type T = QueueCarriageIO #(
+    localparam type T = QueueTrainIO #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .ASYNC(ASYNC),
+        .NUMBER_OF_CARRIAGES(NUMBER_OF_CARRIAGES),
+        .FRONT_ASYNC(FRONT_ASYNC),
+        .END_ASYNC(END_ASYNC),
         .PUSH_SIMPLE(PUSH_SIMPLE),
         .PUSH_BURST_SIZE(PUSH_BURST_SIZE),
         .POP_BURSTMARK(POP_BURSTMARK),
@@ -77,10 +83,12 @@ module queue_carriage_tb #(
         .SYNC_STAGES(SYNC_STAGES)
     );
 
-    localparam type I = virtual queue_carriage_inf #(
+    localparam type I = virtual queue_train_inf #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .ASYNC(ASYNC),
+        .NUMBER_OF_CARRIAGES(NUMBER_OF_CARRIAGES),
+        .FRONT_ASYNC(FRONT_ASYNC),
+        .END_ASYNC(END_ASYNC),
         .PUSH_SIMPLE(PUSH_SIMPLE),
         .PUSH_BURST_SIZE(PUSH_BURST_SIZE),
         .POP_BURSTMARK(POP_BURSTMARK),
@@ -105,10 +113,12 @@ module queue_carriage_tb #(
         end
     endgenerate
 
-    queue_carriage_inf #(
+    queue_train_inf #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .ASYNC(ASYNC),
+        .NUMBER_OF_CARRIAGES(NUMBER_OF_CARRIAGES),
+        .FRONT_ASYNC(FRONT_ASYNC),
+        .END_ASYNC(END_ASYNC),
         .PUSH_SIMPLE(PUSH_SIMPLE),
         .PUSH_BURST_SIZE(PUSH_BURST_SIZE),
         .POP_BURSTMARK(POP_BURSTMARK),
@@ -122,10 +132,12 @@ module queue_carriage_tb #(
         .rd_clk_i(rd_clk)
     );
 
-    queue_carriage #(
+    queue_train #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .ASYNC(ASYNC),
+        .NUMBER_OF_CARRIAGES(NUMBER_OF_CARRIAGES),
+        .FRONT_ASYNC(FRONT_ASYNC),
+        .END_ASYNC(END_ASYNC),
         .PUSH_SIMPLE(PUSH_SIMPLE),
         .PUSH_BURST_SIZE(PUSH_BURST_SIZE),
         .POP_BURSTMARK(POP_BURSTMARK),
@@ -152,24 +164,24 @@ module queue_carriage_tb #(
 
     initial begin
         static TriggerableQueueBroadcaster #(T) dut_generator_out_broadcast = new();
-        static QueueCarriageGenerator #(T) dut_generator = new(dut_generator_out_broadcast);
+        static QueueTrainGenerator #(T) dut_generator = new(dut_generator_out_broadcast);
 
         static TriggerableQueueBroadcaster #(T) model_generator_out_broadcast = new();
-        static QueueCarriageGenerator #(T) model_generator = new(model_generator_out_broadcast);
+        static QueueTrainGenerator #(T) model_generator = new(model_generator_out_broadcast);
 
         static TriggerableQueue #(T) driver_in_queue = new();
-        static QueueCarriageDriver #(T, I) driver = new(driver_in_queue, bfm);
+        static QueueTrainDriver #(T, I) driver = new(driver_in_queue, bfm);
 
         static TriggerableQueue #(T) golden_in_queue = new();
         static TriggerableQueueBroadcaster #(T) golden_out_broadcast = new();
-        static QueueCarriageModel #(T) golden = new(golden_in_queue, golden_out_broadcast);
+        static QueueTrainModel #(T) golden = new(golden_in_queue, golden_out_broadcast);
 
         static TriggerableQueueBroadcaster #(T) monitor_out_broadcast = new();
-        static QueueCarriageMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
+        static QueueTrainMonitor #(T, I) monitor = new(monitor_out_broadcast, bfm);
 
         static TriggerableQueue #(T) scoreboard_in_queue_dut = new();
         static TriggerableQueue #(T) scoreboard_in_queue_golden = new();
-        static QueueCarriageScoreboard #(T) scoreboard = new(
+        static QueueTrainScoreboard #(T) scoreboard = new(
             scoreboard_in_queue_dut,
             scoreboard_in_queue_golden
         );
@@ -180,7 +192,14 @@ module queue_carriage_tb #(
         golden_out_broadcast.add_queue(scoreboard_in_queue_golden);
 
         $dumpfile("waves.vcd");
-        $dumpvars(0, queue_carriage_tb);
+        $dumpvars(0, queue_train_tb);
+
+        if(NUMBER_OF_CARRIAGES < 1) begin
+            $fatal(1, "NUMBER_OF_CARRIAGES must be at least 1");
+        end
+        if((NUMBER_OF_CARRIAGES > 1) && FRONT_ASYNC && END_ASYNC) begin
+            $fatal(1, "Only one async endpoint may be enabled for a multi-carriage train");
+        end
 
         bfm.wr_rst_i = 0;
         bfm.rd_rst_i = 0;
@@ -202,7 +221,7 @@ module queue_carriage_tb #(
             scoreboard.run();
         join_none
 
-        #200000;
-        $fatal(1, "QueueCarriage testbench timeout");
+        #500000;
+        $fatal(1, "QueueTrain testbench timeout");
     end
 endmodule

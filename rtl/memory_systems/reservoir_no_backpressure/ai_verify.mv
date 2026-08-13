@@ -1,0 +1,100 @@
+////////////////////////////////////////////////////////////////
+// Verification Scope
+- reservoir_no_backpressure is intentionally derived from reservoir
+- unchanged storage, occupancy, clock-enable, shifting, simultaneous fill/drain,
+  reset, drain-data, drain-valid and drain-burstmark logic is verified in:
+  rtl/memory_systems/reservoir/manual_verify.mv
+- this file verifies only the small behavioral and interface differences from reservoir
+[Marc103 - 08/13/26]
+
+"
+module reservoir_no_backpressure #(
+    parameter DATA_WIDTH,
+    parameter WATERMARK_ENTRIES,
+    parameter FILLMARK,
+    parameter BURSTMARK,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam ENTRIES = reservoir_ENTRIES(WATERMARK_ENTRIES, 0)
+)
+"
+- DATA_WIDTH, WATERMARK_ENTRIES and BURSTMARK retain their reservoir meanings
+- BACKPRESSURE_ENTRIES is intentionally removed because this implementation does not
+  accept late valid entries after ready deasserts
+- FILLMARK is added to describe how many free entries are required for fill-side burst
+  admission
+- reservoir_ENTRIES receives zero backpressure entries, so ENTRIES is exactly
+  WATERMARK_ENTRIES
+- the common reservoir storage logic therefore allocates only watermark entries
+[Marc103 - 08/13/26]
+
+"
+    input clk_i,
+    input rst_i,
+
+    // Fill side
+    input [DATA_WIDTH - 1 : 0] fill_data_i,
+    input                      fill_valid_i,
+
+    output                     fill_ready_o,
+    output                     fill_burstready_o,
+
+    // Drain side
+    input                       drain_ready_i,
+
+    output [DATA_WIDTH - 1 : 0] drain_data_o,
+    output                      drain_valid_o,
+    output                      drain_burstmark_o
+"
+- the original reservoir interface is retained except for fill_burstready_o
+- fill_burstready_o allows an upstream producer to determine whether FILLMARK entries can
+  be accepted as a complete burst
+- fill_ready_o remains the single-entry ready signal used with fill_valid_i
+- the drain-side interface is unchanged and remains covered by the reservoir verification
+[Marc103 - 08/13/26]
+
+"
+    // Can't fill when reservoir is full
+    assign fill = fill_valid_i & (!occupied[0]);
+    // can't drain if the reservoir is empty.
+    assign drain = occupied[ENTRIES - 1] & drain_ready_i;
+"
+- because ENTRIES equals WATERMARK_ENTRIES, occupied[0] is the top entry and indicates
+  that every reservoir entry is occupied
+- !occupied[0] is therefore equivalent to fill_ready_o in this implementation
+- fill occurs only when fill_valid_i and fill_ready_o are both asserted, implementing the
+  traditional valid/ready acceptance rule
+- a valid held while full is not consumed repeatedly; it is accepted once space becomes
+  available and ready asserts again
+- drain behavior is unchanged from reservoir and remains covered by its manual verification
+[Marc103 - 08/13/26]
+
+"
+    assign fill_ready_o = !occupied[ENTRIES - WATERMARK_ENTRIES];
+    assign fill_burstready_o = !occupied[FILLMARK - 1];
+
+    assign drain_data_o      = reservoir[ENTRIES - 1];
+    assign drain_valid_o     = occupied[ENTRIES - 1];
+    assign drain_burstmark_o = occupied[ENTRIES - BURSTMARK];
+"
+- ENTRIES equals WATERMARK_ENTRIES, so fill_ready_o indexes occupied[0] and asserts when
+  the reservoir is not full
+- occupied entries remain contiguous at the bottom of the reservoir, as verified for the
+  original reservoir
+- occupancy grows from occupied[WATERMARK_ENTRIES - 1] toward occupied[0]
+- occupied[FILLMARK - 1] asserts when occupancy exceeds WATERMARK_ENTRIES - FILLMARK;
+  its inversion therefore includes the boundary where exactly FILLMARK entries are free
+- FILLMARK must be in [1, WATERMARK_ENTRIES] so the packed-array index remains valid
+- drain_data_o, drain_valid_o and drain_burstmark_o are unchanged from reservoir
+[Marc103 - 08/13/26]
+
+////////////////////////////////////////////////////////////////
+// AI Verification Summary
+- all unchanged reservoir state and datapath logic delegates to reservoir/manual_verify.mv
+- no backpressure entries are allocated
+- fill acceptance follows fill_valid_i && fill_ready_o
+- fill_burstready_o reports capacity for FILLMARK entries
+- drain behavior is unchanged
+- parameter legality is not guarded locally and remains an integration requirement
+[Marc103 - 08/13/26]

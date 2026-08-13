@@ -5,11 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SIM_DIR="${SIM_DIR:-$SCRIPT_DIR/simulate_verilator}"
 
-TOP_MODULE="queue_carriage_tb"
+TOP_MODULE="reservoir_no_backpressure_tb"
 THREADS="${THREADS:-1}"
-
-# Example parameter override:
-#   ./simulate_verilator.sh -GASYNC=1 -GPUSH_SIMPLE=1 -GPUSH_BURST_SIZE=1 -GPOP_BURSTMARK=2
 
 TB_DIR="$REPO_ROOT/testbench"
 CT_DIR="$TB_DIR/components"
@@ -80,6 +77,7 @@ rm -rf "$SIM_DIR"
 mkdir -p "$SIM_DIR"
 cd "$SIM_DIR"
 
+# Example: ./simulate_verilator.sh -GDATA_WIDTH=13 -GWATERMARK_ENTRIES=8 -GFILLMARK=4 -GBURSTMARK=3
 verilator \
     -sv \
     --binary \

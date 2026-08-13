@@ -5,11 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SIM_DIR="${SIM_DIR:-$SCRIPT_DIR/simulate_verilator}"
 
-TOP_MODULE="queue_carriage_tb"
+TOP_MODULE="queue_train_tb"
 THREADS="${THREADS:-1}"
 
 # Example parameter override:
-#   ./simulate_verilator.sh -GASYNC=1 -GPUSH_SIMPLE=1 -GPUSH_BURST_SIZE=1 -GPOP_BURSTMARK=2
+#   ./simulate_verilator.sh -GNUMBER_OF_CARRIAGES=3 -GFRONT_ASYNC=1 -GEND_ASYNC=0
 
 TB_DIR="$REPO_ROOT/testbench"
 CT_DIR="$TB_DIR/components"

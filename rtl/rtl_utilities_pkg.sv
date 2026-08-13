@@ -277,6 +277,25 @@ package constant_functions_pkg;
     } reservoir_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // reservoir no backpressure
+    `define RESERVOIR_NO_BACKPRESSURE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic [DATA_WIDTH - 1 : 0] fill_data_i; \
+        logic fill_valid_i; \
+        logic drain_ready_i; \
+    } reservoir_no_backpressure_io_in_t;
+
+    `define RESERVOIR_NO_BACKPRESSURE_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic fill_ready_o; \
+        logic fill_burstready_o; \
+        logic [DATA_WIDTH - 1 : 0] drain_data_o; \
+        logic drain_valid_o; \
+        logic drain_burstmark_o; \
+    } reservoir_no_backpressure_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // queue push coupler
     `define QUEUE_PUSH_COUPLER_IO_IN_STRUCT(DATA_WIDTH) \
     typedef struct packed { \
@@ -336,6 +355,26 @@ package constant_functions_pkg;
         logic rd_valid_o; \
         logic rd_burstvalid_o; \
     } queue_carriage_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
+    // queue train
+    `define QUEUE_TRAIN_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic wr_rst_i; \
+        logic rd_rst_i; \
+        logic [DATA_WIDTH - 1 : 0] wr_data_i; \
+        logic wr_valid_i; \
+        logic rd_ready_i; \
+    } queue_train_io_in_t;
+
+    `define QUEUE_TRAIN_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic wr_ready_o; \
+        logic wr_burstready_o; \
+        logic [DATA_WIDTH - 1 : 0] rd_data_o; \
+        logic rd_valid_o; \
+        logic rd_burstvalid_o; \
+    } queue_train_io_out_t;
 
     ////////////////////////////////////////////////////////////////
     // alternate base fp

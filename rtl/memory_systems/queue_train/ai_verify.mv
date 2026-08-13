@@ -1,0 +1,267 @@
+"
+module queue_train #(
+    parameter DATA_WIDTH,
+    parameter ADDR_WIDTH,
+    parameter NUMBER_OF_CARRIAGES,
+
+    parameter FRONT_ASYNC,
+    parameter END_ASYNC,
+
+    parameter PUSH_SIMPLE,
+    parameter PUSH_BURST_SIZE,
+    parameter POP_BURSTMARK,
+
+    parameter CONFLICT_PROOF,
+    parameter REGISTERED_IN,
+    parameter REGISTERED_IN_BRAM,
+    parameter REGISTERED_OUT_BRAM,
+    parameter SYNC_STAGES
+)
+"
+- DATA_WIDTH and ADDR_WIDTH apply uniformly to every queue_carriage in the train
+- NUMBER_OF_CARRIAGES controls the number of generated queue_carriage instances and must
+  be at least 1
+- FRONT_ASYNC and END_ASYNC select the location of the transition from the write clock
+  domain to the read clock domain
+- for NUMBER_OF_CARRIAGES greater than 1, at most one async selector may be enabled because
+  only two clock domains exist and the chain can contain only one transition between them
+- for NUMBER_OF_CARRIAGES equal to 1, either async selector makes the sole carriage
+  asynchronous because that carriage is both the front and the end
+- PUSH_SIMPLE applies to every carriage push coupler
+- PUSH_BURST_SIZE is used only by the front carriage; internal carriage links use 1
+- POP_BURSTMARK is used only by the end carriage; internal carriage links use 1
+- the queue implementation parameters are forwarded uniformly to every carriage
+- parameter legality is inherited from queue_carriage and its contained modules
+[Marc103 - 08/13/26]
+
+"
+    // Write side
+    input wr_clk_i,
+    input wr_rst_i,
+
+    input  [DATA_WIDTH - 1 : 0] wr_data_i,
+    input                       wr_valid_i,
+    output                      wr_ready_o,
+    output                      wr_burstready_o,
+
+    // Read side
+    input rd_clk_i,
+    input rd_rst_i,
+
+    output [DATA_WIDTH - 1 : 0] rd_data_o,
+    output                      rd_valid_o,
+    output                      rd_burstvalid_o,
+    input                       rd_ready_i
+"
+- the external interface contains only the write and read clock domains
+- no separate shared/internal clock or reset is required
+- wr_data_i, wr_valid_i, wr_ready_o and wr_burstready_o form the upstream interface of the
+  front carriage
+- rd_data_o, rd_valid_o, rd_burstvalid_o and rd_ready_i form the downstream interface of
+  the end carriage
+- both external datapaths are exactly DATA_WIDTH bits wide
+- when an async selector is enabled, wr_clk_i/wr_rst_i and rd_clk_i/rd_rst_i are assumed
+  to represent distinct clock domains and queue_async CDC constraints apply
+- when both async selectors are disabled, the user must drive both clock ports with the
+  same clock and both reset ports with the same reset
+- every active domain must receive several reset cycles followed by several idle cycles
+  before traffic begins
+[Marc103 - 08/13/26]
+
+"
+    logic [NUMBER_OF_CARRIAGES : 0][DATA_WIDTH - 1 : 0] carriage_data;
+    logic [NUMBER_OF_CARRIAGES : 0]                    carriage_valid;
+    logic [NUMBER_OF_CARRIAGES : 0]                    carriage_ready;
+
+    logic [NUMBER_OF_CARRIAGES - 1 : 0] carriage_burstready;
+    logic [NUMBER_OF_CARRIAGES - 1 : 0] carriage_burstvalid;
+"
+- carriage_data, carriage_valid and carriage_ready represent interfaces at carriage
+  boundaries rather than individual carriages
+- N carriages have N + 1 boundaries: external input boundary 0, N - 1 internal boundaries,
+  and external output boundary N
+- [NUMBER_OF_CARRIAGES : 0] therefore intentionally contains NUMBER_OF_CARRIAGES + 1
+  entries and is not an off-by-one packed-range error
+- each carriage has one burstready and one burstvalid output, so those arrays correctly
+  contain NUMBER_OF_CARRIAGES entries using [NUMBER_OF_CARRIAGES - 1 : 0]
+- every carriage_data entry is DATA_WIDTH bits wide
+[Marc103 + Codex 5.6 - 08/13/26]
+
+"
+    assign carriage_data[0]  = wr_data_i;
+    assign carriage_valid[0] = wr_valid_i;
+    assign wr_ready_o         = carriage_ready[0];
+    assign wr_burstready_o    = carriage_burstready[0];
+
+    assign rd_data_o                           = carriage_data[NUMBER_OF_CARRIAGES];
+    assign rd_valid_o                          = carriage_valid[NUMBER_OF_CARRIAGES];
+    assign rd_burstvalid_o                     = carriage_burstvalid[NUMBER_OF_CARRIAGES - 1];
+    assign carriage_ready[NUMBER_OF_CARRIAGES] = rd_ready_i;
+"
+- the external write data and valid signals drive boundary 0
+- ready propagates backward from carriage 0 to the external write interface
+- only carriage 0's burstready is externally meaningful because it is calculated using
+  PUSH_BURST_SIZE
+- the final boundary at index NUMBER_OF_CARRIAGES drives external read data and valid
+- only the final carriage's burstvalid is externally meaningful because it is calculated
+  using POP_BURSTMARK
+- external rd_ready_i enters at boundary NUMBER_OF_CARRIAGES and propagates backward
+  through each ready/valid connection
+- these assignments also remain valid for NUMBER_OF_CARRIAGES equal to 1
+[Marc103 + Codex 5.6 - 08/13/26]
+
+"
+    generate
+        for(genvar carriage = 0; carriage < NUMBER_OF_CARRIAGES; carriage++) begin : carriage_g
+            localparam CARRIAGE_ASYNC = (
+                ((carriage == 0) && (FRONT_ASYNC == 1)) ||
+                ((carriage == (NUMBER_OF_CARRIAGES - 1)) && (END_ASYNC == 1))
+            ) ? 1 : 0;
+"
+- the generate loop creates exactly NUMBER_OF_CARRIAGES instances at indices 0 through
+  NUMBER_OF_CARRIAGES - 1
+- CARRIAGE_ASYNC is 1 for the first carriage when FRONT_ASYNC is enabled
+- CARRIAGE_ASYNC is 1 for the last carriage when END_ASYNC is enabled
+- for a one-carriage train, the first and last indices are the same, so either selector
+  correctly makes the sole carriage asynchronous
+- the ternary converts the constant logical expression to an explicit integer 0 or 1
+- for trains longer than one carriage, enabling both selectors is outside the documented
+  parameter contract
+[Marc103 - 08/13/26]
+
+"
+            localparam CARRIAGE_PUSH_BURST_SIZE =
+                (carriage == 0) ? PUSH_BURST_SIZE : 1;
+
+            localparam CARRIAGE_POP_BURSTMARK =
+                (carriage == (NUMBER_OF_CARRIAGES - 1)) ? POP_BURSTMARK : 1;
+"
+- only the front carriage receives PUSH_BURST_SIZE because wr_burstready_o describes
+  burst admission into the complete train
+- every later push coupler receives a burst size of 1 and participates only in ordinary
+  ready/valid transfer between adjacent carriages
+- only the end carriage receives POP_BURSTMARK because rd_burstvalid_o describes the
+  amount of output data available at the complete train's endpoint
+- every earlier pop coupler receives a burst mark of 1 and therefore exposes ordinary
+  item availability to its downstream carriage
+- no internal burstready or burstvalid signal is used to qualify the ready/valid chain
+[Marc103 - 08/13/26]
+
+"
+            queue_carriage #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .ASYNC(CARRIAGE_ASYNC),
+                .PUSH_SIMPLE(PUSH_SIMPLE),
+                .PUSH_BURST_SIZE(CARRIAGE_PUSH_BURST_SIZE),
+                .POP_BURSTMARK(CARRIAGE_POP_BURSTMARK),
+                .CONFLICT_PROOF(CONFLICT_PROOF),
+                .REGISTERED_IN(REGISTERED_IN),
+                .REGISTERED_IN_BRAM(REGISTERED_IN_BRAM),
+                .REGISTERED_OUT_BRAM(REGISTERED_OUT_BRAM),
+                .SYNC_STAGES(SYNC_STAGES)
+            ) carriage_inst (
+"
+- every queue_carriage receives the common data width, address width, push implementation,
+  queue registration configuration and synchronization depth
+- CARRIAGE_ASYNC selects queue or queue_async independently at the chosen train endpoint
+- CARRIAGE_PUSH_BURST_SIZE and CARRIAGE_POP_BURSTMARK implement endpoint-only burst
+  semantics without changing the internal ready/valid protocol
+- if the front carriage is asynchronous, PUSH_SIMPLE is 1 and PUSH_BURST_SIZE is greater
+  than 1, wr_burstready_o remains 0 because queue_async supplies only one-entry lookahead
+- that unsupported burst-admission combination does not disable wr_ready_o or ordinary
+  single-item transfers
+[Marc103 - 08/13/26]
+
+"
+                .wr_clk_i(
+                    ((carriage == 0) || (FRONT_ASYNC == 0))
+                        ? wr_clk_i
+                        : rd_clk_i
+                ),
+                .wr_rst_i(
+                    ((carriage == 0) || (FRONT_ASYNC == 0))
+                        ? wr_rst_i
+                        : rd_rst_i
+                ),
+"
+- carriage 0 always accepts the external write interface in the write domain
+- when FRONT_ASYNC is 0, all carriage write sides remain in the write domain
+- when FRONT_ASYNC is 1, carriage 0 crosses into the read domain and every following
+  carriage write side uses rd_clk_i/rd_rst_i
+- the reset selection exactly follows the selected write-side clock domain
+- all conditions are elaboration-time constants, so these selections synthesize as direct
+  connections rather than runtime clock multiplexers
+[Marc103 - 08/13/26]
+
+"
+                .wr_data_i(carriage_data[carriage]),
+                .wr_valid_i(carriage_valid[carriage]),
+                .wr_ready_o(carriage_ready[carriage]),
+                .wr_burstready_o(carriage_burstready[carriage]),
+"
+- carriage index i consumes data and valid from boundary i
+- its ready output drives the same boundary and therefore propagates back toward the
+  external producer
+- each carriage burstready is retained so index 0 can drive wr_burstready_o
+- internal burstready values are intentionally not used for carriage-to-carriage transfer
+[Marc103 - 08/13/26]
+
+"
+                .rd_clk_i(
+                    ((carriage == (NUMBER_OF_CARRIAGES - 1)) || (FRONT_ASYNC == 1))
+                        ? rd_clk_i
+                        : wr_clk_i
+                ),
+                .rd_rst_i(
+                    ((carriage == (NUMBER_OF_CARRIAGES - 1)) || (FRONT_ASYNC == 1))
+                        ? rd_rst_i
+                        : wr_rst_i
+                ),
+"
+- the final carriage always presents the external output interface in the read domain
+- with FRONT_ASYNC enabled, every carriage read side uses the read domain; the crossing is
+  therefore confined to carriage 0
+- with FRONT_ASYNC disabled, every non-final carriage read side uses the write domain
+- when END_ASYNC is enabled under that configuration, the crossing is confined to the
+  final carriage
+- when neither async option is enabled, the final synchronous carriage receives wr_clk_i
+  on its write side and rd_clk_i on its read side; the interface contract requires those
+  clocks and resets to be driven identically
+- all selections are elaboration-time constants and do not infer runtime clock muxes
+[Marc103 - 08/13/26]
+
+"
+                .rd_data_o(carriage_data[carriage + 1]),
+                .rd_valid_o(carriage_valid[carriage + 1]),
+                .rd_burstvalid_o(carriage_burstvalid[carriage]),
+                .rd_ready_i(carriage_ready[carriage + 1])
+            );
+        end
+    endgenerate
+"
+- carriage index i produces data and valid directly at boundary i + 1
+- the next carriage consumes that same boundary without additional registers or
+  combinational qualification
+- ready at boundary i + 1 flows into carriage i and provides downstream backpressure
+- the final generated carriage drives boundary NUMBER_OF_CARRIAGES, which is connected to
+  the external read interface
+- every carriage burstvalid is retained so the final index can drive rd_burstvalid_o
+- queue_pop_coupler therefore interfaces directly with the following
+  queue_push_coupler
+[Marc103 + Codex 5.6 - 08/13/26]
+
+////////////////////////////////////////////////////////////////
+// AI verification summary
+- exactly NUMBER_OF_CARRIAGES queue_carriage instances are generated
+- N carriages are connected by N + 1 correctly sized ready/valid/data boundaries
+- all data remains DATA_WIDTH bits wide and transaction order is preserved
+- the train contains one write-to-read clock-domain transition when one async endpoint is
+  enabled, and no asynchronous carriage when both selectors are disabled
+- front and end burst behavior is isolated to the corresponding external endpoint
+- adjacent queue_carriage instances are connected directly without additional logic
+- synchronous configurations require the user to drive matching clocks and resets
+- asynchronous configurations assume distinct domains and inherit queue_async CDC rules
+- reset and post-reset idle requirements are part of the integration contract
+- lint elaboration passed for one-carriage, synchronous, front-async and end-async cases
+[Marc103 + Codex 5.6 - 08/13/26]

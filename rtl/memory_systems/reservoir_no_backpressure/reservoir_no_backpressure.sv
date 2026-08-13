@@ -1,21 +1,23 @@
 /*
-Reservoir, a ready/valid fifo cache that accepts backpressure valids.
+Reservoir No Backpressure, a ready/valid fifo cache that does not accept backpressure.
 
-Backpressure valids are valids that are asserted when the reservoir is not ready. A traditional 'ready & valid'
-would impose this restriction and the upstream device would have to stop pushing data immediately, see
-'reservoir_no_backpressure' for that behavior. This module was developed so that at 'late valids' can be
-absorbed into backpressure entries instead (amongst other importnat features, read below).
+The workings are the same as 'reservoir' with a key difference: Valids presented when
+the reservoir is not ready will not be consumed into backpressure entries. This new
+behavior is necessary to fulfill the traditional 'valid & ready' protocol.
+
+So both reservoir and reservoir_no_backpressure have their respective use cases,
+be weary of the difference.
 
 --- Definitions ---------------------------------------------------------------------------------------------
 'spool up' cycles: Minimum number of cycles it takes from the cycle that the 'fill_ready_o' is asserted
 for upstream logic to provide data.
 
-'spool down' cycles: Maximum additional number of cycles it takes from the cycle that the 'fill_ready_o' is 
-deasserted for upstream logic to stop providing data. 
+'spool down' cycles: Maximum additional number of cycles it takes from the cycle that the 'fill_ready_o' is
+deasserted for upstream logic to stop providing data.
 
-This includes burst size coming from upstream. I.e. +1 'reaction' cycles of stop signal to reach but 
-upstream burst size is 4, so worst case is we need 4 backpressure entries. However, if it's the case that the 
-reaction is so slow that a secondary burst from upstream could be triggered, the appropriate formula is 
+This includes burst size coming from upstream. I.e. +1 'reaction' cycles of stop signal to reach but
+upstream burst size is 4, so worst case is we need 4 backpressure entries. However, if it's the case that the
+reaction is so slow that a secondary burst from upstream could be triggered, the appropriate formula is
 (reaction / upstream burst size + upstream burst size), using floor division.
 If during the reaction time, single items could be issued before the final late one ushers a burst, then add
 an additional (reaction - 1) backpressure entries, making the safest calculation
@@ -23,102 +25,32 @@ an additional (reaction - 1) backpressure entries, making the safest calculation
 
 -------------------------------------------------------------------------------------------------------------
 
-There are 3 issues that this module solves:
-1. Zero latency reaction: Data buffered in the reservoir is immediately available to the consumer
-    - The issue is caused by stall bubbles of upstream logic due to spool up cycles
-2. Handles backpressure: Late arriving data is buffered in BACK_PRESSURE_ENTRIES
-    - The issue is caused by upstream logic that has spool up and spool down cycles
-3. Continous burst mode management
-    - Using 'drain_burstmark_o', downstream logic can know if at at least BURSTMARK entries
-      are available for consumption.
-
-It works like a water tank (hence reservoir) and functionally like a FIFO but without explicit read/write pointers.
-New entries fall to the bottom most unoccupied entry, then the bottom most entry is exposed to the consumer. The reservoir
-will assert 'fill_ready_o' until at least WATERMARK_ENTRIES are present, then we rely on the BACKPRESSURE_ENTRIES to handle
-backpressure.
-
 DATA_WIDTH:
 - Data width.
 
 WATERMARK_ENTRIES [2, ..]:
 - How many watermark entries? To enable optimal continous burst stream, set to at least (minimum is 2):
-   -------------------------------------
-   | (spool up cycles + 1 + BURSTMARK) |
-   -------------------------------------
-- Setting it less than the optimal costs an initial stall bubble reaction time delay, which may or may not
-  be good enough depending on the application.
 
-BACKPRESSURE_ENTRIES [0, ..]:
-- How many backpressure entries? Must be set to (minimum is 0):
-   ---------------------------------------------
-   | (spool up cycles + spool down cycles - 1) |
-   ---------------------------------------------
+FILLMARK[1, WATERMARK_ENTRIES]:
+- What is your upstream burst size? This tell upstream logic wheter FILLMARK entires are available to be
+  filled with. Must be smaller than or equal to WATERMARK_ENTRIES.
 
 BURSTMARK[1, WATERMARK_ENTRIES]:
 - What is your downstream burst size? Must be smaller than or equal to WATERMARK_ENTRIES.
 
-////////////////////////////////////////////////////////////////
-// An Example Setup
-
-spool up cycles = 2
-spool down cycles = 1
-burst size = 1
-therefore,
-BURSTMARK            = burst size = 1
-WATER_ENTRIES        = 2 + 1 + 1 = 4  *optimal configuration
-BACKPRESSURE_ENTRIES = 2 + 1 - 1 = 2
-
--------------- BACKPRESSURE_ENTRIES = 2
-[-] - top entry is the 'top' of the reservoir, exists at index [0]
-[-]
--------------- WATERMARK_ENTRIES = 4
-[-]
-[-]
-[-]
--------------- BURSTMARK = 1
-[-] - bottom entry is the 'bottom' of the reservoir, exists at index [ENTRIES - 1]
-
-* ENTRIES = WATERMARK_ENTRIES + BACKPRESSURE_ENTRIES;
-
-////////////////////////////////////////////////////////////////
-// Limitations
-
-1. Summary: if the spool up and spool down times can't be effectively ammortized by active times,
-            the effectiveness of this module is also reduced.
-
-2. The number of fanout points of the 'fill_data_i' is the total entries, and the worst-case length fanout is
-   proportional to the (total entries x DATA_WIDTH). So this needs to be kept in mind.
-
-3. More efficient ways are available for large continous burst sizes if the upstream logic exposes at least two
-   programmable occupancy level flags but wil introduce < 100% duty cycle if we need to support both continous
-   burst and single consumption (i.e to prevent impartial burst from being 'stuck')
-
-1. Intermittent upstream data arriving and low latency requirements. Say the producer produces data very sparsely
-   but we wish the consumer to react in zero cycles.
-    a. Synchronous case: If this is truly the behavior required then why have a buffer at all? And if you still need
-       a buffer (i.e sometimes along the sparse activity we get bursts that the consumer can't keep up with), then
-       what you need is a first-word fall-through (FTWT) fifo with the control signals directly wired to read/write logic.
-       Unfortunately, the long combinatorial logic paths of the control signals slow down the clock signficantly and 
-       there are no RTL level logic optimizations to solve this on FPGAs. Well actually there is, which is to make 
-       the buffer very shallow (i.e 4/8 entries corresponds to 2/3 bit width addresses) and so if your use case is such 
-       then that is what I would recommend; in that case such a module 'queue_zero_latency' will be developed.
-    b. Asynchronous case: The latency caused by the synchronization flip-flops stages inherently prohibits (at least to
-       the best of my knowledge) zero latency requirements (especially at very high clock rates, where three stages would 
-       be necessary to meet suitable metastability MTBF), and I highly doubt that trying to minimize the latency is worth 
-       the diminshed clock rates.
 */
 
 import constant_functions_pkg::*;
 
-module reservoir #(
+module reservoir_no_backpressure #(
     parameter DATA_WIDTH,
     parameter WATERMARK_ENTRIES,
-    parameter BACKPRESSURE_ENTRIES,
+    parameter FILLMARK,
     parameter BURSTMARK,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam ENTRIES = reservoir_ENTRIES(WATERMARK_ENTRIES, BACKPRESSURE_ENTRIES)
+    localparam ENTRIES = reservoir_ENTRIES(WATERMARK_ENTRIES, 0)
 ) (
     input clk_i,
     input rst_i,
@@ -128,6 +60,7 @@ module reservoir #(
     input                      fill_valid_i,
 
     output                     fill_ready_o,
+    output                     fill_burstready_o,
 
     // Drain side
     input                       drain_ready_i,
@@ -167,8 +100,8 @@ module reservoir #(
         end
     end
 
-    // assumes BACKPRESSURE_ENTRIES sufficiently large enough to handle backpressure.
-    assign fill = fill_valid_i;
+    // Can't fill when reservoir is full
+    assign fill = fill_valid_i & (!occupied[0]);
     // can't drain if the reservoir is empty.
     assign drain = occupied[ENTRIES - 1] & drain_ready_i;
 
@@ -244,6 +177,7 @@ module reservoir #(
     end
 
     assign fill_ready_o = !occupied[ENTRIES - WATERMARK_ENTRIES];
+    assign fill_burstready_o = !occupied[FILLMARK - 1];
 
     assign drain_data_o      = reservoir[ENTRIES - 1];
     assign drain_valid_o     = occupied[ENTRIES - 1];

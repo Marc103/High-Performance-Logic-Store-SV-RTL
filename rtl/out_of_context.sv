@@ -105,6 +105,13 @@ module ooc #(
     localparam RESERVOIR_BURSTMARK = 2,
 
     ////////////////////////////////////////////////////////////////
+    // reservoir_no_backpressure
+    localparam RESERVOIR_NO_BACKPRESSURE_DATA_WIDTH = 8,
+    localparam RESERVOIR_NO_BACKPRESSURE_WATERMARK_ENTRIES = 6,
+    localparam RESERVOIR_NO_BACKPRESSURE_FILLMARK = 3,
+    localparam RESERVOIR_NO_BACKPRESSURE_BURSTMARK = 2,
+
+    ////////////////////////////////////////////////////////////////
     // queue_push_coupler
     localparam QUEUE_PUSH_COUPLER_DATA_WIDTH = 8,
     localparam QUEUE_PUSH_COUPLER_SIMPLE = 0,
@@ -135,7 +142,23 @@ module ooc #(
     localparam QUEUE_CARRIAGE_REGISTERED_IN = 1,
     localparam QUEUE_CARRIAGE_REGISTERED_IN_BRAM = 1,
     localparam QUEUE_CARRIAGE_REGISTERED_OUT_BRAM = 1,
-    localparam QUEUE_CARRIAGE_SYNC_STAGES = 2
+    localparam QUEUE_CARRIAGE_SYNC_STAGES = 2,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_train
+    localparam QUEUE_TRAIN_DATA_WIDTH = 8,
+    localparam QUEUE_TRAIN_ADDR_WIDTH = 4,
+    localparam QUEUE_TRAIN_NUMBER_OF_CARRIAGES = 3,
+    localparam QUEUE_TRAIN_FRONT_ASYNC = 1,
+    localparam QUEUE_TRAIN_END_ASYNC = 0,
+    localparam QUEUE_TRAIN_PUSH_SIMPLE = 0,
+    localparam QUEUE_TRAIN_PUSH_BURST_SIZE = 4,
+    localparam QUEUE_TRAIN_POP_BURSTMARK = 4,
+    localparam QUEUE_TRAIN_CONFLICT_PROOF = 1,
+    localparam QUEUE_TRAIN_REGISTERED_IN = 1,
+    localparam QUEUE_TRAIN_REGISTERED_IN_BRAM = 1,
+    localparam QUEUE_TRAIN_REGISTERED_OUT_BRAM = 1,
+    localparam QUEUE_TRAIN_SYNC_STAGES = 2
 )(
     input clk_i,
 
@@ -198,6 +221,18 @@ module ooc #(
     output                             reservoir_drain_burstmark_o,
 
     ////////////////////////////////////////////////////////////////
+    // reservoir_no_backpressure
+    input  reservoir_no_backpressure_rst_i,
+    input  [RESERVOIR_NO_BACKPRESSURE_DATA_WIDTH - 1 : 0] reservoir_no_backpressure_fill_data_i,
+    input  reservoir_no_backpressure_fill_valid_i,
+    output reservoir_no_backpressure_fill_ready_o,
+    output reservoir_no_backpressure_fill_burstready_o,
+    input  reservoir_no_backpressure_drain_ready_i,
+    output [RESERVOIR_NO_BACKPRESSURE_DATA_WIDTH - 1 : 0] reservoir_no_backpressure_drain_data_o,
+    output reservoir_no_backpressure_drain_valid_o,
+    output reservoir_no_backpressure_drain_burstmark_o,
+
+    ////////////////////////////////////////////////////////////////
     // queue_push_coupler
     input                                      queue_push_coupler_wr_rst_i,
     input  [QUEUE_PUSH_COUPLER_DATA_WIDTH - 1 : 0] queue_push_coupler_wr_data_i,
@@ -237,7 +272,22 @@ module ooc #(
     output [QUEUE_CARRIAGE_DATA_WIDTH - 1 : 0]     queue_carriage_rd_data_o,
     output                                          queue_carriage_rd_valid_o,
     output                                          queue_carriage_rd_burstvalid_o,
-    input                                           queue_carriage_rd_ready_i
+    input                                           queue_carriage_rd_ready_i,
+
+    ////////////////////////////////////////////////////////////////
+    // queue_train
+    input                                       queue_train_wr_clk_i,
+    input                                       queue_train_wr_rst_i,
+    input  [QUEUE_TRAIN_DATA_WIDTH - 1 : 0]     queue_train_wr_data_i,
+    input                                       queue_train_wr_valid_i,
+    output                                      queue_train_wr_ready_o,
+    output                                      queue_train_wr_burstready_o,
+    input                                       queue_train_rd_clk_i,
+    input                                       queue_train_rd_rst_i,
+    output [QUEUE_TRAIN_DATA_WIDTH - 1 : 0]     queue_train_rd_data_o,
+    output                                      queue_train_rd_valid_o,
+    output                                      queue_train_rd_burstvalid_o,
+    input                                       queue_train_rd_ready_i
 );
 
     /*
@@ -407,6 +457,28 @@ module ooc #(
         .drain_burstmark_o(reservoir_drain_burstmark_o)
     );
     */
+
+    /*
+    reservoir_no_backpressure #(
+        .DATA_WIDTH(RESERVOIR_NO_BACKPRESSURE_DATA_WIDTH),
+        .WATERMARK_ENTRIES(RESERVOIR_NO_BACKPRESSURE_WATERMARK_ENTRIES),
+        .FILLMARK(RESERVOIR_NO_BACKPRESSURE_FILLMARK),
+        .BURSTMARK(RESERVOIR_NO_BACKPRESSURE_BURSTMARK)
+    ) dut (
+        .clk_i(clk_i),
+        .rst_i(reservoir_no_backpressure_rst_i),
+
+        .fill_data_i(reservoir_no_backpressure_fill_data_i),
+        .fill_valid_i(reservoir_no_backpressure_fill_valid_i),
+        .fill_ready_o(reservoir_no_backpressure_fill_ready_o),
+        .fill_burstready_o(reservoir_no_backpressure_fill_burstready_o),
+
+        .drain_ready_i(reservoir_no_backpressure_drain_ready_i),
+        .drain_data_o(reservoir_no_backpressure_drain_data_o),
+        .drain_valid_o(reservoir_no_backpressure_drain_valid_o),
+        .drain_burstmark_o(reservoir_no_backpressure_drain_burstmark_o)
+    );
+    */
     
     /*
     queue_push_coupler #(
@@ -487,6 +559,38 @@ module ooc #(
         .rd_valid_o(queue_carriage_rd_valid_o),
         .rd_burstvalid_o(queue_carriage_rd_burstvalid_o),
         .rd_ready_i(queue_carriage_rd_ready_i)
+    );
+    */
+
+    /*
+    queue_train #(
+        .DATA_WIDTH(QUEUE_TRAIN_DATA_WIDTH),
+        .ADDR_WIDTH(QUEUE_TRAIN_ADDR_WIDTH),
+        .NUMBER_OF_CARRIAGES(QUEUE_TRAIN_NUMBER_OF_CARRIAGES),
+        .FRONT_ASYNC(QUEUE_TRAIN_FRONT_ASYNC),
+        .END_ASYNC(QUEUE_TRAIN_END_ASYNC),
+        .PUSH_SIMPLE(QUEUE_TRAIN_PUSH_SIMPLE),
+        .PUSH_BURST_SIZE(QUEUE_TRAIN_PUSH_BURST_SIZE),
+        .POP_BURSTMARK(QUEUE_TRAIN_POP_BURSTMARK),
+        .CONFLICT_PROOF(QUEUE_TRAIN_CONFLICT_PROOF),
+        .REGISTERED_IN(QUEUE_TRAIN_REGISTERED_IN),
+        .REGISTERED_IN_BRAM(QUEUE_TRAIN_REGISTERED_IN_BRAM),
+        .REGISTERED_OUT_BRAM(QUEUE_TRAIN_REGISTERED_OUT_BRAM),
+        .SYNC_STAGES(QUEUE_TRAIN_SYNC_STAGES)
+    ) dut (
+        .wr_clk_i(queue_train_wr_clk_i),
+        .wr_rst_i(queue_train_wr_rst_i),
+        .wr_data_i(queue_train_wr_data_i),
+        .wr_valid_i(queue_train_wr_valid_i),
+        .wr_ready_o(queue_train_wr_ready_o),
+        .wr_burstready_o(queue_train_wr_burstready_o),
+
+        .rd_clk_i(queue_train_rd_clk_i),
+        .rd_rst_i(queue_train_rd_rst_i),
+        .rd_data_o(queue_train_rd_data_o),
+        .rd_valid_o(queue_train_rd_valid_o),
+        .rd_burstvalid_o(queue_train_rd_burstvalid_o),
+        .rd_ready_i(queue_train_rd_ready_i)
     );
     */
     

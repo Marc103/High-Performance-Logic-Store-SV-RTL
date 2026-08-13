@@ -78,7 +78,7 @@ class QueuePushCouplerModel #(type T);
         end else begin
             do_drain = this.queue_push && (this.reservoir_entries.size() > 0);
             do_fill = queue_push_coupler_io_in.wr_valid_i &&
-                ((this.reservoir_entries.size() < T::RESERVOIR_ENTRIES) || do_drain);
+                (this.reservoir_entries.size() < T::RESERVOIR_ENTRIES);
 
             if(do_drain) begin
                 discarded = this.reservoir_entries.pop_front();
@@ -98,9 +98,10 @@ class QueuePushCouplerModel #(type T);
         end
 
         queue_push_coupler_io_out.ready_o =
-            (this.reservoir_entries.size() < 3);
+            (this.reservoir_entries.size() < T::RESERVOIR_ENTRIES);
         queue_push_coupler_io_out.burstready_o =
-            queue_push_coupler_io_out.ready_o;
+            ((T::RESERVOIR_ENTRIES - this.reservoir_entries.size()) >=
+                T::BURST_SIZE);
         queue_push_coupler_io_out.push_o = this.queue_push;
         queue_push_coupler_io_out.more_than_or_eq_o = T::DATA_DEPTH - 1;
 

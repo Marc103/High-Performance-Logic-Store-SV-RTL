@@ -29,7 +29,7 @@ import scoreboards_pkg::*;
 
 ////////////////////////////////////////////////////////////////
 // RTL includes
-`include "memory_systems/reservoir/reservoir.sv"
+`include "memory_systems/reservoir_no_backpressure/reservoir_no_backpressure.sv"
 `include "memory_systems/queue_push_coupler/queue_push_coupler.sv"
 
 ////////////////////////////////////////////////////////////////

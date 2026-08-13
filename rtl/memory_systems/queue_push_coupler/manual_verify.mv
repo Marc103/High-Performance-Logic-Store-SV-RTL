@@ -8,9 +8,12 @@
     endfunction
 "
 - correct argument passed in
-- we need burst_size - 1 backpressure entries, as the top most watermark entry acts
-  as the first item consumed in the burst.
-[Marc103 + Codex 5.6 - 08/09/26]
+- BURST_SIZE - 1 is retained as the number of entries added to the three-entry control
+  reservoir, producing BURST_SIZE + 2 total entries
+- after the migration to reservoir_no_backpressure these are capacity entries, not
+  permission to absorb inputs while ready_o is low
+- the existing localparam name is retained for compatibility with the utility function
+[Marc103 + Codex 5.6 - 08/13/26]
 
 "
     localparam DATA_DEPTH                     = queue_DATA_DEPTH(ADDR_WIDTH)
@@ -51,9 +54,9 @@
 "
     // Fill side
     logic                     fill_ready_o;
+    logic                     fill_burstready_o;
 
     // Drain side
-    logic [DATA_WIDTH - 1 : 0] drain_data_o;
     logic                      drain_valid_o;
     logic                      drain_burstmark_o;
 "
@@ -63,12 +66,15 @@
     - fill_data_i  <-> wr_data_i
     - fill_valid_i <-> wr_valid_i
     - fill_ready_o <-> fill_ready_o
+    - fill_burstready_o <-> fill_burstready_o
 - read side is
     - drain_ready_i     <-> queue_push
     - drain_data_o      <-> wr_data_o
     - drain_valid_o     <-> drain_valid_o
     - drain_burstmark_o <-> drain_burstmark_o
-[Marc103 + Codex 5.6 - 08/09/26]
+- no separate drain_data_o signal is required because the reservoir output connects
+  directly to wr_data_o
+[Marc103 + Codex 5.6 - 08/13/26]
 
 "
     // control state
@@ -110,11 +116,11 @@
             assign wr_data_o    = wr_data_i;
             assign push_o       = wr_valid_i & (!full_i);
         end else begin
-            reservoir #(
+            reservoir_no_backpressure #(
                 .DATA_WIDTH(DATA_WIDTH),
-                .WATERMARK_ENTRIES(3),
-                .BACKPRESSURE_ENTRIES(RESERVOIR_BACKPRESSURE_ENTRIES),
-                .BURSTMARK(2)
+                .WATERMARK_ENTRIES(3 + RESERVOIR_BACKPRESSURE_ENTRIES),
+                .BURSTMARK(2),
+                .FILLMARK(BURST_SIZE)
             ) push_coupler (
                 .clk_i(wr_clk_i),
                 .rst_i(wr_rst_i),
@@ -122,6 +128,7 @@
                 .fill_data_i (wr_data_i),
                 .fill_valid_i(wr_valid_i),
                 .fill_ready_o(fill_ready_o),
+                .fill_burstready_o(fill_burstready_o),
 
                 .drain_ready_i(queue_push),
                 .drain_data_o(wr_data_o),
@@ -130,7 +137,7 @@
             );
 
             assign ready_o      = fill_ready_o;
-            assign burstready_o = fill_ready_o;
+            assign burstready_o = fill_burstready_o;
 
             assign push_o = queue_push;
         end
@@ -144,19 +151,34 @@
       has capacity to receive the complete burst
     - wr_data_o wired to wr_data_i
     - push_o to the queue when write data is valid and the queue is not full
-- if SIMPLE disabled, we instantiate a reservoir
-    - check parameterization, io, 3 watermark entries, 2 for the burstmark
+- if SIMPLE disabled, we instantiate reservoir_no_backpressure
+    - WATERMARK_ENTRIES is 3 + (BURST_SIZE - 1), giving BURST_SIZE + 2 total entries
+    - BURSTMARK remains 2 because queue_push control distinguishes zero, one and at
+      least two buffered entries
+    - FILLMARK is BURST_SIZE, so fill_burstready_o reports capacity for a complete burst
 - for the upstream device / reservoir interface:
     - fill_data_i  <-> wr_data_i
     - fill_valid_i <-> wr_valid_i
     - fill_ready_o <-> fill_ready_o
+    - fill_burstready_o <-> fill_burstready_o
 - for the reservoir / queue interface:
-    - ready_o is set to fill_ready_o which is from the reservoir
-    - burstready_o is also set to fill_ready_o
-        - with how the backpressure entries are configured, a fill_ready_o also
-          means there's enough backpressure entries to handle a burst
+    - ready_o is set to fill_ready_o and asserts whenever at least one entry is free
+    - valid data presented while ready_o is low is not accepted
+    - burstready_o is set independently from fill_burstready_o and asserts only when
+      at least BURST_SIZE entries are free
     - wr_data_o wired to reservoir drain_data_o
-[Marc103 + Codex 5.6 - 08/09/26]
+[Marc103 + Codex 5.6 - 08/13/26]
+
+////////////////////////////////////////////////////////////////
+// reservoir_no_backpressure Migration
+- the queue-side registered push controller is unchanged
+- only the buffered fill-side admission policy and burst-capacity reporting changed
+- when the internal reservoir starts a cycle full, a simultaneous first drain does not
+  accept the waiting fill on that same edge because ready_o was low before the edge
+- a compliant upstream source holds valid and data stable; the waiting item is accepted
+  on a later edge after the drain creates space and ready_o asserts
+- SIMPLE mode remains unchanged
+[Marc103 + Codex 5.6 - 08/13/26]
 
 "
     // if ASYNC == 1, the lookahead_i condition means 'one space left'
