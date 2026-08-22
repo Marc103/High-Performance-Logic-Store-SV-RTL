@@ -7,9 +7,12 @@ SIM_DIR="${SIM_DIR:-$SCRIPT_DIR/simulate_verilator}"
 
 TOP_MODULE="queue_train_tb"
 THREADS="${THREADS:-1}"
+TRACE="${TRACE:-1}"
 
 # Example parameter override:
 #   ./simulate_verilator.sh -GNUMBER_OF_CARRIAGES=3 -GFRONT_ASYNC=1 -GEND_ASYNC=0
+# Disable waveform capture for very large configurations:
+#   TRACE=0 ./simulate_verilator.sh -GNUMBER_OF_CARRIAGES=20
 
 TB_DIR="$REPO_ROOT/testbench"
 CT_DIR="$TB_DIR/components"
@@ -17,6 +20,14 @@ RTL_DIR="$REPO_ROOT/rtl"
 
 if ! [[ "$THREADS" =~ ^[1-9][0-9]*$ ]]; then
     echo "error: THREADS must be a positive integer" >&2
+    exit 1
+fi
+
+TRACE_ARGS=()
+if [ "$TRACE" = "1" ]; then
+    TRACE_ARGS=(--trace-vcd -DTRACE_ENABLED)
+elif [ "$TRACE" != "0" ]; then
+    echo "error: TRACE must be 0 or 1" >&2
     exit 1
 fi
 
@@ -84,7 +95,7 @@ verilator \
     -sv \
     --binary \
     --timing \
-    --trace-vcd \
+    "${TRACE_ARGS[@]}" \
     --threads "$THREADS" \
     -CFLAGS "$COROUTINE_CFLAGS" \
     -MAKEFLAGS "CXX=$CXX" \
@@ -105,4 +116,6 @@ verilator \
     "$@" \
     "$SCRIPT_DIR/${TOP_MODULE}.sv"
 
+# Deep generated hierarchies can exceed WSL's default process stack.
+ulimit -s unlimited 2>/dev/null || true
 "$SIM_DIR/obj_dir/V$TOP_MODULE"

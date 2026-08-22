@@ -191,8 +191,10 @@ module queue_train_tb #(
         monitor_out_broadcast.add_queue(scoreboard_in_queue_dut);
         golden_out_broadcast.add_queue(scoreboard_in_queue_golden);
 
-        $dumpfile("waves.vcd");
-        $dumpvars(0, queue_train_tb);
+        `ifdef TRACE_ENABLED
+            $dumpfile("waves.vcd");
+            $dumpvars(0, queue_train_tb);
+        `endif
 
         if(NUMBER_OF_CARRIAGES < 1) begin
             $fatal(1, "NUMBER_OF_CARRIAGES must be at least 1");
