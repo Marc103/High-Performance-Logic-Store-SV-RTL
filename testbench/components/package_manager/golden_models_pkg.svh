@@ -15,4 +15,5 @@ package golden_models_pkg;
     `include "QueueCarriageModel.sv"
     `include "QueueTrainModel.sv"
     `include "ReservoirNoBackpressureModel.sv"
+    `include "EqualTreeModel.sv"
 endpackage

@@ -14,4 +14,5 @@ package io_pkg;
     `include "QueueCarriageIO.sv"
     `include "QueueTrainIO.sv"
     `include "ReservoirNoBackpressureIO.sv"
+    `include "EqualTreeIO.sv"
 endpackage

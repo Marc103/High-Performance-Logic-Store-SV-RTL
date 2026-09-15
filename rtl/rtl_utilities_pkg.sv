@@ -495,6 +495,19 @@ package constant_functions_pkg;
     } equal_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // equal tree
+    `define EQUAL_TREE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] data_a_i; \
+        logic [DATA_WIDTH - 1 : 0] data_b_i; \
+    } equal_tree_io_in_t;
+
+    `define EQUAL_TREE_IO_OUT_STRUCT \
+    typedef struct packed { \
+        logic eq_o; \
+    } equal_tree_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // reduction tree
     typedef struct packed {
         int DATA_WIDTH;
@@ -1035,6 +1048,34 @@ package constant_functions_pkg;
     );
         if(ASYNC == 1) return queue_async_READ_LATENCY(REGISTERED_OUT_BRAM);
         return queue_READ_LATENCY(CONFLICT_PROOF, REGISTERED_IN, REGISTERED_IN_BRAM, REGISTERED_OUT_BRAM);
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // equal tree
+    function automatic int equal_tree_LUTX_HALF_GRADED(int LUTX, int GRADE);
+        int lutx_nearest_floor_even;
+        lutx_nearest_floor_even = (LUTX / 2) * 2;      // turn into nearest floor even number
+        return (lutx_nearest_floor_even ** GRADE) / 2; // even number divide by 2 no issue.
+    endfunction
+
+    function automatic int equal_tree_PADDED_WIDTH(int DATA_WIDTH, int LUTX_HALF_GRADED);
+        int not_divisible, a;
+        not_divisible = (DATA_WIDTH % LUTX_HALF_GRADED) != 0 ? 1 : 0;
+        a = (DATA_WIDTH / LUTX_HALF_GRADED) * LUTX_HALF_GRADED;
+        return (a + (not_divisible * LUTX_HALF_GRADED));
+    endfunction
+
+    function automatic int equal_tree_GROUPS(int PADDED_WIDTH, int LUTX_HALF_GRADED);
+        return (PADDED_WIDTH / LUTX_HALF_GRADED);
+    endfunction
+
+    function automatic int equal_tree_LATENCY(int REGISTERED_IN, int GROUPS, int REDUCTION_TREE_LATENCY);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        if(GROUPS > 1) begin
+            latency += REDUCTION_TREE_LATENCY;
+        end 
+        return latency;
     endfunction
 
 endpackage

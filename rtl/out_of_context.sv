@@ -31,6 +31,13 @@ module ooc #(
     localparam EQUAL_GRADE = 1,
 
     ////////////////////////////////////////////////////////////////
+    // equal_tree
+    localparam EQUAL_TREE_DATA_WIDTH = 37,
+    localparam EQUAL_TREE_REGISTERED_IN = 1,
+    localparam EQUAL_TREE_LUTX = 6,
+    localparam EQUAL_TREE_GRADE = 2,
+
+    ////////////////////////////////////////////////////////////////
     // reduction_tree
     localparam REDUCTION_TREE_DATA_WIDTH = 17,
     localparam REDUCTION_TREE_GATE = 1,
@@ -172,6 +179,12 @@ module ooc #(
     input  [EQUAL_DATA_WIDTH - 1 : 0] equal_data_a_i,
     input  [EQUAL_DATA_WIDTH - 1 : 0] equal_data_b_i,
     output                            equal_eq_o,
+
+    ////////////////////////////////////////////////////////////////
+    // equal_tree
+    input  [EQUAL_TREE_DATA_WIDTH - 1 : 0] equal_tree_data_a_i,
+    input  [EQUAL_TREE_DATA_WIDTH - 1 : 0] equal_tree_data_b_i,
+    output                                 equal_tree_eq_o,
 
     ////////////////////////////////////////////////////////////////
     // reduction_tree
@@ -317,6 +330,22 @@ module ooc #(
         .data_b_i(equal_data_b_i),
 
         .eq_o(equal_eq_o)
+    );
+    */
+
+    /*
+    equal_tree #(
+        .DATA_WIDTH(EQUAL_TREE_DATA_WIDTH),
+        .REGISTERED_IN(EQUAL_TREE_REGISTERED_IN),
+        .LUTX(EQUAL_TREE_LUTX),
+        .GRADE(EQUAL_TREE_GRADE)
+    ) dut (
+        .clk_i(clk_i),
+
+        .data_a_i(equal_tree_data_a_i),
+        .data_b_i(equal_tree_data_b_i),
+
+        .eq_o(equal_tree_eq_o)
     );
     */
 

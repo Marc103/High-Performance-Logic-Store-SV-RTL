@@ -1,0 +1,192 @@
+"
+    localparam LUTX_HALF_GRADED             = equal_tree_LUTX_HALF_GRADED            (LUTX, GRADE),
+"
+- defined as
+"
+    function automatic int equal_tree_LUTX_HALF_GRADED(int LUTX, int GRADE);
+        int lutx_nearest_floor_even;
+        lutx_nearest_floor_even = (LUTX / 2) * 2;      // turn into nearest floor even number
+        return (lutx_nearest_floor_even ** GRADE) / 2; // even number divide by 2 no issue.
+    endfunction
+"
+- first we find the nearest floor even number since comparing bits requires even number of inputs
+    - it is assumed LUTX is >= 2.
+- then we exponentiate by the GRADE
+- then finally divide by 2 to get input size 
+    - e.g LUTX = 5, GRADE = 2 -> LUTX* = 4, then 4**2 = 16. That means we can compare
+      2 8-bit (16/2 = 8) values directly. If larger than 8-bit, we have the additional and
+      reduction tree as will be seen
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam PADDED_WIDTH                 = equal_tree_PADDED_WIDTH                (DATA_WIDTH, LUTX_HALF_GRADED),
+"
+- defined as
+"
+    function automatic int equal_tree_PADDED_WIDTH(int DATA_WIDTH, int LUTX_HALF_GRADED);
+        int not_divisible, a;
+        not_divisible = (DATA_WIDTH % LUTX_HALF_GRADED) != 0 ? 1 : 0;
+        a = (DATA_WIDTH / LUTX_HALF_GRADED) * LUTX_HALF_GRADED;
+        return (a + (not_divisible * LUTX_HALF_GRADED));
+    endfunction
+"
+- we need to find the nearest ceiling multiple of LUTX_HALF_GRADED
+- 'not_divisible' if 1, means DATA_WIDTH is not perfectly divisible by LUTX_HALF_GRADED
+- 'a' represents the nearest floor multiple of LUTX_HALF_GRADED;
+    - we find how many times LUTX_HALF_GRADED divides into DATA_WIDTH, then multiply by LUTX_HALF_GRADED
+- then, in the case that not_divisible is true, we add one more LUTX_HALF_GRADED to a
+    - done by adding 'not_divisible * LUTX_HALF_GRADED', where if not_divisible is 0, no effect
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam GROUPS                       = equal_tree_GROUPS                      (PADDED_WIDTH, LUTX_HALF_GRADED),
+"
+- defined as
+"
+    function automatic int equal_tree_GROUPS(int PADDED_WIDTH, int LUTX_HALF_GRADED);
+        return (PADDED_WIDTH / LUTX_HALF_GRADED);
+    endfunction
+"
+- since PADDED_WIDTH is guaranteed to be divisible by LUTX_HALF_GRADED, from previous step, we simply
+  return PADDED_WIDTH / LUTX_HALF_GRADED to know by how many times (hence, how many groups will be formed.)
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam REDUCTION_TREE_GROUP_SIZE    = reduction_tree_GROUP_SIZE              (LUTX, GRADE),
+"
+- correct arguments passed in
+    - LUTX  <=> LUTX
+    - GRADE <=> GRADE
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam REDUCTION_TREE_STAGES        = reduction_tree_STAGES                  (REDUCTION_TREE_GROUP_SIZE, GROUPS),
+"
+- correct arguments passed in
+    - GROUP_SIZE <=> REDUCTION_TREE_GROUP_SIZE
+    - DATA_WIDTH <=> GROUPS (GROUPS is referring to equals groups, this is the
+      data width fed into the reduction tree instantiation)
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam REDUCTION_TREE_LATENCY       = reduction_tree_LATENCY                 (1, REDUCTION_TREE_STAGES),
+"
+- correct arguments passed in
+    - REGISTERED_IN <=> 1, registered in is always 1, if we ever need the tree anyway
+    - STAGES        <=> REDUCTION_TREE_STAGES
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    localparam LATENCY                      = equal_tree_LATENCY                     (REGISTERED_IN, GROUPS, REDUCTION_TREE_LATENCY)
+"
+- defined as
+"
+    function automatic int equal_tree_LATENCY(int REGISTERED_IN, int GROUPS, int REDUCTION_TREE_LATENCY);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        if(GROUPS > 1) begin
+            latency += REDUCTION_TREE_LATENCY;
+        end 
+        return latency;
+    endfunction
+"
+- if registered in, adds a cycle
+- 'GROUPS' tells us whether a reduction tree afterwards is necessary
+    - if GROUPS = 1, that means no further processing needed
+    - if GROUPS is greater than 1, that means the reduction tree is added
+      afterwards, hence we add the REDUCTION_TREE_LATENCY aswell.
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    input clk_i,
+
+    input [DATA_WIDTH - 1 : 0] data_a_i,
+    input [DATA_WIDTH - 1 : 0] data_b_i,
+
+    output eq_o
+"
+- signals present
+- bit widths are correct 
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] data_a;
+    logic [DATA_WIDTH - 1 : 0] data_b;
+
+    logic [DATA_WIDTH - 1 : 0] data_a_g;
+    logic [DATA_WIDTH - 1 : 0] data_b_g;
+
+    always@(posedge clk_i) begin
+        data_a <= data_a_i;
+        data_b <= data_b_i;
+    end
+
+    assign data_a_g = (REGISTERED_IN == 1) ? data_a : data_a_i;
+    assign data_b_g = (REGISTERED_IN == 1) ? data_b : data_b_i;
+"
+- standard REGISTERED_IN procedure
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Stage 1
+    logic [PADDED_WIDTH - 1 : 0] data_a_g_padded;
+    logic [PADDED_WIDTH - 1 : 0] data_b_g_padded;
+    always_comb begin
+        data_a_g_padded = 0;
+        data_b_g_padded = 0;
+        data_a_g_padded[DATA_WIDTH - 1 : 0] = data_a_g;
+        data_b_g_padded[DATA_WIDTH - 1 : 0] = data_b_g;
+    end
+
+    logic [GROUPS - 1 : 0] compared;
+    always_comb begin
+        for(int g = 0; g < GROUPS; g++) begin
+            compared[g] = data_a_g_padded[(g * LUTX_HALF_GRADED) +: LUTX_HALF_GRADED] ==
+                          data_b_g_padded[(g * LUTX_HALF_GRADED) +: LUTX_HALF_GRADED] ? 1 : 0;
+        end
+    end
+"
+- declare data_*_g_padded using PADDED_WIDTH 
+    - default value is fist set to 0, this fills in partial groups with the same values, ensuring
+      compared bits of the filled values will always return true for equals
+    - then we set the actually existing bits using [DATA_WIDTH - 1 : 0] range.
+- declare compared using GROUPS, as that is how many compare groups we will end up with
+- from previous steps, we know each group is LUTX_HALF_GRADED bits wide
+    - since g is a procedural loop variable, an indexed part-select is required
+    - the start index is '(g * LUTX_HALF_GRADED)'
+    - '+: LUTX_HALF_GRADED' selects LUTX_HALF_GRADED bits upward from that start index
+    - where g goes from 0 -> GROUPS (exclusive)
+    - compared[g] to the result of the equal
+[Marc103 + Codex 5.6 - 09/15/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Stage 2+
+    logic eq;
+    generate
+        if(GROUPS > 1) begin
+            reduction_tree #(
+                .DATA_WIDTH(GROUPS),
+                .GATE(0),
+                .REGISTERED_IN(1),
+                .LUTX(LUTX),
+                .GRADE(GRADE)
+            ) and_r_tree (
+                .clk_i(clk_i),
+                .data_i(compared),
+                .reduced_o(eq)
+            );
+        end
+    endgenerate
+
+    assign eq_o = GROUPS > 1 ? eq : compared[0];
+"
+- same as before, if GROUPS > 1 is when we need a reduction tree, where we do AND reduction of
+ 'compared'
+- check io, parameterization
+- final assign uses reduction tree output only if GROUPS > 1, otherwise it uses compared[0] directly.
+[Marc103 + Codex 5.6 - 09/15/26]
+
+
+

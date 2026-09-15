@@ -15,4 +15,5 @@ package generators_pkg;
     `include "QueueCarriageGenerator.sv"
     `include "QueueTrainGenerator.sv"
     `include "ReservoirNoBackpressureGenerator.sv"
+    `include "EqualTreeGenerator.sv"
 endpackage

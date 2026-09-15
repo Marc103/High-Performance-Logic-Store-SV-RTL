@@ -15,4 +15,5 @@ package monitors_pkg;
     `include "QueueCarriageMonitor.sv"
     `include "QueueTrainMonitor.sv"
     `include "ReservoirNoBackpressureMonitor.sv"
+    `include "EqualTreeMonitor.sv"
 endpackage
