@@ -128,7 +128,7 @@ return latency;
 [Marc103 - 05/10/26][Marc103 - 05/15/26]
 
 "
-    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH];
+    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH-1:0];
 "
 - type logic is correct
 - packed bit width correct

@@ -45,7 +45,7 @@ module bram_dual_port_simple #(
 
     output [DATA_WIDTH - 1 : 0] rd_data_o
 );
-    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH];
+    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH-1:0];
 
     // write port
     logic                      en_0;

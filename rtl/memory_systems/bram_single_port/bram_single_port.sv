@@ -38,7 +38,7 @@ module bram_single_port #(
 
     output [DATA_WIDTH - 1 : 0] rd_data_o
 );
-    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH];
+    logic [DATA_WIDTH - 1 : 0] bram [DATA_DEPTH-1:0];
 
     logic                      en;
     logic                      wr_en;
