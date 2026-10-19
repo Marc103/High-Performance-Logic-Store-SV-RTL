@@ -124,6 +124,10 @@ package constant_functions_pkg;
     function automatic int max(int a, int b);
         return (a > b) ? a : b;
     endfunction
+
+    function automatic int min(int a, int b);
+        return (a < b) ? a : b;
+    endfunction
     ////////////////////////////////////////////////////////////////
     //            Module specific oversized structs               //
     //////////////////////////////////////////////////////////////// 
@@ -686,37 +690,87 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // alternate_base_fp_adder
-    function automatic int alternate_base_fp_adder_(int EXP_WIDTH, int MANT_WIDTH);
-        return (1 + EXP_WIDTH + MANT_WIDTH);
+    function automatic int alternate_base_fp_adder_BASE_WIDTH(int BASE);
+        return $clog2(BASE);
     endfunction
 
-    function automatic int alternate_base_fp_adder_LATENCY(int PIPE_REG_0, int PIPE_REG_1, int PIPE_REG_2, int PIPE_REG_3);
-        int a = 0;
-        if(PIPE_REG_0 == 1) a += 1;
-        if(PIPE_REG_1 == 1) a += 1;
-        if(PIPE_REG_2 == 1) a += 1;
-        if(PIPE_REG_3 == 1) a += 1;
-        return a;
+    function automatic int alternate_base_fp_adder_ALIGN_CHOICES(int BASE_WIDTH, int MANTISSA_WIDTH);
+        int total_width, choices, pointer;
+        // mantissa, guard bits (is base_width), round bit.
+        total_width = MANTISSA_WIDTH + BASE_WIDTH + 1;
+
+        choices = 0;
+        pointer = total_width - 1;
+        while(pointer >= 0) begin
+            choices++;
+            pointer = pointer - BASE_WIDTH;
+        end
+        choices++; // completely out of bounds is a choice.
+
+        return choices;
+  
     endfunction
 
-    function automatic int alternate_base_fp_DATA_WIDTH(int EXP_WIDTH, int MANT_WIDTH);
-        return (1 + EXP_WIDTH + MANT_WIDTH);
+    function automatic int alternate_base_fp_adder_EXPONENT_SELECTOR_WIDTH(int ALIGN_CHOICES);
+        return $clog2(ALIGN_CHOICES);
     endfunction
 
-    function automatic int alternate_base_fp_BASE_WIDTH(int BASE);
-        return clog_base(2, BASE);
+    function automatic int [PLANETARY - 1 : 0][1:0] alternate_base_fp_adder_STICKY_OR_INDICES(
+        int BASE_WIDTH, 
+        int MANTISSA_WIDTH, 
+        int ALIGN_CHOICES, 
+        int LUTX, 
+        int GRADE);
+
+        int total_width, index, mantissa_lsb_index, latency, group_size, stages;
+
+        // [index, latency]
+        int [PLANETARY - 1 : 0][1:0] sticky_or_indices;
+        
+        for(int i = 0; i < PLANETARY; i++) begin
+            for(int k = 0; i < 2; k++) begin
+                sticky_or_indices[i][k] = 0;
+            end
+        end
+
+        // mantissa, guard bits (is base_width), round bit.
+        total_width = MANTISSA_WIDTH + BASE_WIDTH + 1;
+
+        // the guard bits and round bit consume what otherwise would have been sticky
+        mantissa_lsb_index = BASE_WIDTH + 1;
+        index = 0;
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+
+        for(int c = 0; c < ALIGN_CHOICES; c++) begin
+            if(index < mantissa_lsb_index) begin
+                sticky_or_indices[c][0] = -1;
+                sticky_or_indices[c][1] = 0;
+            end else begin
+                stages  = reduction_tree_STAGES(group_size, index - mantissa_lsb_index + 1);
+                latency = reduction_tree_LATENCY(0, stages);
+                sticky_or_indices[c][0] = min(index, total_width - 1);
+                sticky_or_indices[c][1] = latency;
+            end
+        end
+
+        return sticky_or_indices;
     endfunction
 
-    function automatic int alternate_base_fp_STICKY_WIDTH(int MANT_WIDTH, int BASE_WIDTH);
-        return (MANT_WIDTH - BASE_WIDTH - 1);
+    function automatic int alternate_base_fp_adder_STICKY_MAX_LATENCY(
+        int ALIGN_CHOICES,
+        int [PLANETARY - 1 : 0][1:0] STICKY_OR_INDICES
+    );
+        int max_latency = 0;
+        for(int c = 0; c < ALIGN_CHOICES; c++) begin
+            max_latency = max(max_latency, STICKY_OR_INDICES[c][1]);
+        end
+
+        return max_latency;
     endfunction
 
-    function automatic int alternate_base_fp_DATA_WIDTH_EXT_0(int EXP_WIDTH, int MANT_WIDTH, int BASE_WIDTH, int STICKY_WIDTH);
-        return (1 + EXP_WIDTH + MANT_WIDTH + BASE_WIDTH + 1 + STICKY_WIDTH);
-    endfunction
-
-    function automatic int alternate_base_fp_DATA_WIDTH_EXT_1(int EXP_WIDTH, int MANT_WIDTH, int BASE_WIDTH);
-        return (1 + EXP_WIDTH + MANT_WIDTH + BASE_WIDTH + 1 + 1);
+    function automatic int alternate_base_fp_adder_EXPONENT_LATENCY(REGISTERED_EXPONENT_MUX);
+        if(REGISTERED_EXPONENT_MUX == 1) return 1;
+        return 0;
     endfunction
 
     ////////////////////////////////////////////////////////////////
