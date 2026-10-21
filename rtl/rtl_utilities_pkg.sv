@@ -773,6 +773,14 @@ package constant_functions_pkg;
         return 0;
     endfunction
 
+    function automatic int alternate_base_fp_adder_BALANCED_MAX_LATENCY(int STICKY_MAX_LATENCY, int EXPONENT_LATENCY);
+        return max(EXPONENT_LATENCY, STICKY_MAX_LATENCY);
+    endfunction
+
+    function automatic int alternate_base_fp_adder_NORMALIZE_CHOICES(int ???);
+
+    endfunction
+
     ////////////////////////////////////////////////////////////////
     // max
     function automatic int max_LATENCY(int REGISTERED_IN, int GRADE);

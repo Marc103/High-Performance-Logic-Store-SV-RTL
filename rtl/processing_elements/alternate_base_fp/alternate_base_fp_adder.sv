@@ -36,7 +36,7 @@ EXPONENT_WIDTH:
 MANTISSA_WIDTH:
 - Number of bits in the mantissa.
 
-REGISTERED_IN_* [0, 1]:
+REGISTERED_* [0, 1]:
 - Pipeline registers can be turned on/off with parameters REGISTERED_IN_*, corresponding to the 4 stages of the pipeline.
   The pipeline registers are at the start of each stage.
 
@@ -105,11 +105,11 @@ module alternate_base_fp_adder #(
 
 endmodule
 
-// Swapper
+// Swap
 /*
 Swap 'a' with 'b' if 'b' has a higher exponent.
 */
-module abfp_swapper #(
+module abfp_swap #(
     parameter BASE,
     parameter EXPONENT_WIDTH,
     parameter MANTISSA_WIDTH,
@@ -218,6 +218,7 @@ module abfp_align_sticky#(
     parameter MANTISSA_WIDTH,
     parameter REGISTERED_IN,
     parameter REGISTERED_EXPONENT_MUX,
+    parameter REGISTERED_ALIGN_MUX,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
@@ -236,8 +237,13 @@ module abfp_align_sticky#(
 
     localparam STICKY_MAX_LATENCY  = alternate_base_fp_STICKY_MAX_LATENCY (ALIGN_CHOICES, STICKY_OR_INDICES),
     localparam EXPONENT_LATENCY    = alternate_base_fp_EXPONENT_LATENCY   (REGISTERED_EXPONENT_MUX),
-    localparam BALANCE_MAX_LATENCY = alternate_base_fp_BALANCE_MAX_LATENCY(STICKY_MAX_LATENCY, EXPONENT_LATENCY)
+    localparam BALANCE_MAX_LATENCY = alternate_base_fp_BALANCE_MAX_LATENCY(STICKY_MAX_LATENCY, EXPONENT_LATENCY),
 
+    // align mux related
+    localparam ALIGN_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE),
+    localparam ALIGN_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(ALIGN_MUX_GROUP_SELECTOR_WIDTH),
+    localparam ALIGN_MUX_STAGES               = multistage_mux_STAGES(ALIGN_MUX_GROUP_SIZE, ALIGN_CHOICES),
+    localparam ALIGN_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, ALIGN_MUX_STAGES)
 
 ) (
     input clk_i,
@@ -313,6 +319,9 @@ module abfp_align_sticky#(
     logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector;
     assign exponent_selector = exponent_compare_p ? exponent_difference_p[SELECTOR_WIDTH - 1 : 0] : (ALIGN_CHOICES - 1);
 
+    logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector_p;
+    pipe #(.DATA_WIDTH(EXPONENT_SELECTOR_WIDTH), .LATENCY(BALANCED_MAX_LATENCY - EXPONENT_LATENCY)) a_exp_sel_pipe (.clk_i(clk_i), .data_i(exponent_selector_g), .data_o(exponent_selector_p));
+
       
     ////////////////////////////////////////////////////////////////
     // Sticky Or Tree
@@ -335,71 +344,264 @@ module abfp_align_sticky#(
                 ) sticky_or_tree_inst (
                     .clk_i(clk_i),
                     .data_i   (sticky_b_mantissa_gr[STICKY_OR_INDICES[c][0] : (BASE_WIDTH + 1)]),
-                    .reduced_o(sticky_choices_p[c])
+                    .reduced_o(sticky_choices[c])
                 );
 
-                pipe #(.DATA_WIDTH(1), .LATENCY(STICKY_MAX_LATENCY - STICKY_OR_INDICES[c][1])
+                pipe #(.DATA_WIDTH(1), .LATENCY(BALANCE_MAX_LATENCY - STICKY_OR_INDICES[c][1])
                 ) sticky_or_pipe_inst (
                     .clk_i(clk_i),
-                    .data_i(sticky_choices_p[c]),
-                    .data_o(sticky_choices[c])
+                    .data_i(sticky_choices[c]),
+                    .data_o(sticky_choices_p[c])
                 );
-
             end
         end
     endgenerate
 
 
     ////////////////////////////////////////////////////////////////
+    // A, B Pipelines 
+    logic                           a_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa_p;
+
+    logic                           b_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa_p;
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_sign_pipe     (.clk_i(clk_i), .data_i(a_sign_g)    , .data_o(a_sign_p));
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_exponent_pipe (.clk_i(clk_i), .data_i(a_exponent_g), .data_o(a_exponent_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_mantissa_pipe (.clk_i(clk_i), .data_i(a_mantissa_g), .data_o(a_mantissa_p));
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY)) b_sign_pipe     (.clk_i(clk_i), .data_i(b_sign_g)    ,.data_o(b_sign_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY)) b_mantissa_pipe (.clk_i(clk_i), .data_i(b_mantissa_g),.data_o(b_mantissa_p));
+
+    ////////////////////////////////////////////////////////////////
     // Mantissa Align Mux
-    logic [ALIGN_CHOICES - 1 : 0][MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] align_mantissa_gr;
+    logic [ALIGN_CHOICES - 1 : 0][MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] align_mantissa_gr_choices;
     always_comb begin
         for(int c = ALIGN_CHOICES; c < ALIGN_CHOICES; c++) begin
-            
+            align_mantissa_gr_choices[c] = {b_mantissa_p, {BASE_WIDTH{1'b0}}, 1'b0};
+            align_mantissa_gr_choices[c] = align_mantissa_gr_choices[c] >> (c * BASE_WIDTH);
         end
     end
+
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] aligned_mantissa_gr;
+    multistage_mux #(
+        .DATA_WIDTH(MANTISSA_WIDTH + BASE_WIDTH + 1),
+        .SIZE(ALIGN_CHOICES),
+        .REGISTERED_IN(REGISTERED_ALIGN_MUX),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) align_mantissa_mux (
+        .clk_i(clk_i),
+        .data_i(align_mantissa_gr_choices),
+        .sel_i (exponent_selector_p),
+        .data_o(aligned_mantissa_gr)
+    )
 
 
     ////////////////////////////////////////////////////////////////
     // Sticky Align Mux
+    aligned_sticky;
+    multistage_mux #(
+        .DATA_WIDTH(1),
+        .SIZE(ALIGN_CHOICES),
+        .REGISTERED_IN(REGISTERED_ALIGN_MUX),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) align_mantissa_mux (
+        .clk_i(clk_i),
+        .data_i(sticky_choices_p),
+        .sel_i (exponent_selector_p),
+        .data_o(aligned_sticky)
+    )
 
+    assign a_sign_o         = a_sign_p;
+    assign a_mantissa_grs_o = {a_mantissa_p,{BASE_WIDTH{1'b0}}, 1'b0};
 
+    assign b_sign_o         = b_sign_p;
+    assign b_mantissa_grs_o = {aligned_mantissa_gr, aligned_sticky};
 
-
-    /*
-    [xxxx][xxxx][xxxx][gggg][rs] - 0
-    [0000][xxxx][xxxx][gggg][rs] - 1
-    [0000][0000][xxxx][gggg][rs] - 2
-    [0000][0000][0000][gggg][rs] - 3
-    ----------------------------
-    [0000][0000][0000][0000][rs] - underflow
-
-
-    // out is when exponent < -1 (-2 and beyond), count
-    [xxxx][xxxx][xxxx][xxxg][grs]
-    [0000][0000][0000][0000]
-
-    complete groups tells us so
-
-
-    */
-
-
-
-
-    assign exponent_o = a_exponent_g;
-
-
-
+    assign exponent_o       = a_exponent_p;
 endmodule
 
-// Adder
+// Add & Convert
 /*
 Add according to signs. I think we can stick conversion back
 here.
 */
 
-module abfp_adder #(
+module abfp_add_convert #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter REGISTERED_IN,
+    parameter REGISTERED_CONVERT,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+
+) (
+    input clk_i,
+
+    input                                           a_sign_i,
+    input [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs_i,
+
+    input                                           b_sign_i,
+    input [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs_i,
+
+    input [EXPONENT_WIDTH - 1 : 0] exponent_i,
+
+    output                                       r_sign_o,
+    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]              r_exponent_o
+
+);
+    logic                                           a_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs;
+    logic                                           b_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0] exponent;
+
+    logic                                           a_sign_g;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs_g;
+    logic                                           b_sign_g;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs_g;
+
+    logic [EXPONENT_WIDTH - 1 : 0] exponent_g;
+
+    always@(posedge clk_i) begin
+        a_sign         <= a_sign_i;
+        a_mantissa_grs <= a_mantissa_grs_i;
+        b_sign         <= b_sign_i;
+        b_mantissa_grs <= b_mantissa_grs_i;
+        exponent       <= exponent_i;
+    end
+
+    assign a_sign_g         = (REGISTERED_IN == 1) ? a_sign         : a_sign_i;
+    assign a_mantissa_grs_g = (REGISTERED_IN == 1) ? a_mantissa_grs : a_mantissa_grs_i;
+    assign b_sign_g         = (REGISTERED_IN == 1) ? b_sign         : b_sign_i;
+    assign b_mantissa_grs_g = (REGISTERED_IN == 1) ? b_mantissa_grs : b_mantissa_grs_i;
+    assign exponent_g       = (REGISTERED_IN == 1) ? exponent       : exponent_i;
+
+    logic [EXPONENT_WIDTH - 1 : 0] r_exponent_p;
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(REGISTERED_CONVERT)) r_exponent_pipe (.clk_i(clk_i), .data_i(exponent_g), .data_o(r_exponent_p));
+
+    ////////////////////////////////////////////////////////////////
+    // Adder stage
+
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] a_mantissa_grs_g_pad;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] b_mantissa_grs_g_pad;
+
+    assign a_mantissa_grs_g_pad = {1'b0, a_mantissa_grs_g};
+    assign b_mantissa_grs_g_pad = {1'b0, b_mantissa_grs_g};
+
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_p; 
+
+    /* 
+    Used to determine how the MSB should be interpreted as sign or
+    overflow bit. If false, then as carry, if true, then as sign;
+    Then, if it is a sign and negative, it means we need to convert
+    back to unsigned in the next stage.
+    */
+    logic r_different_sign; 
+    logic r_different_sign_p;
+
+    logic r_sign;
+    logic r_sign_p;
+    
+    // note example bug if *_pad not used.
+    always_comb begin
+        if(a_sign_g == b_sign_g) begin
+            r_mantissa_grs = a_mantissa_grs_g_pad + b_mantissa_grs_g_pad;
+        end else if((!a_sign_g) & b_sign_g) begin
+            r_mantissa_grs = a_mantissa_grs_g_pad - b_mantissa_grs_g_pad;
+        end else begin
+            r_mantissa_grs = b_mantissa_grs_g_pad - a_mantissa_grs_g_pad;
+        end
+
+        r_different_sign = a_sign_g ^ b_sign_g;
+        r_sign           = r_different_sign ? r_mantissa_grs[MANTISSA_WIDTH + BASE_WIDTH + 2] : a_sign_g;
+    end
+
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH + BASE_WIDTH + 2 + 1), .LATENCY(REGISTERED_CONVERT)) r_mantissa_grs_pipe   (.clk_i(clk_i), .data_i(r_mantissa_grs)  ,.data_o(r_mantissa_grs_p));
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_CONVERT))                                   r_different_sign_pipe (.clk_i(clk_i), .data_i(r_different_sign),.data_o(r_different_sign_p));
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_CONVERT))                                   r_sign_pipe           (.clk_i(clk_i), .data_i(r_sign),         ,.data_o(r_sign_p));
+
+    ////////////////////////////////////////////////////////////////
+    // Convert stage
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_converted;
+    always_comb begin
+        if(r_different_sign_p) begin // interpret MSB as sign, convert if necessary
+            if(r_sign_p) begin 
+                r_mantissa_grs_converted = (~r_mantissa_grs_p) + 1;
+                /* Overflow is not an issue, as the bits are reinterpreted as unsigned.
+                I.e 4-bit signed, 1000 = -8, 1000 -> 0111 + 1 -> 1000 is 8, not -8
+                */
+            end else begin
+                r_mantissa_grs_converted = r_mantissa_grs_p;
+            end
+        end else begin               // interpret MSB as overflow, do nothing.
+            r_mantissa_grs_converted = r_mantissa_grs_p;
+        end
+    end
+
+    output                                       ,
+    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] ,
+    output [EXPONENT_WIDTH - 1 : 0]              
+
+    assign r_sign_o         = r_sign_p;
+    assign r_mantissa_grs_o = r_mantissa_grs_converted;
+    assign r_exponent_o     = r_exponent_p;
+
+
+
+endmodule
+
+// Priority Encode
+/*
+Leading one detection using the or reduced values. 
+*/
+
+module abfp_priority_encode #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter REGISTERED_IN,
+    parameter REGISTERED_CONVERT,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+
+) (
+    input clk_i,
+
+    input                                       r_sign_i,
+    input [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_i,
+    input [EXPONENT_WIDTH - 1 : 0]              r_exponent_i,
+
+    output                                       r_sign_o,
+    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]              r_exponent_o
+); 
+
+    ////////////////////////////////////////////////////////////////
+    // 
+
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+
+
+endmodule
+
+// Noramlize, Round, Post-Normalize
+/*
+
+*/
+
+module abfp_normalize_round_post_normalize #(
 
 ) (
 
@@ -407,18 +609,4 @@ module abfp_adder #(
 
 endmodule
 
-module abfp_normalizer #(
 
-) (
-
-);
-
-endmodule
-
-module abfp_rounder #(
-
-) (
-
-);
-
-endmodule
