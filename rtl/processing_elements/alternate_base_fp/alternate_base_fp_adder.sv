@@ -545,17 +545,11 @@ module abfp_add_convert #(
         end else begin               // interpret MSB as overflow, do nothing.
             r_mantissa_grs_converted = r_mantissa_grs_p;
         end
-    end
-
-    output                                       ,
-    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] ,
-    output [EXPONENT_WIDTH - 1 : 0]              
+    end  
 
     assign r_sign_o         = r_sign_p;
     assign r_mantissa_grs_o = r_mantissa_grs_converted;
     assign r_exponent_o     = r_exponent_p;
-
-
 
 endmodule
 
