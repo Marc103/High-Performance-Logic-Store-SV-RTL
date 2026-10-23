@@ -440,6 +440,7 @@ module abfp_add_convert #(
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
+    localparam BASE_WIDTH              = alternate_base_fp_BASE_WIDTH(BASE),
 
 ) (
     input clk_i,
@@ -452,9 +453,9 @@ module abfp_add_convert #(
 
     input [EXPONENT_WIDTH - 1 : 0] exponent_i,
 
-    output                                       r_sign_o,
-    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_o,
-    output [EXPONENT_WIDTH - 1 : 0]              r_exponent_o
+    output                                                 r_sign_o,
+    output [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]                        r_exponent_o
 
 );
     logic                                           a_sign;
@@ -490,14 +491,14 @@ module abfp_add_convert #(
     ////////////////////////////////////////////////////////////////
     // Adder stage
 
-    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] a_mantissa_grs_g_pad;
-    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] b_mantissa_grs_g_pad;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] a_mantissa_grs_g_pad;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] b_mantissa_grs_g_pad;
 
     assign a_mantissa_grs_g_pad = {1'b0, a_mantissa_grs_g};
     assign b_mantissa_grs_g_pad = {1'b0, b_mantissa_grs_g};
 
-    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs;
-    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_p; 
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_p; 
 
     /* 
     Used to determine how the MSB should be interpreted as sign or
@@ -531,7 +532,7 @@ module abfp_add_convert #(
 
     ////////////////////////////////////////////////////////////////
     // Convert stage
-    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_converted;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_converted;
     always_comb begin
         if(r_different_sign_p) begin // interpret MSB as sign, convert if necessary
             if(r_sign_p) begin 
@@ -555,7 +556,8 @@ endmodule
 
 // Priority Encode
 /*
-Leading one detection using the or reduced values. 
+Leading one detection using the or reduced values to get selector
+value for normalize stage and exponent inc/dec to be added.
 */
 
 module abfp_priority_encode #(
@@ -563,30 +565,147 @@ module abfp_priority_encode #(
     parameter EXPONENT_WIDTH,
     parameter MANTISSA_WIDTH,
     parameter REGISTERED_IN,
-    parameter REGISTERED_CONVERT,
+    parameter REGISTERED_PRIORITY_ENCODER,
+    parameter LUTX,
+    parameter GRADE,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
+    localparam BASE_WIDTH               = alternate_base_fp_BASE_WIDTH(BASE),
+    localparam NORMALIZE_CHOICES        = alternate_base_fp_adder_NORMALIZE_CHOICES(BASE_WIDTH, MANTISSA_WIDTH),
+    localparam NORMALIZE_OR_MAX_LATENCY = alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(LUTX, GRADE, MANTISSA_WIDTH, BASE_WIDTH, NORMALIZE_CHOICES),
+    localparam int_t [PLANETARY - 1 : 0][1 : 0] NORMALIZE_OR_INDICES = 
+        alternate_base_fp_NORMALIZE_OR_INDICES(
+            BASE_WIDTH, 
+            MANTISSA_WIDTH, 
+            NORMALIZE_CHOICES, 
+            LUTX, 
+            GRADE
+        ),
+    localparam PRIORITY_ENCODER_SELECTOR_WIDTH = priority_encoder_OUTPUT_DATA_WIDTH(NORMALIZE_CHOICES),
+
+    localparam PRIORITY_ENCODER_ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS(NORMALIZE_CHOICES, LUTX),
+    localparam PRIORITY_ENCODER_ENCODE_DEPTH               = priority_encoder_ENCODE_DEPTH(PRIORITY_ENCODER_ENCODE_GROUPS),
+    localparam PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY = max_LATENCY(1, GRADE),
+    localparam PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY = max_LATENCY(0, GRADE),
+    localparam PRIORITY_ENCODER_LATENCY = priority_encoder_LATENCY(
+        REGISTERED_PRIORITY_ENCODER, 
+        PRIORITY_ENCODER_ENCODE_DEPTH, 
+        PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, 
+        PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
 
 ) (
     input clk_i,
 
-    input                                       r_sign_i,
-    input [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_i,
-    input [EXPONENT_WIDTH - 1 : 0]              r_exponent_i,
+    input                                                 r_sign_i,
+    input [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_i,
+    input [EXPONENT_WIDTH - 1 : 0]                        r_exponent_i,
 
-    output                                       r_sign_o,
-    output [MANTISSA_WIDTH + BASE_WIDTH + 2 : 0] r_mantissa_grs_o,
-    output [EXPONENT_WIDTH - 1 : 0]              r_exponent_o
+    output                                                 r_sign_o,
+    output [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]                        r_exponent_o,
+    output [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0]       priority_encoded_o
 ); 
 
+    logic                                                 r_sign;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent;
+
+    logic                                                 r_sign_g;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_g;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent_g;
+
+    always@(posedge clk_i) begin
+        r_sign         <= r_sign_i;
+        r_mantissa_grs <= r_mantissa_grs_i;
+        r_exponent     <= r_exponent_i;
+    end
+
+    assign r_sign_g         = (REGISTERED_IN == 1) ? r_sign         : r_sign_i;
+    assign r_mantissa_grs_g = (REGISTERED_IN == 1) ? r_mantissa_grs : r_mantissa_grs_i;
+    assign r_exponent_g     = (REGISTERED_IN == 1) ? r_exponent     : r_exponent_i;
+
     ////////////////////////////////////////////////////////////////
-    // 
+    // Or Reductions
+    logic [NORMALIZE_CHOICES - 1 : 0] normalize_or_reductions;
+    logic [NORMALIZE_CHOICES - 1 : 0] normalize_or_reductions_p;
 
+    generate
+        for(genvar c = 0; c < NORMALIZE_CHOICES; c++) begin
+            reduction_tree #(
+                .DATA_WIDTH(NORMALIZE_OR_INDICES[c][0] - NORMALIZE_OR_INDICES[c][1] + 1),
+                .GATE(1),
+                .REGISTERED_IN(0),
+                .LUTX(LUTX),
+                .GRADE(GRADE)
+            ) norm_or_reduce_inst (
+                .clk_i(clk_i),
+                .data_i   (r_mantissa_grs_g[NORMALIZE_OR_INDICES[0][0] : NORMALIZE_OR_INDICES[0][1]]),
+                .reduced_o(normalize_or_reductions[c])
+            );
+
+            pipe #(
+                .DATA_WIDTH(1),
+                .LATENCY(NORMALIZE_OR_MAX_LATENCY - NORMALIZE_OR_INDICES[2])
+            ) norm_or_reduce_pipe (
+                .clk_i(clk_i),
+                .data_i(normalize_or_reductions[c]),
+                .data_o(normalize_or_reductions_p[c])
+            );
+        end
+    endgenerate
 
     ////////////////////////////////////////////////////////////////
-    // Globally Defined Locally Set Parameters
+    // Priority Encoder
+    logic [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0] selector;
+    priority_encoder #(
+        .INPUT_DATA_WIDTH(NORMALIZE_CHOICES),
+        .REGISTERED_IN(REGISTERED_PRIORITY_ENCODER),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) lead_one_priority_encoder (
+        .clk_i(clk_i),
+        .priority_i(normalize_or_reductions_p),
+        .priority_encoded_o(selector)
+    );
 
+    ////////////////////////////////////////////////////////////////
+    // Pipes
+    logic                                                 r_sign_p;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_p;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent_p;
+
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_sign_pipe (
+        .clk_i(clk_i),
+        .data_i(r_sign_g),
+        .data_o(r_sign_p)
+    );
+
+    pipe #(
+        .DATA_WIDTH(1 + MANTISSA_WIDTH + BASE_WIDTH + 2),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_mantissa_grs_pipe (
+        .clk_i(clk_i),
+        .data_i(r_mantissa_grs_g),
+        .data_o(r_mantissa_grs_p)
+    );
+
+    pipe #(
+        .DATA_WIDTH(EXPONENT_WIDTH),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_exponent_pipe (
+        .clk_i(clk_i),
+        .data_i(r_exponent_g),
+        .data_o(r_exponent_p)
+    );
+
+    assign r_sign_o           = r_sign_p;
+    assign r_mantissa_grs_o   = r_mantissa_grs_p;
+    assign r_exponent_o       = r_exponent_p;
+    assign priority_encoded_o = selector;
 
 endmodule
 

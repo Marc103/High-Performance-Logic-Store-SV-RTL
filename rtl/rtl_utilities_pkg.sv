@@ -728,7 +728,7 @@ package constant_functions_pkg;
         int [PLANETARY - 1 : 0][1:0] sticky_or_indices;
         
         for(int i = 0; i < PLANETARY; i++) begin
-            for(int k = 0; i < 2; k++) begin
+            for(int k = 0; k < 2; k++) begin
                 sticky_or_indices[i][k] = 0;
             end
         end
@@ -768,7 +768,7 @@ package constant_functions_pkg;
         return max_latency;
     endfunction
 
-    function automatic int alternate_base_fp_adder_EXPONENT_LATENCY(REGISTERED_EXPONENT_MUX);
+    function automatic int alternate_base_fp_adder_EXPONENT_LATENCY(int REGISTERED_EXPONENT_MUX);
         if(REGISTERED_EXPONENT_MUX == 1) return 1;
         return 0;
     endfunction
@@ -777,8 +777,90 @@ package constant_functions_pkg;
         return max(EXPONENT_LATENCY, STICKY_MAX_LATENCY);
     endfunction
 
-    function automatic int alternate_base_fp_adder_NORMALIZE_CHOICES(int ???);
+    function automatic int alternate_base_fp_adder_NORMALIZE_CHOICES(int BASE_WIDTH, int MANTISSA_WIDTH);
+        int total_width, choices, pointer;
+        // carry bit, mantissa, guard bits (is base_width)
+        total_width = 1 + MANTISSA_WIDTH + BASE_WIDTH;
 
+        choices = 0;
+        pointer = total_width - 1;
+
+        // carry bit
+        choices++; // start with carry choice
+        point--;
+
+        while(pointer >= 0) begin
+            choices++;
+            pointer = pointer - BASE_WIDTH;
+        end
+        //c[x x][x x x x][x x x x][x x x x][g g g g]
+        //. .        .        .        .        .
+        //1 2        3        4        5        6
+        //  0        1        2        3        4
+        return choices;
+    endfunction
+
+    function automatic int alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(
+        int LUTX, 
+        int GRADE, 
+        int MANTISSA_WIDTH,
+        int BASE_WIDTH, 
+        int NORMALIZE_CHOICES
+    );
+        int group_size, stages, data_width, latency;
+        data_width = min(MANTISSSA_WIDTH, BASE_WIDTH);
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+        stages     = reduction_tree_STAGES(group_size, data_width);
+        latency    = reduction_tree_LATENCY(0, stages);
+
+        return latency;
+    endfunction
+
+    function automatic int_t [PLANETARY - 1 : 0][1 : 0] alternate_base_fp_adder_NORMALIZE_OR_INDICES(
+        int BASE_WIDTH, 
+        int MANTISSA_WIDTH, 
+        int NORMALIZE_CHOICES, 
+        int LUTX, 
+        int GRADE
+    );
+        int total_width, left_index, right_index, latency, group_size, stages;
+
+        // [left_idx, right_idx, latency]
+        int [PLANETARY - 1 : 0][2:0] normalize_or_indices;
+        
+        for(int i = 0; i < PLANETARY; i++) begin
+            for(int k = 0; k < 3; k++) begin
+                normalize_or_indices[i][k] = 0;
+            end
+        end
+
+        // carry bit, mantissa, guard bits (is base_width), round bit, sticky bit
+        total_width = 1 + MANTISSA_WIDTH + BASE_WIDTH + 1 + 1;
+        guard_lsb_index = 2;
+        
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+
+        // carry bit first
+        left_index = total_width - 1;
+        right_index = left_index - 1;
+        normalize_or_indices[0] = left_index;
+        normalize_or_indices[1] = right_index;
+        stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
+        latency = reduction_tree_LATENCY(0, stages);
+        normalize_or_indices[2] = latency;
+
+
+        for(int c = 1; c < NORMALIZE_CHOICES; c++) begin
+            left_index = total_width - 1;
+            right_index = max((left_index - 1), guard_lsb_index);
+            normalize_or_indices[0] = left_index;
+            normalize_or_indices[1] = right_index;
+            stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
+            latency = reduction_tree_LATENCY(0, stages);
+            normalize_or_indices[2] = latency;
+        end
+
+        return normalize_or_indices;
     endfunction
 
     ////////////////////////////////////////////////////////////////
