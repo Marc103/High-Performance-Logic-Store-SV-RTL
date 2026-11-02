@@ -690,6 +690,10 @@ package constant_functions_pkg;
 
     ////////////////////////////////////////////////////////////////
     // alternate_base_fp_adder
+    function automatic int alternate_base_fp_adder_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return 1 + EXPONENT_WIDTH + MANTISSA_WIDTH;
+    endfunction
+
     function automatic int alternate_base_fp_adder_BASE_WIDTH(int BASE);
         return $clog2(BASE);
     endfunction
@@ -715,7 +719,7 @@ package constant_functions_pkg;
         return $clog2(ALIGN_CHOICES);
     endfunction
 
-    function automatic int [PLANETARY - 1 : 0][1:0] alternate_base_fp_adder_STICKY_OR_INDICES(
+    function automatic int_t [PLANETARY - 1 : 0][1:0] alternate_base_fp_adder_STICKY_OR_INDICES(
         int BASE_WIDTH, 
         int MANTISSA_WIDTH, 
         int ALIGN_CHOICES, 
@@ -725,7 +729,7 @@ package constant_functions_pkg;
         int total_width, index, mantissa_lsb_index, latency, group_size, stages;
 
         // [index, latency]
-        int [PLANETARY - 1 : 0][1:0] sticky_or_indices;
+        int_t [PLANETARY - 1 : 0][1:0] sticky_or_indices;
         
         for(int i = 0; i < PLANETARY; i++) begin
             for(int k = 0; k < 2; k++) begin
@@ -751,6 +755,7 @@ package constant_functions_pkg;
                 sticky_or_indices[c][0] = min(index, total_width - 1);
                 sticky_or_indices[c][1] = latency;
             end
+            index = index + BASE_WIDTH;
         end
 
         return sticky_or_indices;
@@ -758,7 +763,7 @@ package constant_functions_pkg;
 
     function automatic int alternate_base_fp_adder_STICKY_MAX_LATENCY(
         int ALIGN_CHOICES,
-        int [PLANETARY - 1 : 0][1:0] STICKY_OR_INDICES
+        int_t [PLANETARY - 1 : 0][1:0] STICKY_OR_INDICES
     );
         int max_latency = 0;
         for(int c = 0; c < ALIGN_CHOICES; c++) begin
@@ -787,7 +792,7 @@ package constant_functions_pkg;
 
         // carry bit
         choices++; // start with carry choice
-        point--;
+        pointer--;
 
         while(pointer >= 0) begin
             choices++;
@@ -808,7 +813,7 @@ package constant_functions_pkg;
         int NORMALIZE_CHOICES
     );
         int group_size, stages, data_width, latency;
-        data_width = min(MANTISSSA_WIDTH, BASE_WIDTH);
+        data_width = min(MANTISSA_WIDTH, BASE_WIDTH);
         group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
         stages     = reduction_tree_STAGES(group_size, data_width);
         latency    = reduction_tree_LATENCY(0, stages);
@@ -816,17 +821,17 @@ package constant_functions_pkg;
         return latency;
     endfunction
 
-    function automatic int_t [PLANETARY - 1 : 0][1 : 0] alternate_base_fp_adder_NORMALIZE_OR_INDICES(
+    function automatic int_t [PLANETARY - 1 : 0][2 : 0] alternate_base_fp_adder_NORMALIZE_OR_INDICES(
         int BASE_WIDTH, 
         int MANTISSA_WIDTH, 
         int NORMALIZE_CHOICES, 
         int LUTX, 
         int GRADE
     );
-        int total_width, left_index, right_index, latency, group_size, stages;
+        int total_width, left_index, right_index, latency, group_size, stages, guard_lsb_index;
 
         // [left_idx, right_idx, latency]
-        int [PLANETARY - 1 : 0][2:0] normalize_or_indices;
+        int_t [PLANETARY - 1 : 0][2:0] normalize_or_indices;
         
         for(int i = 0; i < PLANETARY; i++) begin
             for(int k = 0; k < 3; k++) begin
@@ -843,24 +848,31 @@ package constant_functions_pkg;
         // carry bit first
         left_index = total_width - 1;
         right_index = left_index - 1;
-        normalize_or_indices[0] = left_index;
-        normalize_or_indices[1] = right_index;
+        normalize_or_indices[0][0] = left_index;
+        normalize_or_indices[0][1] = right_index;
         stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
         latency = reduction_tree_LATENCY(0, stages);
-        normalize_or_indices[2] = latency;
+        normalize_or_indices[0][2] = latency;
 
 
         for(int c = 1; c < NORMALIZE_CHOICES; c++) begin
             left_index = total_width - 1;
             right_index = max((left_index - 1), guard_lsb_index);
-            normalize_or_indices[0] = left_index;
-            normalize_or_indices[1] = right_index;
+            normalize_or_indices[c][0] = left_index;
+            normalize_or_indices[c][1] = right_index;
             stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
             latency = reduction_tree_LATENCY(0, stages);
-            normalize_or_indices[2] = latency;
+            normalize_or_indices[c][2] = latency;
         end
 
         return normalize_or_indices;
+    endfunction
+
+    function automatic int alternate_base_fp_adder_EXPONENT_MAX_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        int exp_width, mantissa_width;
+        exp_width = EXPONENT_WIDTH + 1 + 1; // pad plus potential + 1
+        mantissa_width = $clog2(MANTISSA_WIDTH) + 1; // just pad, K is positive.
+        return max(exp_width, mantissa_width);
     endfunction
 
     ////////////////////////////////////////////////////////////////
