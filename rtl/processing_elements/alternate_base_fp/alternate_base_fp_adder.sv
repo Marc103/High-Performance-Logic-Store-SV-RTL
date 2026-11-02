@@ -35,6 +35,7 @@ EXPONENT_WIDTH:
 
 MANTISSA_WIDTH:
 - Number of bits in the mantissa.
+- Must be at least log2(BASE), so one radix digit fits in the mantissa.
 
 REGISTERED_* [0, 1]:
 - Pipeline registers can be turned on/off with parameters REGISTERED_IN_*, corresponding to the 4 stages of the pipeline.
@@ -89,19 +90,183 @@ module alternate_base_fp_adder #(
     parameter LUTX,
     parameter GRADE,
 
+    parameter REGISTERED_SWAP_IN,
+    parameter REGISTERED_SWAP_MUX,
+
+    parameter REGISTERED_ALIGN_STICKY_IN,
+    parameter REGISTERED_ALIGN_EXPONENT_MUX,
+    parameter REGISTERED_ALIGN_MUX,
+
+    parameter REGISTERED_ADD_CONVERT,
+    parameter REGISTERED_ADD_CONVERT_CONVERT,
+
+    parameter REGISTERED_PRIORITY_ENCODE,
+    parameter REGISTERED_PRIORITY_ENCODE_ENCODER,
+
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
     localparam DATA_WIDTH = alternate_base_fp_adder_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
-    localparam LATENCY    = alternate_base_fp_LATENCY   (PIPE_REG_0, PIPE_REG_1, PIPE_REG_2, PIPE_REG_3)
+    localparam BASE_WIDTH = alternate_base_fp_adder_BASE_WIDTH(BASE),
+    localparam NORMALIZE_CHOICES = alternate_base_fp_adder_NORMALIZE_CHOICES(BASE_WIDTH, MANTISSA_WIDTH),
+    localparam PRIORITY_ENCODER_SELECTOR_WIDTH = priority_encoder_OUTPUT_DATA_WIDTH(NORMALIZE_CHOICES),
+    localparam LATENCY = alternate_base_fp_adder_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    )
 ) (
+    input clk_i,
     input  [DATA_WIDTH - 1 : 0] a_i,
     input  [DATA_WIDTH - 1 : 0] b_i,
     output [DATA_WIDTH - 1 : 0] sum_o
 );
-    // this is just a placeholder for now, will implement the actual adder later
-    //
-    assign sum_o = a_i + b_i;
+    ////////////////////////////////////////////////////////////////
+    // Swap
+    logic a_swap_sign;
+    logic [EXPONENT_WIDTH - 1 : 0] a_swap_exponent;
+    logic [MANTISSA_WIDTH - 1 : 0] a_swap_mantissa;
+    logic b_swap_sign;
+    logic [EXPONENT_WIDTH - 1 : 0] b_swap_exponent;
+    logic [MANTISSA_WIDTH - 1 : 0] b_swap_mantissa;
+
+    abfp_swap #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_SWAP_IN),
+        .REGISTERED_MUX(REGISTERED_SWAP_MUX)
+    ) swap_inst (
+        .clk_i(clk_i),
+        .a_sign_i(a_i[DATA_WIDTH - 1]),
+        .a_exponent_i(a_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]),
+        .a_mantissa_i(a_i[MANTISSA_WIDTH - 1 : 0]),
+        .b_sign_i(b_i[DATA_WIDTH - 1]),
+        .b_exponent_i(b_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]),
+        .b_mantissa_i(b_i[MANTISSA_WIDTH - 1 : 0]),
+        .a_swap_sign_o(a_swap_sign),
+        .a_swap_exponent_o(a_swap_exponent),
+        .a_swap_mantissa_o(a_swap_mantissa),
+        .b_swap_sign_o(b_swap_sign),
+        .b_swap_exponent_o(b_swap_exponent),
+        .b_swap_mantissa_o(b_swap_mantissa)
+    );
+
+    ////////////////////////////////////////////////////////////////
+    // Align & Sticky
+    logic a_align_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_align_mantissa_grs;
+    logic b_align_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_align_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0] align_exponent;
+
+    abfp_align_sticky #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_ALIGN_STICKY_IN),
+        .REGISTERED_EXPONENT_MUX(REGISTERED_ALIGN_EXPONENT_MUX),
+        .REGISTERED_ALIGN_MUX(REGISTERED_ALIGN_MUX),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) align_sticky_inst (
+        .clk_i(clk_i),
+        .a_sign_i(a_swap_sign),
+        .a_exponent_i(a_swap_exponent),
+        .a_mantissa_i(a_swap_mantissa),
+        .b_sign_i(b_swap_sign),
+        .b_exponent_i(b_swap_exponent),
+        .b_mantissa_i(b_swap_mantissa),
+        .a_sign_o(a_align_sign),
+        .a_mantissa_grs_o(a_align_mantissa_grs),
+        .b_sign_o(b_align_sign),
+        .b_mantissa_grs_o(b_align_mantissa_grs),
+        .exponent_o(align_exponent)
+    );
+
+    ////////////////////////////////////////////////////////////////
+    // Add & Convert
+    logic add_convert_sign;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] add_convert_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0] add_convert_exponent;
+
+    abfp_add_convert #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_ADD_CONVERT),
+        .REGISTERED_CONVERT(REGISTERED_ADD_CONVERT_CONVERT)
+    ) add_convert_inst (
+        .clk_i(clk_i),
+        .a_sign_i(a_align_sign),
+        .a_mantissa_grs_i(a_align_mantissa_grs),
+        .b_sign_i(b_align_sign),
+        .b_mantissa_grs_i(b_align_mantissa_grs),
+        .exponent_i(align_exponent),
+        .r_sign_o(add_convert_sign),
+        .r_mantissa_grs_o(add_convert_mantissa_grs),
+        .r_exponent_o(add_convert_exponent)
+    );
+
+    ////////////////////////////////////////////////////////////////
+    // Priority Encode
+    logic priority_encode_sign;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] priority_encode_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0] priority_encode_exponent;
+    logic [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0] priority_encoded;
+
+    abfp_priority_encode #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_PRIORITY_ENCODE),
+        .REGISTERED_PRIORITY_ENCODER(REGISTERED_PRIORITY_ENCODE_ENCODER),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) priority_encode_inst (
+        .clk_i(clk_i),
+        .r_sign_i(add_convert_sign),
+        .r_mantissa_grs_i(add_convert_mantissa_grs),
+        .r_exponent_i(add_convert_exponent),
+        .r_sign_o(priority_encode_sign),
+        .r_mantissa_grs_o(priority_encode_mantissa_grs),
+        .r_exponent_o(priority_encode_exponent),
+        .priority_encoded_o(priority_encoded)
+    );
+
+    ////////////////////////////////////////////////////////////////
+    // Normalize, Round & Post Normalize
+    abfp_normalize_round_post_normalize #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE),
+        .REGISTERED_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) normalize_round_post_normalize_inst (
+        .clk_i(clk_i),
+        .r_sign_i(priority_encode_sign),
+        .r_mantissa_grs_i(priority_encode_mantissa_grs),
+        .r_exponent_i(priority_encode_exponent),
+        .priority_encoded_i(priority_encoded),
+        .sum_o(sum_o)
+    );
 
 endmodule
 
@@ -114,10 +279,11 @@ module abfp_swap #(
     parameter EXPONENT_WIDTH,
     parameter MANTISSA_WIDTH,
     parameter REGISTERED_IN,
-    parameter REGISTERED_MUX
+    parameter REGISTERED_MUX,
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters 
+    localparam LATENCY = alternate_base_fp_adder_SWAP_LATENCY(REGISTERED_IN, REGISTERED_MUX)
 ) (
     input clk_i,
 
@@ -245,7 +411,11 @@ module abfp_align_sticky#(
     localparam ALIGN_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE),
     localparam ALIGN_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(ALIGN_MUX_GROUP_SELECTOR_WIDTH),
     localparam ALIGN_MUX_STAGES               = multistage_mux_STAGES(ALIGN_MUX_GROUP_SIZE, ALIGN_CHOICES),
-    localparam ALIGN_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, ALIGN_MUX_STAGES)
+    localparam ALIGN_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, ALIGN_MUX_STAGES),
+
+    localparam LATENCY = alternate_base_fp_adder_align_sticky_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_EXPONENT_MUX, REGISTERED_ALIGN_MUX, LUTX, GRADE
+    )
 
 ) (
     input clk_i,
@@ -319,7 +489,7 @@ module abfp_align_sticky#(
     ////////////////////////////////////////////////////////////////
     // Exponent Mux
     logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector;
-    assign exponent_selector = exponent_compare_p ? exponent_difference_p[EXPONENT_SELECTOR_WIDTH - 1 : 0] : (ALIGN_CHOICES - 1);
+    assign exponent_selector = exponent_compare_p ? EXPONENT_SELECTOR_WIDTH'(exponent_difference_p) : EXPONENT_SELECTOR_WIDTH'(ALIGN_CHOICES - 1);
 
     logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector_p;
     pipe #(.DATA_WIDTH(EXPONENT_SELECTOR_WIDTH), .LATENCY(BALANCE_MAX_LATENCY - EXPONENT_LATENCY)) a_exp_sel_pipe (.clk_i(clk_i), .data_i(exponent_selector), .data_o(exponent_selector_p));
@@ -336,6 +506,7 @@ module abfp_align_sticky#(
         for(genvar c = 0; c < ALIGN_CHOICES; c++) begin
             if(STICKY_OR_INDICES[c][0] == -1) begin
                 assign sticky_choices[c] = 0;
+                assign sticky_choices_p[c] = 0;
             end else begin
                 reduction_tree #(
                     .DATA_WIDTH(STICKY_OR_INDICES[c][0] - (BASE_WIDTH + 1) + 1),
@@ -374,7 +545,7 @@ module abfp_align_sticky#(
     pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_exponent_pipe (.clk_i(clk_i), .data_i(a_exponent_g), .data_o(a_exponent_p));
     pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_mantissa_pipe (.clk_i(clk_i), .data_i(a_mantissa_g), .data_o(a_mantissa_p));
 
-    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY)) b_sign_pipe     (.clk_i(clk_i), .data_i(b_sign_g)    ,.data_o(b_sign_p));
+    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) b_sign_pipe     (.clk_i(clk_i), .data_i(b_sign_g)    ,.data_o(b_sign_p));
     pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY)) b_mantissa_pipe (.clk_i(clk_i), .data_i(b_mantissa_g),.data_o(b_mantissa_p));
 
     ////////////////////////////////////////////////////////////////
@@ -419,7 +590,7 @@ module abfp_align_sticky#(
     );
 
     assign a_sign_o         = a_sign_p;
-    assign a_mantissa_grs_o = {a_mantissa_p,{BASE_WIDTH{1'b0}}, 1'b0};
+    assign a_mantissa_grs_o = {a_mantissa_p,{BASE_WIDTH{1'b0}}, 1'b0, 1'b0};
 
     assign b_sign_o         = b_sign_p;
     assign b_mantissa_grs_o = {aligned_mantissa_gr, aligned_sticky};
@@ -442,7 +613,8 @@ module abfp_add_convert #(
 
     ////////////////////////////////////////////////////////////////
     // Globally Defined Locally Set Parameters
-    localparam BASE_WIDTH              = alternate_base_fp_adder_BASE_WIDTH(BASE)
+    localparam BASE_WIDTH = alternate_base_fp_adder_BASE_WIDTH(BASE),
+    localparam LATENCY    = alternate_base_fp_adder_add_convert_LATENCY(REGISTERED_IN, REGISTERED_CONVERT)
 
 ) (
     input clk_i,
@@ -525,7 +697,7 @@ module abfp_add_convert #(
         end
 
         r_different_sign = a_sign_g ^ b_sign_g;
-        r_sign           = r_different_sign ? r_mantissa_grs[MANTISSA_WIDTH + BASE_WIDTH + 2] : a_sign_g;
+        r_sign           = r_different_sign ? r_mantissa_grs[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1] : a_sign_g;
     end
 
     pipe #(.DATA_WIDTH(MANTISSA_WIDTH + BASE_WIDTH + 2 + 1), .LATENCY(REGISTERED_CONVERT)) r_mantissa_grs_pipe   (.clk_i(clk_i), .data_i(r_mantissa_grs)  ,.data_o(r_mantissa_grs_p));
@@ -594,7 +766,11 @@ module abfp_priority_encode #(
         REGISTERED_PRIORITY_ENCODER, 
         PRIORITY_ENCODER_ENCODE_DEPTH, 
         PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, 
-        PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY)
+        PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
+
+    localparam LATENCY = alternate_base_fp_adder_priority_encoder_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_PRIORITY_ENCODER, LUTX, GRADE
+    )
 
 ) (
     input clk_i,
@@ -735,12 +911,18 @@ module abfp_normalize_round_post_normalize #(
     localparam BASE_WIDTH                      = alternate_base_fp_adder_BASE_WIDTH(BASE),
     localparam NORMALIZE_CHOICES               = alternate_base_fp_adder_NORMALIZE_CHOICES(BASE_WIDTH, MANTISSA_WIDTH),
     localparam PRIORITY_ENCODER_SELECTOR_WIDTH = priority_encoder_OUTPUT_DATA_WIDTH(NORMALIZE_CHOICES),
-    localparam EXPONENT_MAX_WIDTH              = alternate_base_fp_adder_EXPONENT_MAX_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
+    localparam EXPONENT_MAX_WIDTH              = alternate_base_fp_adder_EXPONENT_MAX_WIDTH(EXPONENT_WIDTH, NORMALIZE_CHOICES),
+    localparam logic [EXPONENT_MAX_WIDTH - 1 : 0] EXPONENT_MAX_VALUE = EXPONENT_MAX_WIDTH'({EXPONENT_WIDTH{1'b1}}),
+    localparam POST_NORMALIZE_CARRY_INDEX = max(0, MANTISSA_WIDTH - BASE_WIDTH),
 
     localparam MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE),
     localparam MULTISTAGE_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(MULTISTAGE_MUX_GROUP_SELECTOR_WIDTH),
     localparam MULTISTAGE_MUX_STAGES               = multistage_mux_STAGES(MULTISTAGE_MUX_GROUP_SIZE, NORMALIZE_CHOICES),
-    localparam MULTISTAGE_MUX_LATENCY              = multistage_mux_LATENCY(0, MULTISTAGE_MUX_STAGES)
+    localparam MULTISTAGE_MUX_LATENCY              = multistage_mux_LATENCY(0, MULTISTAGE_MUX_STAGES),
+
+    localparam LATENCY = alternate_base_fp_adder_normalize_round_post_normalize_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_ROUND, LUTX, GRADE
+    )
 ) (
     input clk_i,
 
@@ -750,8 +932,6 @@ module abfp_normalize_round_post_normalize #(
     input [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0]       priority_encoded_i,
 
     output [DATA_WIDTH - 1 : 0] sum_o
-
-
 );
 
     logic                                                 r_sign;
@@ -779,9 +959,19 @@ module abfp_normalize_round_post_normalize #(
     ////////////////////////////////////////////////////////////////
     // Normalize choices
     logic [NORMALIZE_CHOICES - 1 : 0][1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalize_choices;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalize_carry_choice;
+    initial begin
+        if(MANTISSA_WIDTH < BASE_WIDTH)
+            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
+    end
+
+    assign normalize_carry_choice = r_mantissa_grs_g >> BASE_WIDTH;
     generate
-        // carry choice
-        assign normalize_choices[NORMALIZE_CHOICES - 1] = r_mantissa_grs_g >> BASE_WIDTH;
+        // Carry choice: preserve all shifted-out information in sticky.
+        assign normalize_choices[NORMALIZE_CHOICES - 1] = {
+            normalize_carry_choice[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 1],
+            normalize_carry_choice[0] | (|r_mantissa_grs_g[BASE_WIDTH - 1 : 0])
+        };
         // rest of choices
         for(genvar i = 1; i < NORMALIZE_CHOICES; i++) begin
             assign normalize_choices[NORMALIZE_CHOICES - 1 - i] = r_mantissa_grs_g << ((i - 1) * BASE_WIDTH);
@@ -810,7 +1000,7 @@ module abfp_normalize_round_post_normalize #(
     -((-p + K) | C*)
     where
     p  is the priority encoded value
-    K  is the constant MANTISSA_WIDTH
+    K  is the constant (NORMALIZE_CHOICES - 2)
     C* is the carry bit replicated to the exponent width (for OR mask).
     Overall take care to make sure bit widths are large enough for signed
     calculations.
@@ -825,10 +1015,13 @@ module abfp_normalize_round_post_normalize #(
         r_exponent_padded = r_exponent_g;
         r_priority_encoded_padded = priority_encoded_g;
 
-        r_exponent_padded = -r_exponent_padded;                           // -p
-        r_exponent_padded = r_exponent_padded + r_priority_encoded_padded; // -p + K
-        r_exponent_padded = r_exponent_padded | or_bit_mask;              // (-p + K) | C*
-        r_exponent_padded = -r_exponent_padded;                           // -((-p + K) | C*)
+        r_priority_encoded_padded = -r_priority_encoded_padded;                           // -p
+        r_priority_encoded_padded = r_priority_encoded_padded + (NORMALIZE_CHOICES - 2);  // -p + K
+        r_priority_encoded_padded = r_priority_encoded_padded | or_bit_mask;              // (-p + K) | C*
+        r_priority_encoded_padded = -r_priority_encoded_padded;                           // -((-p + K) | C*)
+
+        r_exponent_padded = r_exponent_padded + r_priority_encoded_padded;  // exponent + (-((-p + K) | C*)), add to the exponent
+        // since the number of bits for the exponent is small, we hope the synthesizer does a good job at optimizing this logic
     end
 
     pipe #(
@@ -912,6 +1105,10 @@ module abfp_normalize_round_post_normalize #(
         // check carry
         carry = normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1];
 
+        // A rounding carry leaves the other retained mantissa bits zero.
+        final_mantissa = normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 : BASE_WIDTH + 2];
+        final_mantissa[POST_NORMALIZE_CARRY_INDEX] = final_mantissa[POST_NORMALIZE_CARRY_INDEX] | carry;
+
         // adjust exponent in case of carry
         post_normalized_exponent = r_exponent_padded_p_g;
         if(carry) begin
@@ -923,13 +1120,17 @@ module abfp_normalize_round_post_normalize #(
         subnormal = 0;
         underflow = 0;
 
-        // if not negative and too big
-        if((!post_normalized_exponent[EXPONENT_MAX_WIDTH - 1]) && (post_normalized_exponent >= ((BASE_WIDTH ** 2) - 1))) begin
+        // Exponents above the field range always overflow. At the maximum
+        // exponent, mantissa MSB=1 is the reserved NaN/Inf representation.
+        if((!post_normalized_exponent[EXPONENT_MAX_WIDTH - 1]) &&
+            ((post_normalized_exponent > EXPONENT_MAX_VALUE) ||
+             ((post_normalized_exponent == EXPONENT_MAX_VALUE) && final_mantissa[MANTISSA_WIDTH - 1]))) begin
             overflow = 1;
         end
 
         // if 0
-        if(post_normalized_exponent == 0) begin
+        if((post_normalized_exponent == 0) &&
+           (!final_mantissa[MANTISSA_WIDTH - 1])) begin
             subnormal = 1;
         end
 
@@ -945,12 +1146,11 @@ module abfp_normalize_round_post_normalize #(
             post_normalized_exponent = '0;
             
         end else if(overflow) begin
-            post_normalized_exponent = ((BASE_WIDTH ** 2) - 1);
+            post_normalized_exponent = EXPONENT_MAX_VALUE;
+            final_mantissa[MANTISSA_WIDTH - 1] = 1;
         end
 
         final_exponent = post_normalized_exponent[EXPONENT_WIDTH - 1 : 0];
-        final_mantissa = normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 : BASE_WIDTH + 2];
-        final_mantissa[MANTISSA_WIDTH - BASE_WIDTH] = final_mantissa[MANTISSA_WIDTH - BASE_WIDTH] | carry;
         final_mantissa = final_mantissa & subnormal_underflow_mantissa_bit_mask;
     end
 

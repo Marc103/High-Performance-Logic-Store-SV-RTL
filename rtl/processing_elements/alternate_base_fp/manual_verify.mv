@@ -1,0 +1,1387 @@
+
+////////////////////////////////////////////////////////////////
+// abfp_swap
+"
+    localparam LATENCY = alternate_base_fp_adder_SWAP_LATENCY(REGISTERED_IN, REGISTERED_MUX)
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_SWAP_LATENCY(int REGISTERED_IN, int REGISTERED_MUX);
+        return (REGISTERED_IN + REGISTERED_MUX);
+    endfunction
+"
+- correct arguments called
+- each adds a cycle of latency if true (1) so correct latency calculation
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    input clk_i,
+
+    input                           a_sign_i,
+    input  [EXPONENT_WIDTH - 1 : 0] a_exponent_i,
+    input  [MANTISSA_WIDTH - 1 : 0] a_mantissa_i,
+
+    input                           b_sign_i,
+    input  [EXPONENT_WIDTH - 1 : 0] b_exponent_i,
+    input  [MANTISSA_WIDTH - 1 : 0] b_mantissa_i,
+
+    output                          a_swap_sign_o,
+    output [EXPONENT_WIDTH - 1 : 0] a_swap_exponent_o,
+    output [MANTISSA_WIDTH - 1 : 0] a_swap_mantissa_o,
+
+    output                          b_swap_sign_o,
+    output [EXPONENT_WIDTH - 1 : 0] b_swap_exponent_o,
+    output [MANTISSA_WIDTH - 1 : 0] b_swap_mantissa_o
+"
+- correct types and bit widths
+[Marc103 + GPT-6.1 - 11/02/26]
+
+
+"
+    logic                           a_sign;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa;
+
+    logic                           a_sign_g;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent_g;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa_g;
+
+    logic                           b_sign;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa;
+
+    logic                           b_sign_g;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent_g;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa_g;
+
+    always@(posedge clk_i) begin
+        a_sign     <= a_sign_i;
+        a_exponent <= a_exponent_i;
+        a_mantissa <= a_mantissa_i;
+
+        b_sign     <= b_sign_i;
+        b_exponent <= b_exponent_i;
+        b_mantissa <= b_mantissa_i;
+    end
+
+    assign a_sign_g     = (REGISTERED_IN == 1) ? a_sign     : a_sign_i;
+    assign a_exponent_g = (REGISTERED_IN == 1) ? a_exponent : a_exponent_i;
+    assign a_mantissa_g = (REGISTERED_IN == 1) ? a_mantissa : a_mantissa_i;
+
+    assign b_sign_g     = (REGISTERED_IN == 1) ? b_sign     : b_sign_i;
+    assign b_exponent_g = (REGISTERED_IN == 1) ? b_exponent : b_exponent_i;
+    assign b_mantissa_g = (REGISTERED_IN == 1) ? b_mantissa : b_mantissa_i;
+"
+- standard REGISTERED_IN behavior with *_g variables
+[Marc103 + GPT-6.1 - 11/02/26]
+
+
+"
+    logic                           a_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa_p;
+
+    logic                           b_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa_p;
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(REGISTERED_MUX)) a_sign_pipe     (.clk_i(clk_i), .data_i(a_sign_g),     .data_o(a_sign_p));
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(REGISTERED_MUX)) a_exponent_pipe (.clk_i(clk_i), .data_i(a_exponent_g), .data_o(a_exponent_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(REGISTERED_MUX)) a_mantissa_pipe (.clk_i(clk_i), .data_i(a_mantissa_g), .data_o(a_mantissa_p));
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(REGISTERED_MUX)) b_sign_pipe     (.clk_i(clk_i), .data_i(b_sign_g),     .data_o(b_sign_p));
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(REGISTERED_MUX)) b_exponent_pipe (.clk_i(clk_i), .data_i(b_exponent_g), .data_o(b_exponent_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(REGISTERED_MUX)) b_mantissa_pipe (.clk_i(clk_i), .data_i(b_mantissa_g), .data_o(b_mantissa_p));
+"
+- the idea is to use pipe to handle REGISTERED_MUX, if 0 then nothing happens (just passes through) but if 1 then we get a pipe with 1 pipeline register
+- use the *_g signals
+- correct parameterization of the pipe
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic a_gte_b;
+    logic a_gte_b_p;
+
+    assign a_gte_b = a_exponent_g >= b_exponent_g;
+
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_MUX)) a_gte_pipe (.clk_i(clk_i), .data_i(a_gte_b), .data_o(a_gte_b_p));
+"
+- usage of default unsigned is fine for '>=' comparision
+- we use *_g signals, but then pipe accordingly with REGISTERED_MUX into the *_p signal
+- correct parameterization of the pipe
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+// A swap
+    assign a_swap_sign_o     =  a_gte_b_p ? a_sign_p     : b_sign_p;
+    assign a_swap_exponent_o =  a_gte_b_p ? a_exponent_p : b_exponent_p;
+    assign a_swap_mantissa_o =  a_gte_b_p ? a_mantissa_p : b_mantissa_p;
+        
+    // B swap
+    assign b_swap_sign_o     =  a_gte_b_p ? b_sign_p     : a_sign_p;
+    assign b_swap_exponent_o =  a_gte_b_p ? b_exponent_p : a_exponent_p;
+    assign b_swap_mantissa_o =  a_gte_b_p ? b_mantissa_p : a_mantissa_p;
+"
+- we swap as according the a greater than or equal to b result
+- If its true, A remains as A, B remains as B, otherwise they swap with eachother
+- check correct mapping of logic and usage of *_p signals
+- all output signals assigned to
+[Marc103 + GPT-6.1 - 11/02/26]
+
+////////////////////////////////////////////////////////////////
+// abfp_align_sticky
+"
+    localparam BASE_WIDTH              = alternate_base_fp_adder_BASE_WIDTH(BASE),
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_BASE_WIDTH(int BASE);
+        return $clog2(BASE);
+    endfunction
+"
+- correct argument passed in
+- base is expect to be a power of 2, thus $clog2(BASE) is correct
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam ALIGN_CHOICES           = alternate_base_fp_adder_ALIGN_CHOICES(BASE_WIDTH, MANTISSA_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_ALIGN_CHOICES(int BASE_WIDTH, int MANTISSA_WIDTH);
+        int total_width, choices, pointer;
+        // mantissa, guard bits (is base_width), round bit.
+        total_width = MANTISSA_WIDTH + BASE_WIDTH + 1;
+
+        choices = 0;
+        pointer = total_width - 1;
+        while(pointer >= 0) begin
+            choices++;
+            pointer = pointer - BASE_WIDTH;
+        end
+        choices++; // completely out of bounds is a choice.
+
+        return choices;
+  
+    endfunction
+"
+- correct arguments passed in
+- for the align step, we need to calculate how many ways we could align, best shown with an example
+- BASE = 16, BASE_WIDTH = $clog2(16) = 4, MANTISSA_WIDTH = 12
+- 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1  0 
+                                      G0 G1 G2 G3 R
+-  x          x           x           x           x        x (out of bounds) = 6 choices
+- The BASE_WIDTH determined how many guard bits we need
+- R is a valid choice since the GUARD bits can be consumed by a left shift after addition,
+  meaning it can still impact the result via rounding, hence the total_width
+  considered is MANTISSA_WIDTH + BASE_WIDTH + 1 instead of MANTISSA_WIDTH + BASE_WIDTH, and why
+  we do pointer >= 0 instead of pointer > 0. Finally, the out of bounds (pointer < 0) is always considered
+  a choice, so outside of the loop choices++ is performed.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam EXPONENT_SELECTOR_WIDTH = alternate_base_fp_adder_EXPONENT_SELECTOR_WIDTH(ALIGN_CHOICES),
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_EXPONENT_SELECTOR_WIDTH(int ALIGN_CHOICES);
+        return $clog2(ALIGN_CHOICES);
+    endfunction
+"
+- correct arguments passed in
+- bit width of mux selector signal is $clog2(ALIGN_CHOICES)
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam int_t [PLANETARY - 1 : 0][1 : 0] STICKY_OR_INDICES = 
+        alternate_base_fp_adder_STICKY_OR_INDICES(
+            BASE_WIDTH, 
+            MANTISSA_WIDTH, 
+            ALIGN_CHOICES, 
+            LUTX, 
+            GRADE
+        ),
+"
+- defined as
+"
+    function automatic int_t [PLANETARY - 1 : 0][1:0] alternate_base_fp_adder_STICKY_OR_INDICES(
+        int BASE_WIDTH, 
+        int MANTISSA_WIDTH, 
+        int ALIGN_CHOICES, 
+        int LUTX, 
+        int GRADE);
+
+        int total_width, index, mantissa_lsb_index, latency, group_size, stages;
+
+        // [index, latency]
+        int_t [PLANETARY - 1 : 0][1:0] sticky_or_indices;
+        
+        for(int i = 0; i < PLANETARY; i++) begin
+            for(int k = 0; k < 2; k++) begin
+                sticky_or_indices[i][k] = 0;
+            end
+        end
+
+        // mantissa, guard bits (is base_width), round bit.
+        total_width = MANTISSA_WIDTH + BASE_WIDTH + 1;
+
+        // the guard bits and round bit consume what otherwise would have been sticky
+        mantissa_lsb_index = BASE_WIDTH + 1;
+        // Choice c shifts by c * BASE_WIDTH; its round bit is at that index.
+        // Sticky includes only the bits below the new round bit.
+        index = -1;
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+
+        for(int c = 0; c < ALIGN_CHOICES; c++) begin
+            if(index < mantissa_lsb_index) begin
+                sticky_or_indices[c][0] = -1;
+                sticky_or_indices[c][1] = 0;
+            end else begin
+                stages  = reduction_tree_STAGES(group_size, min(index, total_width - 1) - mantissa_lsb_index + 1);
+                latency = reduction_tree_LATENCY(0, stages);
+                sticky_or_indices[c][0] = min(index, total_width - 1);
+                sticky_or_indices[c][1] = latency;
+            end
+            index = index + BASE_WIDTH;
+        end
+
+        return sticky_or_indices;
+    endfunction
+"
+- Each alignment choice shifts right by c * BASE_WIDTH. In the mantissa/guard/round vector,
+  source index c * BASE_WIDTH becomes the new round bit; sticky must exclude it.
+- The inclusive sticky upper index therefore starts at -1 and advances by BASE_WIDTH per choice.
+- If this index is below BASE_WIDTH + 1, no mantissa bits contribute and the choice is marked -1.
+- Otherwise clamp the upper index to total_width - 1 before deriving the reduction width and latency.
+- Each record contains [inclusive upper index, actual reduction latency]. The lower index is BASE_WIDTH + 1.
+- For BASE_WIDTH=4 and MANTISSA_WIDTH=12, choices 0/1 are empty; choices 2/3/4/5 use
+  [7:5], [11:5], [15:5], and [16:5], respectively.
+- This excludes the new round bit and keeps the stored latency equal to the instantiated tree's latency.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam STICKY_MAX_LATENCY  = alternate_base_fp_adder_STICKY_MAX_LATENCY (ALIGN_CHOICES, STICKY_OR_INDICES),
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_STICKY_MAX_LATENCY(
+        int ALIGN_CHOICES,
+        int_t [PLANETARY - 1 : 0][1:0] STICKY_OR_INDICES
+    );
+        int max_latency = STICKY_OR_INDICES[ALIGN_CHOICES - 1][1];
+        return max_latency;
+    endfunction
+"
+- correct arguments passed in
+- we need to return the longest latency OR tree, which we know is at
+  ALIGN_CHOICES - 1 position
+
+"
+    localparam EXPONENT_LATENCY    = alternate_base_fp_adder_EXPONENT_LATENCY   (REGISTERED_EXPONENT_MUX),
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_EXPONENT_LATENCY(int REGISTERED_EXPONENT_MUX);
+        if(REGISTERED_EXPONENT_MUX == 1) return 1;
+        return 0;
+    endfunction
+"
+- correct argument passed in
+- somewhat redundant but works
+
+"
+    localparam BALANCE_MAX_LATENCY = alternate_base_fp_adder_BALANCED_MAX_LATENCY(STICKY_MAX_LATENCY, EXPONENT_LATENCY),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_BALANCED_MAX_LATENCY(int STICKY_MAX_LATENCY, int EXPONENT_LATENCY);
+        return max(EXPONENT_LATENCY, STICKY_MAX_LATENCY);
+    endfunction
+"
+- correct arguments passed in
+- for pipe balancing later, we need to find the longest latency between the max stick or tree and the exponent latency
+    - the exponent latency is either 0 if a pipeline register is not inserted between the exponent compare and exponent mux stages,
+      otherwise it is 1.
+
+"
+    // align mux related
+    localparam ALIGN_MUX_GROUP_SELECTOR_WIDTH = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE),
+    localparam ALIGN_MUX_GROUP_SIZE           = multistage_mux_GROUP_SIZE(ALIGN_MUX_GROUP_SELECTOR_WIDTH),
+    localparam ALIGN_MUX_STAGES               = multistage_mux_STAGES(ALIGN_MUX_GROUP_SIZE, ALIGN_CHOICES),
+    localparam ALIGN_MUX_LATENCY              = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, ALIGN_MUX_STAGES),
+"
+- check that correct arguments passed in to these previously verified function calls.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam LATENCY = alternate_base_fp_adder_align_sticky_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_EXPONENT_MUX, REGISTERED_ALIGN_MUX, LUTX, GRADE
+    )
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_align_sticky_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, align_choices, sticky_latency, exponent_latency;
+        int group_selector_width, group_size, stages, align_mux_latency;
+        int_t [PLANETARY - 1 : 0][1 : 0] sticky_or_indices;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        align_choices = alternate_base_fp_adder_ALIGN_CHOICES(base_width, MANTISSA_WIDTH);
+        sticky_or_indices = alternate_base_fp_adder_STICKY_OR_INDICES(
+            base_width, MANTISSA_WIDTH, align_choices, LUTX, GRADE
+        );
+        sticky_latency = alternate_base_fp_adder_STICKY_MAX_LATENCY(align_choices, sticky_or_indices);
+        exponent_latency = alternate_base_fp_adder_EXPONENT_LATENCY(REGISTERED_EXPONENT_MUX);
+        group_selector_width = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE);
+        group_size = multistage_mux_GROUP_SIZE(group_selector_width);
+        stages = multistage_mux_STAGES(group_size, align_choices);
+        align_mux_latency = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, stages);
+
+        return REGISTERED_IN + alternate_base_fp_adder_BALANCED_MAX_LATENCY(sticky_latency, exponent_latency)
+                             + align_mux_latency;
+    endfunction
+"
+- check that this derivation matches the localparam derivations in the abfp_align_sticky
+- in the end, the total latency is these added togehter
+    - REGISTERED_IN
+    - BALANCED_MAX_LATENCY, max latency between exponent calculations and or trees 
+    - finally the ALIGN_MUX_LATENCY, which happens after exponent calcuation
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    input clk_i,
+
+    input                           a_sign_i,
+    input  [EXPONENT_WIDTH - 1 : 0] a_exponent_i,
+    input  [MANTISSA_WIDTH - 1 : 0] a_mantissa_i,
+
+    input                           b_sign_i,
+    input  [EXPONENT_WIDTH - 1 : 0] b_exponent_i,
+    input  [MANTISSA_WIDTH - 1 : 0] b_mantissa_i,
+
+    output                                           a_sign_o,
+    output [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs_o,
+
+    output                                           b_sign_o,
+    output [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs_o,
+
+    output [EXPONENT_WIDTH - 1 : 0] exponent_o
+"
+- correct types and bit widths
+    - the output GRS one adds the BASE_WIDTH guard bits, round bit and sticky bit (BASE_WIDTH + 2 = BASE_WIDTH + 1 + 1)
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic                           a_sign;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa;
+
+    logic                           a_sign_g;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent_g;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa_g;
+
+    logic                           b_sign;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa;
+
+    logic                           b_sign_g;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent_g;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa_g;
+
+    always@(posedge clk_i) begin
+        a_sign     <= a_sign_i;
+        a_exponent <= a_exponent_i;
+        a_mantissa <= a_mantissa_i;
+
+        b_sign     <= b_sign_i;
+        b_exponent <= b_exponent_i;
+        b_mantissa <= b_mantissa_i;
+    end
+
+    assign a_sign_g     = (REGISTERED_IN == 1) ? a_sign     : a_sign_i;
+    assign a_exponent_g = (REGISTERED_IN == 1) ? a_exponent : a_exponent_i;
+    assign a_mantissa_g = (REGISTERED_IN == 1) ? a_mantissa : a_mantissa_i;
+
+    assign b_sign_g     = (REGISTERED_IN == 1) ? b_sign     : b_sign_i;
+    assign b_exponent_g = (REGISTERED_IN == 1) ? b_exponent : b_exponent_i;
+    assign b_mantissa_g = (REGISTERED_IN == 1) ? b_mantissa : b_mantissa_i;
+"
+- standard REGISTERED_IN *_g procedure
+[Marc103 + GPT-6.1 - 11/02/26]
+
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Exponent Compare
+    logic [EXPONENT_WIDTH - 1 : 0]          exponent_difference;
+    logic                                   exponent_compare;
+    
+    always_comb begin
+        exponent_difference = a_exponent_g - b_exponent_g; // since a exp >= b exp, no chance of overflow
+        exponent_compare  = exponent_difference < ALIGN_CHOICES;
+    end
+
+    logic [EXPONENT_WIDTH - 1 : 0]          exponent_difference_p;
+    logic                                   exponent_compare_p;
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(REGISTERED_EXPONENT_MUX)) exponent_difference_pipe (.clk_i(clk_i), .data_i(exponent_difference), .data_o(exponent_difference_p));
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_EXPONENT_MUX)) exponent_compare_pipe    (.clk_i(clk_i), .data_i(exponent_compare),    .data_o(exponent_compare_p));
+"
+- 'exponent_difference' calculation is safe since a exp >= b exp
+- 'exponent_compare' is safe: exponent_difference is unsigned and is zero-extended for comparison with the positive integer ALIGN_CHOICES.
+- then we do the respective pipe for both values if separated to exponent mux stage
+    - check pipe parameterization.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Exponent Mux
+    logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector;
+    assign exponent_selector = exponent_compare_p ? EXPONENT_SELECTOR_WIDTH'(exponent_difference_p) : EXPONENT_SELECTOR_WIDTH'(ALIGN_CHOICES - 1);
+
+    logic [EXPONENT_SELECTOR_WIDTH - 1 : 0] exponent_selector_p;
+    pipe #(.DATA_WIDTH(EXPONENT_SELECTOR_WIDTH), .LATENCY(BALANCE_MAX_LATENCY - EXPONENT_LATENCY)) a_exp_sel_pipe (.clk_i(clk_i), .data_i(exponent_selector), .data_o(exponent_selector_p));
+"
+- thresholding, we don't want exponent_difference to be bigger than ALIGN_CHOICES - 1, so we use the exponent compare to judge and mux
+- then we balance the pipeline wrt to BALANCE_MAX_LATENCY
+    - we do BALANCE_MAX_LATENCY - EXPONENT_LATENCY, the or tree results and the exponent result will have same latency
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Sticky Or Tree
+    logic [ALIGN_CHOICES - 1 : 0] sticky_choices;
+    logic [ALIGN_CHOICES - 1 : 0] sticky_choices_p;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] sticky_b_mantissa_gr;
+    assign sticky_b_mantissa_gr = {b_mantissa_g, {BASE_WIDTH{1'b0}}, 1'b0};
+
+    generate
+        for(genvar c = 0; c < ALIGN_CHOICES; c++) begin
+            if(STICKY_OR_INDICES[c][0] == -1) begin
+                assign sticky_choices[c] = 0;
+                assign sticky_choices_p[c] = 0;
+            end else begin
+                reduction_tree #(
+                    .DATA_WIDTH(STICKY_OR_INDICES[c][0] - (BASE_WIDTH + 1) + 1),
+                    .GATE(1),
+                    .REGISTERED_IN(0),
+                    .LUTX(LUTX),
+                    .GRADE(GRADE)
+                ) sticky_or_tree_inst (
+                    .clk_i(clk_i),
+                    .data_i   (sticky_b_mantissa_gr[STICKY_OR_INDICES[c][0] : (BASE_WIDTH + 1)]),
+                    .reduced_o(sticky_choices[c])
+                );
+
+                pipe #(.DATA_WIDTH(1), .LATENCY(BALANCE_MAX_LATENCY - STICKY_OR_INDICES[c][1])
+                ) sticky_or_pipe_inst (
+                    .clk_i(clk_i),
+                    .data_i(sticky_choices[c]),
+                    .data_o(sticky_choices_p[c])
+                );
+            end
+        end
+    endgenerate
+"
+- overview is we generate the respective OR trees, then balance the pipelines to have the same latency
+- earlier we showed that the 'mantissa_lsb_index' is 'BASE_WIDTH + 1;'
+- we start with sticky_b_mantissa_gr = {b_mantissa_g, {BASE_WIDTH{1'b0}}, 1'b0}, then select the appropriate indices from it
+- in the generate statement we iterate over the choices
+    - as shown before, if the STICKY_OR_INDICES[c][0] is -1, theres nothing to do, assign sticky_choices[c] = 0 and sticky_choices_p[c] = 0.
+    - otherwise we generate a OR reduction tree
+        - .DATA_WIDTH(STICKY_OR_INDICES[c][0] - (BASE_WIDTH + 1) + 1), correct, we use the describe mantissa_lsb_index then + 1 since its bit width
+        - .data_i   (sticky_b_mantissa_gr[STICKY_OR_INDICES[c][0] : (BASE_WIDTH + 1)]), correct index selection
+    - then we balance the pipelines
+        - .LATENCY(BALANCE_MAX_LATENCY - STICKY_OR_INDICES[c][1])
+    - otherwise check parameterization
+- the end result balanced pipeliens sits in sticky_choices_p
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // A, B Pipelines 
+    logic                           a_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] a_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] a_mantissa_p;
+
+    logic                           b_sign_p;
+    logic  [EXPONENT_WIDTH - 1 : 0] b_exponent_p;
+    logic  [MANTISSA_WIDTH - 1 : 0] b_mantissa_p;
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_sign_pipe     (.clk_i(clk_i), .data_i(a_sign_g)    , .data_o(a_sign_p));
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_exponent_pipe (.clk_i(clk_i), .data_i(a_exponent_g), .data_o(a_exponent_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) a_mantissa_pipe (.clk_i(clk_i), .data_i(a_mantissa_g), .data_o(a_mantissa_p));
+
+    pipe #(.DATA_WIDTH(1),              .LATENCY(BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY)) b_sign_pipe     (.clk_i(clk_i), .data_i(b_sign_g)    ,.data_o(b_sign_p));
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH), .LATENCY(BALANCE_MAX_LATENCY)) b_mantissa_pipe (.clk_i(clk_i), .data_i(b_mantissa_g),.data_o(b_mantissa_p));
+"
+- Nothing is operated on the A values, so they need to be delayed by BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY cycles (wrt to *_g)
+- B mantissa is delayed BALANCE_MAX_LATENCY cycles before its mux; B sign bypasses the mux and is delayed BALANCE_MAX_LATENCY + ALIGN_MUX_LATENCY cycles.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Mantissa Align Mux
+    logic [ALIGN_CHOICES - 1 : 0][MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] align_mantissa_gr_choices;
+    always_comb begin
+        for(int c = 0; c < ALIGN_CHOICES; c++) begin
+            align_mantissa_gr_choices[c] = {b_mantissa_p, {BASE_WIDTH{1'b0}}, 1'b0};
+            align_mantissa_gr_choices[c] = align_mantissa_gr_choices[c] >> (c * BASE_WIDTH);
+        end
+    end
+
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 1 - 1 : 0] aligned_mantissa_gr;
+    multistage_mux #(
+        .DATA_WIDTH(MANTISSA_WIDTH + BASE_WIDTH + 1),
+        .SIZE(ALIGN_CHOICES),
+        .REGISTERED_IN(REGISTERED_ALIGN_MUX),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) align_mantissa_mux (
+        .clk_i(clk_i),
+        .data_i(align_mantissa_gr_choices),
+        .sel_i (exponent_selector_p),
+        .data_o(aligned_mantissa_gr)
+    );
+"
+- here we calculate the shifted mantissa choices
+- choice 0, no shift, choice 1, shift by BASE_WIDTH, choice 2 , shift by BASE_WIDTH * 2... and so on
+- then we feed these choices into the mux and use the exponent_selector_p
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Sticky Align Mux
+    logic aligned_sticky;
+    multistage_mux #(
+        .DATA_WIDTH(1),
+        .SIZE(ALIGN_CHOICES),
+        .REGISTERED_IN(REGISTERED_ALIGN_MUX),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) align_sticky_mux (
+        .clk_i(clk_i),
+        .data_i(sticky_choices_p),
+        .sel_i (exponent_selector_p),
+        .data_o(aligned_sticky)
+    );
+
+    assign a_sign_o         = a_sign_p;
+    assign a_mantissa_grs_o = {a_mantissa_p,{BASE_WIDTH{1'b0}}, 1'b0, 1'b0};
+
+    assign b_sign_o         = b_sign_p;
+    assign b_mantissa_grs_o = {aligned_mantissa_gr, aligned_sticky};
+
+    assign exponent_o       = a_exponent_p;
+"
+- the sticky choices were calculated as shown before from the OR reduction trees
+- Here we actually mux them, using the same exponent_selector_p
+- finally we assign out, where in the B side we used the aligned values and add the correctly selected sticky
+[Marc103 + GPT-6.1 - 11/02/26]
+
+////////////////////////////////////////////////////////////////
+// abfp_add_convert
+"
+    localparam LATENCY    = alternate_base_fp_adder_add_convert_LATENCY(REGISTERED_IN, REGISTERED_CONVERT)
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_add_convert_LATENCY(int REGISTERED_IN, int REGISTERED_CONVERT);
+        return(REGISTERED_IN + REGISTERED_CONVERT);
+    endfunction
+"
+- correct arguments passed in
+- basically up to 2 stage pipeline, correct
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    input clk_i,
+
+    input                                           a_sign_i,
+    input [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs_i,
+
+    input                                           b_sign_i,
+    input [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs_i,
+
+    input [EXPONENT_WIDTH - 1 : 0] exponent_i,
+
+    output                                                 r_sign_o,
+    output [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]                        r_exponent_o
+"
+- correct bit widths, no we are dealing with mantissa, guard bits, round bit and sticky bit
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic                                           a_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs;
+    logic                                           b_sign;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0] exponent;
+
+    logic                                           a_sign_g;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] a_mantissa_grs_g;
+    logic                                           b_sign_g;
+    logic [MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] b_mantissa_grs_g;
+
+    logic [EXPONENT_WIDTH - 1 : 0] exponent_g;
+
+    always@(posedge clk_i) begin
+        a_sign         <= a_sign_i;
+        a_mantissa_grs <= a_mantissa_grs_i;
+        b_sign         <= b_sign_i;
+        b_mantissa_grs <= b_mantissa_grs_i;
+        exponent       <= exponent_i;
+    end
+
+    assign a_sign_g         = (REGISTERED_IN == 1) ? a_sign         : a_sign_i;
+    assign a_mantissa_grs_g = (REGISTERED_IN == 1) ? a_mantissa_grs : a_mantissa_grs_i;
+    assign b_sign_g         = (REGISTERED_IN == 1) ? b_sign         : b_sign_i;
+    assign b_mantissa_grs_g = (REGISTERED_IN == 1) ? b_mantissa_grs : b_mantissa_grs_i;
+    assign exponent_g       = (REGISTERED_IN == 1) ? exponent       : exponent_i;
+"
+- standard REGISTERED_IN *_g procedure
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic [EXPONENT_WIDTH - 1 : 0] r_exponent_p;
+    pipe #(.DATA_WIDTH(EXPONENT_WIDTH), .LATENCY(REGISTERED_CONVERT)) r_exponent_pipe (.clk_i(clk_i), .data_i(exponent_g), .data_o(r_exponent_p));
+"
+- yes, exponent doesnt change here, we pipeline accordingly
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Adder stage
+
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] a_mantissa_grs_g_pad;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] b_mantissa_grs_g_pad;
+
+    assign a_mantissa_grs_g_pad = {1'b0, a_mantissa_grs_g};
+    assign b_mantissa_grs_g_pad = {1'b0, b_mantissa_grs_g};
+
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_p; 
+
+    /* 
+    Used to determine how the MSB should be interpreted as sign or
+    overflow bit. If false, then as carry, if true, then as sign;
+    Then, if it is a sign and negative, it means we need to convert
+    back to unsigned in the next stage.
+    */
+    logic r_different_sign; 
+    logic r_different_sign_p;
+
+    logic r_sign;
+    logic r_sign_p;
+    
+    // note example bug if *_pad not used.
+    always_comb begin
+        if(a_sign_g == b_sign_g) begin
+            r_mantissa_grs = a_mantissa_grs_g_pad + b_mantissa_grs_g_pad;
+        end else if((!a_sign_g) & b_sign_g) begin
+            r_mantissa_grs = a_mantissa_grs_g_pad - b_mantissa_grs_g_pad;
+        end else begin
+            r_mantissa_grs = b_mantissa_grs_g_pad - a_mantissa_grs_g_pad;
+        end
+
+        r_different_sign = a_sign_g ^ b_sign_g;
+        r_sign           = r_different_sign ? r_mantissa_grs[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1] : a_sign_g;
+    end
+"
+- first we pad both values with a 0 on the left, *_pad
+- when signs are the same, add the padded magnitudes
+- when A is positive and B is negative, subtract B magnitude from A
+- when A is negative and B is positive, subtract A magnitude from B
+- we set 'r_different_sign' to a_sign_g ^ b_sign_g, tells me if the ORIGINAL operands had differenet signs
+- 'r_sign' tells me if the RESULT sign is which
+    - if different sign is true, we look at the MSB as a sign bit
+    - otherwise we know the sign stayed the same, we use a_sign_g
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH + BASE_WIDTH + 2 + 1), .LATENCY(REGISTERED_CONVERT)) r_mantissa_grs_pipe   (.clk_i(clk_i), .data_i(r_mantissa_grs)  ,.data_o(r_mantissa_grs_p));
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_CONVERT))                                   r_different_sign_pipe (.clk_i(clk_i), .data_i(r_different_sign),.data_o(r_different_sign_p));
+    pipe #(.DATA_WIDTH(1), .LATENCY(REGISTERED_CONVERT))                                   r_sign_pipe           (.clk_i(clk_i), .data_i(r_sign),          .data_o(r_sign_p));
+"
+- we pipe accordingly using REGSITERED_CONVERT if we wish to insert a pipeline registers before the convert stage
+- check parameterization
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Convert stage
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_converted;
+    always_comb begin
+        if(r_different_sign_p) begin // interpret MSB as sign, convert if necessary
+            if(r_sign_p) begin 
+                r_mantissa_grs_converted = (~r_mantissa_grs_p) + 1;
+                /* Overflow is not an issue, as the bits are reinterpreted as unsigned.
+                I.e 4-bit signed, 1000 = -8, 1000 -> 0111 + 1 -> 1000 is 8, not -8
+                */
+            end else begin
+                r_mantissa_grs_converted = r_mantissa_grs_p;
+            end
+        end else begin               // interpret MSB as overflow, do nothing.
+            r_mantissa_grs_converted = r_mantissa_grs_p;
+        end
+    end  
+
+    assign r_sign_o         = r_sign_p;
+    assign r_mantissa_grs_o = r_mantissa_grs_converted;
+    assign r_exponent_o     = r_exponent_p;
+"
+- if r_different_sign, we must interpret r_sign_p as also the sign of add calculation
+    - in this case we complement + 1 if it is negative and leave alone otherwise
+- if not r_different_sign, then we know the result is a positive number and the MSB
+  instead signals a carry rather than sign
+- finally we assign out.
+
+////////////////////////////////////////////////////////////////
+// abfp_priority_encode
+"
+    localparam NORMALIZE_CHOICES        = alternate_base_fp_adder_NORMALIZE_CHOICES(BASE_WIDTH, MANTISSA_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_NORMALIZE_CHOICES(int BASE_WIDTH, int MANTISSA_WIDTH);
+        int total_width, choices, pointer;
+        // carry bit, mantissa, guard bits (is base_width)
+        total_width = 1 + MANTISSA_WIDTH + BASE_WIDTH;
+
+        choices = 0;
+        pointer = total_width - 1;
+
+        // carry bit
+        choices++; // start with carry choice
+        pointer--;
+
+        while(pointer >= 0) begin
+            choices++;
+            pointer = pointer - BASE_WIDTH;
+        end
+        //c[x x][x x x x][x x x x][x x x x][g g g g]
+        //. .        .        .        .        .
+        //1 2        3        4        5        6
+        //  0        1        2        3        4
+        return choices;
+    endfunction
+"
+- There is one carry choice plus enough BASE_WIDTH groups to cover the mantissa and guard bits.
+- The carry is excluded from the subsequent group scan by pointer--.
+- Round and sticky are excluded; the lowest scanned bit belongs to the guard group.
+- For BASE_WIDTH=4 and MANTISSA_WIDTH=12 there are five choices: carry, three mantissa digits,
+  and one guard digit. The largest selector is the carry; the next largest is no shift.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam NORMALIZE_OR_MAX_LATENCY = alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(LUTX, GRADE, MANTISSA_WIDTH, BASE_WIDTH, NORMALIZE_CHOICES),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(
+        int LUTX, 
+        int GRADE, 
+        int MANTISSA_WIDTH,
+        int BASE_WIDTH, 
+        int NORMALIZE_CHOICES
+    );
+        int group_size, stages, data_width, latency;
+        data_width = min(MANTISSA_WIDTH, BASE_WIDTH);
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+        stages     = reduction_tree_STAGES(group_size, data_width);
+        latency    = reduction_tree_LATENCY(0, stages);
+
+        return latency;
+    endfunction
+"
+- Correct helper arguments are passed in.
+- MANTISSA_WIDTH >= BASE_WIDTH is required and checked by the normalization module.
+- Each non-carry detection group has at most BASE_WIDTH inputs; the carry group has one.
+- The helper derives the longest OR-tree latency from this group size, LUTX, and GRADE.
+- A shorter partial final group is balanced to this latency by the per-choice pipes.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam int_t [PLANETARY - 1 : 0][2 : 0] NORMALIZE_OR_INDICES = 
+        alternate_base_fp_adder_NORMALIZE_OR_INDICES(
+            BASE_WIDTH, 
+            MANTISSA_WIDTH, 
+            NORMALIZE_CHOICES, 
+            LUTX, 
+            GRADE
+        ),
+"
+- defined as
+"
+    function automatic int_t [PLANETARY - 1 : 0][2 : 0] alternate_base_fp_adder_NORMALIZE_OR_INDICES(
+        int BASE_WIDTH, 
+        int MANTISSA_WIDTH, 
+        int NORMALIZE_CHOICES, 
+        int LUTX, 
+        int GRADE
+    );
+        int total_width, left_index, right_index, latency, group_size, stages, guard_lsb_index;
+
+        // [left_idx, right_idx, latency]
+        int_t [PLANETARY - 1 : 0][2:0] normalize_or_indices;
+        
+        for(int i = 0; i < PLANETARY; i++) begin
+            for(int k = 0; k < 3; k++) begin
+                normalize_or_indices[i][k] = 0;
+            end
+        end
+
+        // carry bit, mantissa, guard bits (is base_width), round bit, sticky bit
+        total_width = 1 + MANTISSA_WIDTH + BASE_WIDTH + 1 + 1;
+        guard_lsb_index = 2;
+        
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+
+        // Highest selector has highest priority and selects the carry shift.
+        left_index = total_width - 1;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][0] = left_index;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][1] = left_index;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][2] = 0;
+
+        left_index--;
+
+        // Remaining selectors cover radix digits from the mantissa down to guard.
+        for(int c = NORMALIZE_CHOICES - 2; c >= 0; c--) begin
+            right_index = max((left_index - BASE_WIDTH + 1), guard_lsb_index);
+            normalize_or_indices[c][0] = left_index;
+            normalize_or_indices[c][1] = right_index;
+            stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
+            latency = reduction_tree_LATENCY(0, stages);
+            normalize_or_indices[c][2] = latency;
+            left_index = right_index - 1;
+        end
+
+        return normalize_or_indices;
+    endfunction
+"
+- Each record contains [left index, right index, reduction latency].
+- The carry record contains only the carry bit and is placed at NORMALIZE_CHOICES - 1.
+- Remaining groups scan downward from the mantissa MSB, with inclusive width BASE_WIDTH.
+- right_index = max(left_index - BASE_WIDTH + 1, 2) excludes round and sticky and permits a partial final group.
+- The next group begins at right_index - 1, so detection groups neither overlap nor repeat.
+- For BASE_WIDTH=4 and MANTISSA_WIDTH=12, selectors map to:
+    4: [18:18] carry; 3: [17:14] no shift; 2: [13:10]; 1: [9:6]; 0: [5:2] guard.
+- This matches both the priority encoder's highest-index preference and normalize_choices indexing.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam PRIORITY_ENCODER_SELECTOR_WIDTH = priority_encoder_OUTPUT_DATA_WIDTH(NORMALIZE_CHOICES),
+
+    localparam PRIORITY_ENCODER_ENCODE_GROUPS              = priority_encoder_ENCODE_GROUPS(NORMALIZE_CHOICES, LUTX),
+    localparam PRIORITY_ENCODER_ENCODE_DEPTH               = priority_encoder_ENCODE_DEPTH(PRIORITY_ENCODER_ENCODE_GROUPS),
+    localparam PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY = max_LATENCY(1, GRADE),
+    localparam PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY = max_LATENCY(0, GRADE),
+    localparam PRIORITY_ENCODER_LATENCY = priority_encoder_LATENCY(
+        REGISTERED_PRIORITY_ENCODER, 
+        PRIORITY_ENCODER_ENCODE_DEPTH, 
+        PRIORITY_ENCODER_ENCODE_FIRST_LAYER_LATENCY, 
+        PRIORITY_ENCODER_ENCODE_REST_LAYERS_LATENCY),
+"
+- check correct arguments passed into the functions 
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam LATENCY = alternate_base_fp_adder_priority_encoder_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_PRIORITY_ENCODER, LUTX, GRADE
+    )
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_priority_encoder_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_PRIORITY_ENCODER,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, normalize_choices, normalize_or_latency;
+        int encode_groups, encode_depth, encoder_latency;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        normalize_choices = alternate_base_fp_adder_NORMALIZE_CHOICES(base_width, MANTISSA_WIDTH);
+        normalize_or_latency = alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(
+            LUTX, GRADE, MANTISSA_WIDTH, base_width, normalize_choices
+        );
+        encode_groups = priority_encoder_ENCODE_GROUPS(normalize_choices, LUTX);
+        encode_depth = priority_encoder_ENCODE_DEPTH(encode_groups);
+        encoder_latency = priority_encoder_LATENCY(
+            REGISTERED_PRIORITY_ENCODER, encode_depth, max_LATENCY(1, GRADE), max_LATENCY(0, GRADE)
+        );
+
+        return REGISTERED_IN + normalize_or_latency + encoder_latency;
+    endfunction
+"
+- check same derivation as used within the module localparams
+- in the end its REGISTERED_IN + NORMALIZE_OR_LATENCY + ENCODER_LATENCY
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    input clk_i,
+
+    input                                                 r_sign_i,
+    input [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_i,
+    input [EXPONENT_WIDTH - 1 : 0]                        r_exponent_i,
+
+    output                                                 r_sign_o,
+    output [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_o,
+    output [EXPONENT_WIDTH - 1 : 0]                        r_exponent_o,
+    output [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0]       priority_encoded_o
+"
+- correct bit widths
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic                                                 r_sign;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent;
+
+    logic                                                 r_sign_g;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_g;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent_g;
+
+    always@(posedge clk_i) begin
+        r_sign         <= r_sign_i;
+        r_mantissa_grs <= r_mantissa_grs_i;
+        r_exponent     <= r_exponent_i;
+    end
+
+    assign r_sign_g         = (REGISTERED_IN == 1) ? r_sign         : r_sign_i;
+    assign r_mantissa_grs_g = (REGISTERED_IN == 1) ? r_mantissa_grs : r_mantissa_grs_i;
+    assign r_exponent_g     = (REGISTERED_IN == 1) ? r_exponent     : r_exponent_i;
+"
+- standard REGISTERED_IN *_g procedure
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Or Reductions
+    logic [NORMALIZE_CHOICES - 1 : 0] normalize_or_reductions;
+    logic [NORMALIZE_CHOICES - 1 : 0] normalize_or_reductions_p;
+
+    generate
+        for(genvar c = 0; c < NORMALIZE_CHOICES; c++) begin
+            reduction_tree #(
+                .DATA_WIDTH(NORMALIZE_OR_INDICES[c][0] - NORMALIZE_OR_INDICES[c][1] + 1),
+                .GATE(1),
+                .REGISTERED_IN(0),
+                .LUTX(LUTX),
+                .GRADE(GRADE)
+            ) norm_or_reduce_inst (
+                .clk_i(clk_i),
+                .data_i   (r_mantissa_grs_g[NORMALIZE_OR_INDICES[c][0] : NORMALIZE_OR_INDICES[c][1]]),
+                .reduced_o(normalize_or_reductions[c])
+            );
+
+            pipe #(
+                .DATA_WIDTH(1),
+                .LATENCY(NORMALIZE_OR_MAX_LATENCY - NORMALIZE_OR_INDICES[c][2])
+            ) norm_or_reduce_pipe (
+                .clk_i(clk_i),
+                .data_i(normalize_or_reductions[c]),
+                .data_o(normalize_or_reductions_p[c])
+            );
+        end
+    endgenerate
+"
+- we generate an OR tree for each group, using the provided indices
+    - .DATA_WIDTH(NORMALIZE_OR_INDICES[c][0] - NORMALIZE_OR_INDICES[c][1] + 1), correct
+    - .data_i   (r_mantissa_grs_g[NORMALIZE_OR_INDICES[c][0] : NORMALIZE_OR_INDICES[c][1]]), correct
+- similarily as before, we balance to the longest latency using pipes
+    - .LATENCY(NORMALIZE_OR_MAX_LATENCY - NORMALIZE_OR_INDICES[c][2])
+- otherwise check parameterization in general
+[Marc103 + GPT-6.1 - 11/02/26]
+
+
+"
+    logic [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0] selector;
+    priority_encoder #(
+        .INPUT_DATA_WIDTH(NORMALIZE_CHOICES),
+        .REGISTERED_IN(REGISTERED_PRIORITY_ENCODER),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) lead_one_priority_encoder (
+        .clk_i(clk_i),
+        .priority_i(normalize_or_reductions_p),
+        .priority_encoded_o(selector)
+    );
+"
+- check parameterization, we generate a priority encoder on the or reduced normalize choices.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Pipes
+    logic                                                 r_sign_p;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_p;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent_p;
+
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_sign_pipe (
+        .clk_i(clk_i),
+        .data_i(r_sign_g),
+        .data_o(r_sign_p)
+    );
+
+    pipe #(
+        .DATA_WIDTH(1 + MANTISSA_WIDTH + BASE_WIDTH + 2),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_mantissa_grs_pipe (
+        .clk_i(clk_i),
+        .data_i(r_mantissa_grs_g),
+        .data_o(r_mantissa_grs_p)
+    );
+
+    pipe #(
+        .DATA_WIDTH(EXPONENT_WIDTH),
+        .LATENCY(PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY)
+    ) r_exponent_pipe (
+        .clk_i(clk_i),
+        .data_i(r_exponent_g),
+        .data_o(r_exponent_p)
+    );
+
+    assign r_sign_o           = r_sign_p;
+    assign r_mantissa_grs_o   = r_mantissa_grs_p;
+    assign r_exponent_o       = r_exponent_p;
+    assign priority_encoded_o = selector;
+"
+- finally pipes to delay by PRIORITY_ENCODER_LATENCY + NORMALIZE_OR_MAX_LATENCY
+- check parameterization
+- then final assign outs
+[Marc103 + GPT-6.1 - 11/02/26]
+
+////////////////////////////////////////////////////////////////
+// Globally Defined Locally Set Parameters
+"
+    localparam LATENCY = alternate_base_fp_adder_normalize_round_post_normalize_LATENCY(
+        BASE, MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_ROUND, LUTX, GRADE
+    )
+"
+- defined as
+"
+    function automatic int alternate_base_fp_adder_normalize_round_post_normalize_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_ROUND,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, normalize_choices, group_selector_width, group_size, stages;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        normalize_choices = alternate_base_fp_adder_NORMALIZE_CHOICES(base_width, MANTISSA_WIDTH);
+        group_selector_width = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE);
+        group_size = multistage_mux_GROUP_SIZE(group_selector_width);
+        stages = multistage_mux_STAGES(group_size, normalize_choices);
+
+        return REGISTERED_IN + multistage_mux_LATENCY(0, stages) + REGISTERED_ROUND;
+    endfunction
+"
+- check that derivations match localparam derivations in module
+- then the total latency is REGISTERED_IN + multistage_mux_LATENCY(0, stages) + REGISTERED_ROUND,
+  the multistage registered in is off.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    localparam EXPONENT_MAX_WIDTH              = alternate_base_fp_adder_EXPONENT_MAX_WIDTH(EXPONENT_WIDTH, NORMALIZE_CHOICES),
+    localparam logic [EXPONENT_MAX_WIDTH - 1 : 0] EXPONENT_MAX_VALUE = EXPONENT_MAX_WIDTH'({EXPONENT_WIDTH{1'b1}}),
+    localparam POST_NORMALIZE_CARRY_INDEX = max(0, MANTISSA_WIDTH - BASE_WIDTH),
+"
+- defined as 
+"
+    function automatic int alternate_base_fp_adder_EXPONENT_MAX_WIDTH(int EXPONENT_WIDTH, int NORMALIZE_CHOICES);
+        int exp_width, normalize_width;
+        exp_width = EXPONENT_WIDTH + 1 + 1; // pad plus potential + 1
+        normalize_width = $clog2(NORMALIZE_CHOICES) + 1; // just pad, K is positive.
+        return max(exp_width, normalize_width);
+    endfunction
+"
+- correct arguments passed in
+- basically we have to make sure the bit widths are sufficiently large enough such that
+  the later shown priority encoded values being converted to exponent offsets don't overflow
+  intermediately.
+
+"
+    logic                                                 r_sign;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent;
+    logic [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0]       priority_encoded;
+
+    logic                                                 r_sign_g;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] r_mantissa_grs_g;
+    logic [EXPONENT_WIDTH - 1 : 0]                        r_exponent_g;
+    logic [PRIORITY_ENCODER_SELECTOR_WIDTH - 1 : 0]       priority_encoded_g;
+
+    always@(posedge clk_i) begin
+        r_sign           <= r_sign_i;
+        r_mantissa_grs   <= r_mantissa_grs_i;
+        r_exponent       <= r_exponent_i;
+        priority_encoded <= priority_encoded_i;
+    end
+
+    assign r_sign_g           = (REGISTERED_IN == 1) ? r_sign           : r_sign_i;
+    assign r_mantissa_grs_g   = (REGISTERED_IN == 1) ? r_mantissa_grs   : r_mantissa_grs_i;
+    assign r_exponent_g       = (REGISTERED_IN == 1) ? r_exponent       : r_exponent_i;
+    assign priority_encoded_g = (REGISTERED_IN == 1) ? priority_encoded : priority_encoded_i;
+"
+- standard REGISTERED_IN *_g procedure
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Normalize choices
+    logic [NORMALIZE_CHOICES - 1 : 0][1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalize_choices;
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalize_carry_choice;
+    initial begin
+        if(MANTISSA_WIDTH < BASE_WIDTH)
+            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
+    end
+
+    assign normalize_carry_choice = r_mantissa_grs_g >> BASE_WIDTH;
+    generate
+        // Carry choice: preserve all shifted-out information in sticky.
+        assign normalize_choices[NORMALIZE_CHOICES - 1] = {
+            normalize_carry_choice[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 1],
+            normalize_carry_choice[0] | (|r_mantissa_grs_g[BASE_WIDTH - 1 : 0])
+        };
+        // rest of choices
+        for(genvar i = 1; i < NORMALIZE_CHOICES; i++) begin
+            assign normalize_choices[NORMALIZE_CHOICES - 1 - i] = r_mantissa_grs_g << ((i - 1) * BASE_WIDTH);
+        end
+    endgenerate
+
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalized;
+    multistage_mux #(
+        .DATA_WIDTH(1 + MANTISSA_WIDTH + BASE_WIDTH + 2),
+        .SIZE(NORMALIZE_CHOICES),
+        .REGISTERED_IN(0),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) normalize_mux (
+        .clk_i(clk_i),
+        .data_i(normalize_choices),
+        .sel_i(priority_encoded_g),
+        .data_o(normalized)
+    );
+"
+- MANTISSA_WIDTH must be at least BASE_WIDTH so one radix digit fits; unsupported widths trigger $fatal.
+- The highest selector is the carry choice. It shifts right by BASE_WIDTH and ORs all shifted-out
+  low bits into the new sticky bit, preserving correct rounding information.
+- Selector NORMALIZE_CHOICES - 2 is unshifted; lower selectors shift left by successive radix digits.
+- All choices have one driver and the mux uses the same ordering as the detection records.
+- POST_NORMALIZE_CARRY_INDEX is clamped for legal elaboration, while the parameter check rejects unsupported widths.
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Exponent Calculation 1.
+    /*
+    From proofing we found that the appropriate way to convert the
+    priority encoded value to value to add to the exponent is:
+    -((-p + K) | C*)
+    where
+    p  is the priority encoded value
+    K  is the constant (NORMALIZE_CHOICES - 2)
+    C* is the carry bit replicated to the exponent width (for OR mask).
+    Overall take care to make sure bit widths are large enough for signed
+    calculations.
+    */
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] r_exponent_padded;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] r_exponent_padded_p;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] r_priority_encoded_padded;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] or_bit_mask;
+
+    assign or_bit_mask = {EXPONENT_MAX_WIDTH{r_mantissa_grs_g[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1]}};
+    always_comb begin
+        r_exponent_padded = r_exponent_g;
+        r_priority_encoded_padded = priority_encoded_g;
+
+        r_priority_encoded_padded = -r_priority_encoded_padded;                           // -p
+        r_priority_encoded_padded = r_priority_encoded_padded + (NORMALIZE_CHOICES - 2);  // -p + K
+        r_priority_encoded_padded = r_priority_encoded_padded | or_bit_mask;              // (-p + K) | C*
+        r_priority_encoded_padded = -r_priority_encoded_padded;                           // -((-p + K) | C*)
+
+        r_exponent_padded = r_exponent_padded + r_priority_encoded_padded;  // exponent + (-((-p + K) | C*)), add to the exponent
+        // since the number of bits for the exponent is small, we hope the synthesizer does a good job at optimizing this logic
+    end
+
+    pipe #(
+        .DATA_WIDTH(EXPONENT_MAX_WIDTH),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) r_exponent_padded_pipe (
+        .clk_i(clk_i),
+        .data_i(r_exponent_padded),
+        .data_o(r_exponent_padded_p)
+    );
+
+    logic r_sign_p;
+    pipe #(
+        .DATA_WIDTH(1),
+        .LATENCY(MULTISTAGE_MUX_LATENCY)
+    ) r_sign_pipe (
+        .clk_i(clk_i),
+        .data_i(r_sign_g),
+        .data_o(r_sign_p)
+    );
+"
+- For non-carry choices the exponent offset is p - (NORMALIZE_CHOICES - 2).
+- With no carry, the OR mask is zero and -((-p + K) | C*) implements this subtraction.
+- With carry, the mask is all ones and the same expression returns +1.
+- For BASE_WIDTH=4 and MANTISSA_WIDTH=12, NORMALIZE_CHOICES=5 and K=3:
+    selector 4 (carry) -> +1; selector 3 (unshifted) -> 0; selectors 2/1/0 -> -1/-2/-3.
+- Padding includes a sign bit and room for the carry increment before any exponent-field truncation.
+- The adjusted exponent and sign are piped to match MULTISTAGE_MUX_LATENCY.
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    ////////////////////////////////////////////////////////////////
+    // Round & Post-normalize (bit masking)
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalized_reg;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] r_exponent_padded_p_reg;
+    logic r_sign_p_reg;
+
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalized_g;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0] r_exponent_padded_p_g;
+    logic r_sign_p_g;
+
+    always@(posedge clk_i) begin
+        normalized_reg          <= normalized;
+        r_exponent_padded_p_reg <= r_exponent_padded_p;
+        r_sign_p_reg            <= r_sign_p;
+    end
+
+    assign normalized_g          = (REGISTERED_ROUND == 1) ? normalized_reg          : normalized;
+    assign r_exponent_padded_p_g = (REGISTERED_ROUND == 1) ? r_exponent_padded_p_reg : r_exponent_padded_p;
+    assign r_sign_p_g            = (REGISTERED_ROUND == 1) ? r_sign_p_reg            : r_sign_p;
+"
+- standard REGISTERED_ROUND behavior *_g 
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic guard;
+    logic round;
+    logic sticky_sticky;
+    logic lsb;
+    logic msb;
+    assign guard =          normalized_g[BASE_WIDTH + 1 + 1 - 1];
+    assign round =          normalized_g[BASE_WIDTH + 1 + 1 - 2];
+    // we expect this range to be small, so a dedicated reduction OR tree is unecessary
+    assign sticky_sticky = |normalized_g[BASE_WIDTH + 1 + 1 - 3 : 0];
+    assign lsb           =  normalized_g[BASE_WIDTH + 1 + 1];
+    assign msb           =  normalized_g[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2];
+"
+- check correct indexing
+- we need sticky_sticky so that false negatives in place of a guard bit doesnt happen
+[Marc103 + GPT-6.1 - 11/02/26]
+
+"
+    logic [1 + BASE_WIDTH + 1 + 1 - 1 : 0]                round_bits; 
+    logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalized_rounded;
+    logic [EXPONENT_MAX_WIDTH - 1 : 0]                    post_normalized_exponent;
+    logic                                                 carry;
+
+    logic                                                 overflow;  // NaN, INF
+    logic                                                 underflow; // result is 0
+    logic                                                 subnormal; // result is 0
+    
+    logic [MANTISSA_WIDTH - 1 : 0] subnormal_underflow_mantissa_bit_mask;
+
+
+    logic                          final_sign;
+    logic [EXPONENT_WIDTH - 1 : 0] final_exponent;
+    logic [MANTISSA_WIDTH - 1 : 0] final_mantissa;
+    
+
+    //increment = guard & (round | sticky_sticky | lsb)
+    always_comb begin
+        final_sign = r_sign_p_g;
+
+        // round
+        round_bits = '0;
+        round_bits[1 + BASE_WIDTH + 1 + 1 - 1] = guard & (round | sticky_sticky | lsb);
+        normalized_rounded = normalized_g;
+        normalized_rounded = normalized_rounded +  round_bits;
+
+        // check carry
+        carry = normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1];
+
+        // A rounding carry leaves the other retained mantissa bits zero.
+        final_mantissa = normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 : BASE_WIDTH + 2];
+        final_mantissa[POST_NORMALIZE_CARRY_INDEX] = final_mantissa[POST_NORMALIZE_CARRY_INDEX] | carry;
+
+        // adjust exponent in case of carry
+        post_normalized_exponent = r_exponent_padded_p_g;
+        if(carry) begin
+            post_normalized_exponent = post_normalized_exponent + 1;
+        end
+
+        // exponent conditions: Overflow, Subnormal, Underflow
+        overflow = 0;
+        subnormal = 0;
+        underflow = 0;
+
+        // Exponents above the field range always overflow. At the maximum
+        // exponent, mantissa MSB=1 is the reserved NaN/Inf representation.
+        if((!post_normalized_exponent[EXPONENT_MAX_WIDTH - 1]) &&
+            ((post_normalized_exponent > EXPONENT_MAX_VALUE) ||
+             ((post_normalized_exponent == EXPONENT_MAX_VALUE) && final_mantissa[MANTISSA_WIDTH - 1]))) begin
+            overflow = 1;
+        end
+
+        // if 0
+        if((post_normalized_exponent == 0) &&
+           (!final_mantissa[MANTISSA_WIDTH - 1])) begin
+            subnormal = 1;
+        end
+
+        // if negative
+        if(post_normalized_exponent[EXPONENT_MAX_WIDTH - 1]) begin
+            underflow = 1;
+        end
+
+        subnormal_underflow_mantissa_bit_mask = '1;
+
+        if(subnormal | underflow) begin
+            subnormal_underflow_mantissa_bit_mask = '0;
+            post_normalized_exponent = '0;
+            
+        end else if(overflow) begin
+            post_normalized_exponent = EXPONENT_MAX_VALUE;
+            final_mantissa[MANTISSA_WIDTH - 1] = 1;
+        end
+
+        final_exponent = post_normalized_exponent[EXPONENT_WIDTH - 1 : 0];
+        final_mantissa = final_mantissa & subnormal_underflow_mantissa_bit_mask;
+    end
+
+    assign sum_o = {final_sign, final_exponent, final_mantissa};
+"
+- round_bits is zero except at the retained mantissa LSB, where guard & (round | sticky_sticky | lsb)
+  implements round-to-nearest, ties-to-even.
+- When rounding carries, the other retained mantissa bits are zero. OR the carry into
+  POST_NORMALIZE_CARRY_INDEX and increment the exponent by one radix exponent.
+- Form the post-normalization mantissa before classifying special encodings. For BASE_WIDTH > 1,
+  a shifted carry is not generally the mantissa MSB.
+- EXPONENT_MAX_VALUE is the all-ones EXPONENT_WIDTH field, zero-extended to the intermediate width.
+- Any positive exponent above that value overflows, regardless of the mantissa MSB.
+- At the maximum exponent, mantissa MSB=1 remains the documented reserved NaN/Inf representation.
+- Preserve the existing encoding rule at exponent zero: mantissa MSB=0 is unsupported subnormal and flushes to zero.
+- Negative exponents also flush to zero. On overflow clamp the exponent to its maximum and set the reserved mantissa MSB.
+- Apply the underflow/subnormal mask to the final mantissa, retain the pipelined sign,
+  and concatenate {final_sign, final_exponent, final_mantissa} into sum_o.
+[Marc103 + GPT-6.1 - 11/02/26]

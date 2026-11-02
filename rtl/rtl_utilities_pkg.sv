@@ -742,7 +742,9 @@ package constant_functions_pkg;
 
         // the guard bits and round bit consume what otherwise would have been sticky
         mantissa_lsb_index = BASE_WIDTH + 1;
-        index = 0;
+        // Choice c shifts by c * BASE_WIDTH; its round bit is at that index.
+        // Sticky includes only the bits below the new round bit.
+        index = -1;
         group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
 
         for(int c = 0; c < ALIGN_CHOICES; c++) begin
@@ -750,7 +752,7 @@ package constant_functions_pkg;
                 sticky_or_indices[c][0] = -1;
                 sticky_or_indices[c][1] = 0;
             end else begin
-                stages  = reduction_tree_STAGES(group_size, index - mantissa_lsb_index + 1);
+                stages  = reduction_tree_STAGES(group_size, min(index, total_width - 1) - mantissa_lsb_index + 1);
                 latency = reduction_tree_LATENCY(0, stages);
                 sticky_or_indices[c][0] = min(index, total_width - 1);
                 sticky_or_indices[c][1] = latency;
@@ -765,11 +767,7 @@ package constant_functions_pkg;
         int ALIGN_CHOICES,
         int_t [PLANETARY - 1 : 0][1:0] STICKY_OR_INDICES
     );
-        int max_latency = 0;
-        for(int c = 0; c < ALIGN_CHOICES; c++) begin
-            max_latency = max(max_latency, STICKY_OR_INDICES[c][1]);
-        end
-
+        int max_latency = STICKY_OR_INDICES[ALIGN_CHOICES - 1][1];
         return max_latency;
     endfunction
 
@@ -845,34 +843,153 @@ package constant_functions_pkg;
         
         group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
 
-        // carry bit first
+        // Highest selector has highest priority and selects the carry shift.
         left_index = total_width - 1;
-        right_index = left_index - 1;
-        normalize_or_indices[0][0] = left_index;
-        normalize_or_indices[0][1] = right_index;
-        stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
-        latency = reduction_tree_LATENCY(0, stages);
-        normalize_or_indices[0][2] = latency;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][0] = left_index;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][1] = left_index;
+        normalize_or_indices[NORMALIZE_CHOICES - 1][2] = 0;
 
+        left_index--;
 
-        for(int c = 1; c < NORMALIZE_CHOICES; c++) begin
-            left_index = total_width - 1;
-            right_index = max((left_index - 1), guard_lsb_index);
+        // Remaining selectors cover radix digits from the mantissa down to guard.
+        for(int c = NORMALIZE_CHOICES - 2; c >= 0; c--) begin
+            right_index = max((left_index - BASE_WIDTH + 1), guard_lsb_index);
             normalize_or_indices[c][0] = left_index;
             normalize_or_indices[c][1] = right_index;
             stages  = reduction_tree_STAGES(group_size, left_index - right_index + 1);
             latency = reduction_tree_LATENCY(0, stages);
             normalize_or_indices[c][2] = latency;
+            left_index = right_index - 1;
         end
 
         return normalize_or_indices;
     endfunction
 
-    function automatic int alternate_base_fp_adder_EXPONENT_MAX_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
-        int exp_width, mantissa_width;
+    function automatic int alternate_base_fp_adder_EXPONENT_MAX_WIDTH(int EXPONENT_WIDTH, int NORMALIZE_CHOICES);
+        int exp_width, normalize_width;
         exp_width = EXPONENT_WIDTH + 1 + 1; // pad plus potential + 1
-        mantissa_width = $clog2(MANTISSA_WIDTH) + 1; // just pad, K is positive.
-        return max(exp_width, mantissa_width);
+        normalize_width = $clog2(NORMALIZE_CHOICES) + 1; // just pad, K is positive.
+        return max(exp_width, normalize_width);
+    endfunction
+
+    function automatic int alternate_base_fp_adder_SWAP_LATENCY(int REGISTERED_IN, int REGISTERED_MUX);
+        return (REGISTERED_IN + REGISTERED_MUX);
+    endfunction
+
+    function automatic int alternate_base_fp_adder_align_sticky_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, align_choices, sticky_latency, exponent_latency;
+        int group_selector_width, group_size, stages, align_mux_latency;
+        int_t [PLANETARY - 1 : 0][1 : 0] sticky_or_indices;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        align_choices = alternate_base_fp_adder_ALIGN_CHOICES(base_width, MANTISSA_WIDTH);
+        sticky_or_indices = alternate_base_fp_adder_STICKY_OR_INDICES(
+            base_width, MANTISSA_WIDTH, align_choices, LUTX, GRADE
+        );
+        sticky_latency = alternate_base_fp_adder_STICKY_MAX_LATENCY(align_choices, sticky_or_indices);
+        exponent_latency = alternate_base_fp_adder_EXPONENT_LATENCY(REGISTERED_EXPONENT_MUX);
+        group_selector_width = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE);
+        group_size = multistage_mux_GROUP_SIZE(group_selector_width);
+        stages = multistage_mux_STAGES(group_size, align_choices);
+        align_mux_latency = multistage_mux_LATENCY(REGISTERED_ALIGN_MUX, stages);
+
+        return REGISTERED_IN + alternate_base_fp_adder_BALANCED_MAX_LATENCY(sticky_latency, exponent_latency)
+                             + align_mux_latency;
+    endfunction
+
+    function automatic int alternate_base_fp_adder_add_convert_LATENCY(int REGISTERED_IN, int REGISTERED_CONVERT);
+        return(REGISTERED_IN + REGISTERED_CONVERT);
+    endfunction
+
+    function automatic int alternate_base_fp_adder_priority_encoder_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_PRIORITY_ENCODER,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, normalize_choices, normalize_or_latency;
+        int encode_groups, encode_depth, encoder_latency;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        normalize_choices = alternate_base_fp_adder_NORMALIZE_CHOICES(base_width, MANTISSA_WIDTH);
+        normalize_or_latency = alternate_base_fp_adder_NORMALIZE_OR_MAX_LATENCY(
+            LUTX, GRADE, MANTISSA_WIDTH, base_width, normalize_choices
+        );
+        encode_groups = priority_encoder_ENCODE_GROUPS(normalize_choices, LUTX);
+        encode_depth = priority_encoder_ENCODE_DEPTH(encode_groups);
+        encoder_latency = priority_encoder_LATENCY(
+            REGISTERED_PRIORITY_ENCODER, encode_depth, max_LATENCY(1, GRADE), max_LATENCY(0, GRADE)
+        );
+
+        return REGISTERED_IN + normalize_or_latency + encoder_latency;
+    endfunction
+
+    function automatic int alternate_base_fp_adder_normalize_round_post_normalize_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_ROUND,
+        int LUTX,
+        int GRADE
+    );
+        int base_width, normalize_choices, group_selector_width, group_size, stages;
+
+        base_width = alternate_base_fp_adder_BASE_WIDTH(BASE);
+        normalize_choices = alternate_base_fp_adder_NORMALIZE_CHOICES(base_width, MANTISSA_WIDTH);
+        group_selector_width = multistage_mux_GROUP_SELECTOR_WIDTH(LUTX, GRADE);
+        group_size = multistage_mux_GROUP_SIZE(group_selector_width);
+        stages = multistage_mux_STAGES(group_size, normalize_choices);
+
+        return REGISTERED_IN + multistage_mux_LATENCY(0, stages) + REGISTERED_ROUND;
+    endfunction
+
+    function automatic int alternate_base_fp_adder_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    );
+        int latency;
+
+        latency = alternate_base_fp_adder_SWAP_LATENCY(REGISTERED_SWAP_IN, REGISTERED_SWAP_MUX);
+        latency += alternate_base_fp_adder_align_sticky_LATENCY(
+            BASE, MANTISSA_WIDTH, REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX, REGISTERED_ALIGN_MUX, LUTX, GRADE
+        );
+        latency += alternate_base_fp_adder_add_convert_LATENCY(
+            REGISTERED_ADD_CONVERT, REGISTERED_ADD_CONVERT_CONVERT
+        );
+        latency += alternate_base_fp_adder_priority_encoder_LATENCY(
+            BASE, MANTISSA_WIDTH, REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER, LUTX, GRADE
+        );
+        latency += alternate_base_fp_adder_normalize_round_post_normalize_LATENCY(
+            BASE, MANTISSA_WIDTH, REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND, LUTX, GRADE
+        );
+
+        return latency;
     endfunction
 
     ////////////////////////////////////////////////////////////////
