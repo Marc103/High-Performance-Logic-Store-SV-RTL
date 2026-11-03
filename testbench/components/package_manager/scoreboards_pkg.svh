@@ -16,4 +16,5 @@ package scoreboards_pkg;
     `include "QueueTrainScoreboard.sv"
     `include "ReservoirNoBackpressureScoreboard.sv"
     `include "EqualTreeScoreboard.sv"
+    `include "AlternateBaseFpAdderScoreboard.sv"
 endpackage

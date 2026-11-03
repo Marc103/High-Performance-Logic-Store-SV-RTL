@@ -15,4 +15,5 @@ package io_pkg;
     `include "QueueTrainIO.sv"
     `include "ReservoirNoBackpressureIO.sv"
     `include "EqualTreeIO.sv"
+    `include "AlternateBaseFpAdderIO.sv"
 endpackage

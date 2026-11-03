@@ -16,4 +16,5 @@ package drivers_pkg;
     `include "QueueTrainDriver.sv"
     `include "ReservoirNoBackpressureDriver.sv"
     `include "EqualTreeDriver.sv"
+    `include "AlternateBaseFpAdderDriver.sv"
 endpackage

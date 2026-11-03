@@ -133,6 +133,19 @@ package constant_functions_pkg;
     //////////////////////////////////////////////////////////////// 
 
     ////////////////////////////////////////////////////////////////
+    // alternate_base_fp_adder behavioral transactions
+    `define ALTERNATE_BASE_FP_ADDER_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] a_i; \
+        logic [DATA_WIDTH - 1 : 0] b_i; \
+    } alternate_base_fp_adder_io_in_t;
+
+    `define ALTERNATE_BASE_FP_ADDER_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] sum_o; \
+    } alternate_base_fp_adder_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;
