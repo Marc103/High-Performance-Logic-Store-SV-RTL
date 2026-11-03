@@ -9,6 +9,7 @@ Keep MANTISSA_WIDTH / log2(BASE) < 4, to ensure that our largest muxes are 4:1, 
 perfectly into LUT6. 
 
 Subnormal numbers are not supported, meaning exponent underflow simply results in 0. 
+Zero results have exponent zero and mantissa zero; their sign is preserved.
 
 Because we are using a base greater than 2, we cannot assume an implicit leading 1 
 bit in the mantissa, so the precision is MANTISSA_WIDTH bits not MANTISSA_WIDTH + 1 as in 
@@ -1152,6 +1153,12 @@ module abfp_normalize_round_post_normalize #(
 
         final_exponent = post_normalized_exponent[EXPONENT_WIDTH - 1 : 0];
         final_mantissa = final_mantissa & subnormal_underflow_mantissa_bit_mask;
+
+        // A zero leading radix digit denotes zero after normalization.
+        // A rounding carry supplies a new leading digit during post-normalization.
+        if(!carry && (normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 -: BASE_WIDTH] == '0)) begin
+            final_exponent = '0;
+        end
     end
 
     assign sum_o = {final_sign, final_exponent, final_mantissa};

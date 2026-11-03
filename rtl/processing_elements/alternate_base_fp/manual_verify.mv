@@ -1367,6 +1367,12 @@
 
         final_exponent = post_normalized_exponent[EXPONENT_WIDTH - 1 : 0];
         final_mantissa = final_mantissa & subnormal_underflow_mantissa_bit_mask;
+
+        // A zero leading radix digit denotes zero after normalization.
+        // A rounding carry supplies a new leading digit during post-normalization.
+        if(!carry && (normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 -: BASE_WIDTH] == '0)) begin
+            final_exponent = '0;
+        end
     end
 
     assign sum_o = {final_sign, final_exponent, final_mantissa};
@@ -1382,6 +1388,9 @@
 - At the maximum exponent, mantissa MSB=1 remains the documented reserved NaN/Inf representation.
 - Preserve the existing encoding rule at exponent zero: mantissa MSB=0 is unsupported subnormal and flushes to zero.
 - Negative exponents also flush to zero. On overflow clamp the exponent to its maximum and set the reserved mantissa MSB.
+- If the leading BASE_WIDTH mantissa bits of normalized_rounded are zero and there is no
+  rounding carry, force the final exponent to zero. A carry produces a nonzero leading
+  radix digit during post-normalization and must not trigger this zero check.
 - Apply the underflow/subnormal mask to the final mantissa, retain the pipelined sign,
   and concatenate {final_sign, final_exponent, final_mantissa} into sum_o.
-[Marc103 + GPT-6.1 - 11/02/26]
+[Marc103 + GPT-6.1 - 11/03/26]

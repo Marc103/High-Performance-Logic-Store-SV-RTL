@@ -38,9 +38,9 @@ class AlternateBaseFpAdderScoreboard #(type T);
                 if(model_error !== 0) $fatal(1, "Model error %0d at sequence %0d item %0d", model_error, sequences, i);
                 actual_value = actual;
                 expected_value = expected;
-                // All finite zero encodings are numerically equivalent. Preserve Xs.
-                if(actual.sum_o[T::MANTISSA_WIDTH - 1 : 0] === '0) actual_value.sum_o = '0;
-                if(expected.sum_o[T::MANTISSA_WIDTH - 1 : 0] === '0) expected_value.sum_o = '0;
+                // Zero requires exponent zero; only its sign may differ. Preserve Xs.
+                if(actual.sum_o[T::DATA_WIDTH - 2 : 0] === '0) actual_value.sum_o[T::DATA_WIDTH - 1] = 0;
+                if(expected.sum_o[T::DATA_WIDTH - 2 : 0] === '0) expected_value.sum_o[T::DATA_WIDTH - 1] = 0;
                 if(!(actual_value === expected_value))
                     $fatal(1, "Sequence %0d item %0d a=%h b=%h DUT=%h model=%h LATENCY=%0d",
                            sequences, i, stimulus.a_i, stimulus.b_i, actual.sum_o, expected.sum_o, T::LATENCY);

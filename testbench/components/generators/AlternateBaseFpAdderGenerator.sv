@@ -81,6 +81,17 @@ class AlternateBaseFpAdderGenerator #(type T);
         add_io(io_obj, 0, finite_word(1, mid_exponent, '1), odd_value);
         add_io(io_obj, 0, finite_word(0, mid_exponent, '1), finite_word(0, mid_exponent, '1));
         add_io(io_obj, 1, '0, '0);
+        // Signed zeros and exact cancellation must produce exponent zero.
+        for(int signs = 0; signs < 4; signs++) begin
+            add_io(io_obj, 0, finite_word(signs[0], 0, '0), finite_word(signs[1], 0, '0));
+        end
+        for(int exponent_value = 0; exponent_value <= T::MAX_EXPONENT; exponent_value++) begin
+            a = finite_word(0, exponent_value, msb_mantissa);
+            b = a;
+            b[T::DATA_WIDTH - 1] = 1;
+            add_io(io_obj, 0, a, b);
+            add_io(io_obj, 0, b, a);
+        end
         // All sign combinations, near cancellation, and shifts beyond the mantissa.
         max_gap = min(T::MAX_EXPONENT, alternate_base_fp_adder_ALIGN_CHOICES(T::BASE_WIDTH, T::MANTISSA_WIDTH) + 1);
         for(int gap = 0; gap <= max_gap; gap++) begin
