@@ -21,7 +21,7 @@ import scoreboards_pkg::*;
 `include "processing_elements/multistage_mux/multistage_mux.sv"
 `include "processing_elements/reduction_tree/reduction_tree.sv"
 `include "processing_elements/priority_encoder/priority_encoder.sv"
-`include "processing_elements/alternate_base_fp/alternate_base_fp_adder.sv"
+`include "processing_elements/alternate_base_fp_adder/alternate_base_fp_adder.sv"
 
 `timescale 1ns/1ns
 module alternate_base_fp_adder_tb #(
