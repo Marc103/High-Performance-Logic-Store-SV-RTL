@@ -16,4 +16,5 @@ package io_pkg;
     `include "ReservoirNoBackpressureIO.sv"
     `include "EqualTreeIO.sv"
     `include "AlternateBaseFpAdderIO.sv"
+    `include "AlternateBaseFpMultiplierIO.sv"
 endpackage

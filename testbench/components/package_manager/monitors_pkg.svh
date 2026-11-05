@@ -17,4 +17,5 @@ package monitors_pkg;
     `include "ReservoirNoBackpressureMonitor.sv"
     `include "EqualTreeMonitor.sv"
     `include "AlternateBaseFpAdderMonitor.sv"
+    `include "AlternateBaseFpMultiplierMonitor.sv"
 endpackage

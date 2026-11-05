@@ -17,4 +17,5 @@ package drivers_pkg;
     `include "ReservoirNoBackpressureDriver.sv"
     `include "EqualTreeDriver.sv"
     `include "AlternateBaseFpAdderDriver.sv"
+    `include "AlternateBaseFpMultiplierDriver.sv"
 endpackage

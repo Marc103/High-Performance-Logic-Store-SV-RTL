@@ -17,4 +17,5 @@ package golden_models_pkg;
     `include "ReservoirNoBackpressureModel.sv"
     `include "EqualTreeModel.sv"
     `include "AlternateBaseFpAdderModel.sv"
+    `include "AlternateBaseFpMultiplierModel.sv"
 endpackage

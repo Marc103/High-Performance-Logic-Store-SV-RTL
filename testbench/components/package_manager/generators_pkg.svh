@@ -17,4 +17,5 @@ package generators_pkg;
     `include "ReservoirNoBackpressureGenerator.sv"
     `include "EqualTreeGenerator.sv"
     `include "AlternateBaseFpAdderGenerator.sv"
+    `include "AlternateBaseFpMultiplierGenerator.sv"
 endpackage

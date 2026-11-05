@@ -17,4 +17,5 @@ package scoreboards_pkg;
     `include "ReservoirNoBackpressureScoreboard.sv"
     `include "EqualTreeScoreboard.sv"
     `include "AlternateBaseFpAdderScoreboard.sv"
+    `include "AlternateBaseFpMultiplierScoreboard.sv"
 endpackage

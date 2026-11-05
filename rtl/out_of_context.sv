@@ -29,6 +29,18 @@ module ooc #(
         ALTERNATE_BASE_FP_ADDER_EXPONENT_WIDTH, ALTERNATE_BASE_FP_ADDER_MANTISSA_WIDTH),
 
     ////////////////////////////////////////////////////////////////
+    // alternate_base_fp_multiplier
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_BASE = 16,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_EXPONENT_WIDTH = 6,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_MANTISSA_WIDTH = 25,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_REGISTERED_IN = 1,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_REGISTERED_NORMALIZE = 1,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_LUTX = 6,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_GRADE = 1,
+    localparam ALTERNATE_BASE_FP_MULTIPLIER_DATA_WIDTH = alternate_base_fp_multiplier_DATA_WIDTH(
+        ALTERNATE_BASE_FP_MULTIPLIER_EXPONENT_WIDTH, ALTERNATE_BASE_FP_MULTIPLIER_MANTISSA_WIDTH),
+
+    ////////////////////////////////////////////////////////////////
     // multistage_fanout
     localparam MULTISTAGE_FANOUT_DATA_WIDTH = 12,
     localparam MULTISTAGE_FANOUT_FANOUT_SIZE = 17,
@@ -195,6 +207,12 @@ module ooc #(
     input [ALTERNATE_BASE_FP_ADDER_DATA_WIDTH - 1 : 0] alternate_base_fp_adder_a_i,
     input [ALTERNATE_BASE_FP_ADDER_DATA_WIDTH - 1 : 0] alternate_base_fp_adder_b_i,
     output [ALTERNATE_BASE_FP_ADDER_DATA_WIDTH - 1 : 0] alternate_base_fp_adder_sum_o,
+
+    ////////////////////////////////////////////////////////////////
+    // alternate_base_fp_multiplier
+    input [ALTERNATE_BASE_FP_MULTIPLIER_DATA_WIDTH - 1 : 0] alternate_base_fp_multiplier_a_i,
+    input [ALTERNATE_BASE_FP_MULTIPLIER_DATA_WIDTH - 1 : 0] alternate_base_fp_multiplier_b_i,
+    output [ALTERNATE_BASE_FP_MULTIPLIER_DATA_WIDTH - 1 : 0] alternate_base_fp_multiplier_product_o,
 
     ////////////////////////////////////////////////////////////////
     // multistage_fanout
@@ -652,6 +670,23 @@ module ooc #(
     
 
     
+    /*
+    alternate_base_fp_multiplier #(
+        .BASE(ALTERNATE_BASE_FP_MULTIPLIER_BASE),
+        .EXPONENT_WIDTH(ALTERNATE_BASE_FP_MULTIPLIER_EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(ALTERNATE_BASE_FP_MULTIPLIER_MANTISSA_WIDTH),
+        .REGISTERED_IN(ALTERNATE_BASE_FP_MULTIPLIER_REGISTERED_IN),
+        .REGISTERED_NORMALIZE(ALTERNATE_BASE_FP_MULTIPLIER_REGISTERED_NORMALIZE),
+        .LUTX(ALTERNATE_BASE_FP_MULTIPLIER_LUTX),
+        .GRADE(ALTERNATE_BASE_FP_MULTIPLIER_GRADE)
+    ) dut (
+        .clk_i(clk_i),
+        .a_i(alternate_base_fp_multiplier_a_i),
+        .b_i(alternate_base_fp_multiplier_b_i),
+        .product_o(alternate_base_fp_multiplier_product_o)
+    );
+    */
+
     alternate_base_fp_adder #(
         .BASE(ALTERNATE_BASE_FP_ADDER_BASE),
         .EXPONENT_WIDTH(ALTERNATE_BASE_FP_ADDER_EXPONENT_WIDTH),
