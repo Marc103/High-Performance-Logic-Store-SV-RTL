@@ -9,6 +9,7 @@ Keep MANTISSA_WIDTH / log2(BASE) < 4, to ensure that our largest muxes are 4:1, 
 perfectly into LUT6. 
 
 Subnormal numbers are not supported, meaning exponent underflow simply results in 0. 
+Inputs must have zero mantissas when the exponent is zero; other encodings are undefined.
 Zero results have exponent zero and mantissa zero; their sign is preserved.
 
 Because we are using a base greater than 2, we cannot assume an implicit leading 1 
@@ -17,6 +18,7 @@ traditional floating point.
 
 NaNs and Infs are represented with the largest exponent value and RN-even exact rounding 
 as per the standard.
+An input NaN/Inf preserves the combined reserved class at the output, including cancellation.
 
 BASE [4,8,16...]:
 - Traditional floating point uses base-2. Here we specificy a base greater or equal than 2 to
@@ -137,6 +139,18 @@ module alternate_base_fp_adder #(
     input  [DATA_WIDTH - 1 : 0] b_i,
     output [DATA_WIDTH - 1 : 0] sum_o
 );
+    logic inf_nan_operand;
+    logic inf_nan_operand_p;
+    logic [DATA_WIDTH - 1 : 0] arithmetic_sum;
+    logic [DATA_WIDTH - 1 : 0] final_sum;
+
+    assign inf_nan_operand = ((&a_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]) && a_i[MANTISSA_WIDTH - 1]) ||
+                             ((&b_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]) && b_i[MANTISSA_WIDTH - 1]);
+
+    pipe #(.DATA_WIDTH(1), .LATENCY(LATENCY)) inf_nan_operand_pipe (
+        .clk_i(clk_i), .data_i(inf_nan_operand), .data_o(inf_nan_operand_p)
+    );
+
     ////////////////////////////////////////////////////////////////
     // Swap
     logic a_swap_sign;
@@ -266,8 +280,18 @@ module alternate_base_fp_adder #(
         .r_mantissa_grs_i(priority_encode_mantissa_grs),
         .r_exponent_i(priority_encode_exponent),
         .priority_encoded_i(priority_encoded),
-        .sum_o(sum_o)
+        .sum_o(arithmetic_sum)
     );
+
+    always_comb begin
+        final_sum = arithmetic_sum;
+        if(inf_nan_operand_p) begin
+            final_sum[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH] = '1;
+            final_sum[MANTISSA_WIDTH - 1] = 1;
+        end
+    end
+
+    assign sum_o = final_sum;
 
 endmodule
 
@@ -1129,9 +1153,8 @@ module abfp_normalize_round_post_normalize #(
             overflow = 1;
         end
 
-        // if 0
-        if((post_normalized_exponent == 0) &&
-           (!final_mantissa[MANTISSA_WIDTH - 1])) begin
+        // Exponent zero is reserved for zero, regardless of the mantissa.
+        if(post_normalized_exponent == 0) begin
             subnormal = 1;
         end
 
@@ -1158,6 +1181,9 @@ module abfp_normalize_round_post_normalize #(
         // A rounding carry supplies a new leading digit during post-normalization.
         if(!carry && (normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 -: BASE_WIDTH] == '0)) begin
             final_exponent = '0;
+        end
+        if(final_exponent == '0) begin
+            final_mantissa = '0;
         end
     end
 

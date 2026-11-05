@@ -1,5 +1,69 @@
 
 ////////////////////////////////////////////////////////////////
+// alternate_base_fp_adder: input NaN/Inf tracking and output classification
+"
+    logic inf_nan_operand;
+    logic inf_nan_operand_p;
+    logic [DATA_WIDTH - 1 : 0] arithmetic_sum;
+    logic [DATA_WIDTH - 1 : 0] final_sum;
+
+    assign inf_nan_operand = ((&a_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]) && a_i[MANTISSA_WIDTH - 1]) ||
+                             ((&b_i[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH]) && b_i[MANTISSA_WIDTH - 1]);
+
+    pipe #(.DATA_WIDTH(1), .LATENCY(LATENCY)) inf_nan_operand_pipe (
+        .clk_i(clk_i), .data_i(inf_nan_operand), .data_o(inf_nan_operand_p)
+    );
+"
+- Detect either input's maximum-exponent/mantissa-MSB encoding directly from the packed input words.
+- Maximum exponent with mantissa MSB zero remains finite and must not set the flag.
+- A single-bit pipe uses the existing aggregate LATENCY, including every selected input/intermediate register
+  and all internal tree/mux balancing delays. It also supports LATENCY=0 without an added cycle.
+- The arithmetic modules and their interfaces are unchanged; only the top-level output is classified again.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    ) normalize_round_post_normalize_inst (
+        .clk_i(clk_i),
+        .r_sign_i(priority_encode_sign),
+        .r_mantissa_grs_i(priority_encode_mantissa_grs),
+        .r_exponent_i(priority_encode_exponent),
+        .priority_encoded_i(priority_encoded),
+        .sum_o(arithmetic_sum)
+    );
+
+    always_comb begin
+        final_sum = arithmetic_sum;
+        if(inf_nan_operand_p) begin
+            final_sum[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH] = '1;
+            final_sum[MANTISSA_WIDTH - 1] = 1;
+        end
+    end
+
+    assign sum_o = final_sum;
+"
+- Copy the existing rounded/range-checked result, preserving its sign and other mantissa bits.
+- If the delayed input-class flag is set, force maximum exponent and mantissa MSB one even when the ordinary
+  arithmetic would produce finite data or exact cancellation. Special plus canonical zero remains special.
+- The single bit preserves the combined NaN/Inf class; individual NaN payloads and NaN-versus-Inf distinction are not tracked.
+- Without a special input, the existing finite arithmetic and canonical output zeros pass through unchanged.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+// Input-special propagation verification - 11/05/26
+- WSL Verilator: nine adder configurations passed 2,988 comparisons, including registered, bypassed,
+  mixed-register, radix-4, radix-256, partial-mantissa, zero-latency, minimum-width, and directed-only cases.
+- The reference model now accepts the combined reserved input class, preserves the arithmetic sign/payload,
+  and forces the reserved exponent/MSB after rounding and range checks. Exact special cancellation uses the
+  existing subtract/convert datapath's positive zero sign before the class override.
+- Directed and random stimuli cover either special operand, both special, all signs, equal/opposite payloads,
+  special plus canonical zero, and alternating special/finite/zero records around idle and sequence boundaries.
+- An independent exact-integer model checked 10,850 direct/chained comparisons in two pipeline configurations:
+  addition, multiplication, addition followed by multiplication by a small finite number, multiplication
+  followed by opposite-sign addition, and addition followed by multiplication by zero.
+- Those checks compared complete words, including signs and computed payload bits, before the multiplier's subsequent priority update.
+- The multiplier now gives NaN/Inf precedence over zero as the adder does; its manual records the updated priority verification.
+- Questa 2025.2 compatibility smoke passed 360 comparisons. Existing LATENCY values are unchanged.
+
+////////////////////////////////////////////////////////////////
 // abfp_swap
 "
     localparam LATENCY = alternate_base_fp_adder_SWAP_LATENCY(REGISTERED_IN, REGISTERED_MUX)
@@ -73,7 +137,8 @@
     assign b_mantissa_g = (REGISTERED_IN == 1) ? b_mantissa : b_mantissa_i;
 "
 - standard REGISTERED_IN behavior with *_g variables
-[Marc103 + GPT-6.1 - 11/02/26]
+- Inputs must be canonical: exponent zero requires mantissa zero. Other zero-exponent encodings are undefined.
+[Marc103 + GPT-6.1 - 11/05/26]
 
 
 "
@@ -1343,9 +1408,8 @@
             overflow = 1;
         end
 
-        // if 0
-        if((post_normalized_exponent == 0) &&
-           (!final_mantissa[MANTISSA_WIDTH - 1])) begin
+        // Exponent zero is reserved for zero, regardless of the mantissa.
+        if(post_normalized_exponent == 0) begin
             subnormal = 1;
         end
 
@@ -1373,6 +1437,9 @@
         if(!carry && (normalized_rounded[1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 2 -: BASE_WIDTH] == '0)) begin
             final_exponent = '0;
         end
+        if(final_exponent == '0) begin
+            final_mantissa = '0;
+        end
     end
 
     assign sum_o = {final_sign, final_exponent, final_mantissa};
@@ -1386,11 +1453,12 @@
 - EXPONENT_MAX_VALUE is the all-ones EXPONENT_WIDTH field, zero-extended to the intermediate width.
 - Any positive exponent above that value overflows, regardless of the mantissa MSB.
 - At the maximum exponent, mantissa MSB=1 remains the documented reserved NaN/Inf representation.
-- Preserve the existing encoding rule at exponent zero: mantissa MSB=0 is unsupported subnormal and flushes to zero.
+- Exponent zero is reserved for zero: flush every exponent-zero result regardless of its mantissa MSB.
 - Negative exponents also flush to zero. On overflow clamp the exponent to its maximum and set the reserved mantissa MSB.
 - If the leading BASE_WIDTH mantissa bits of normalized_rounded are zero and there is no
   rounding carry, force the final exponent to zero. A carry produces a nonzero leading
   radix digit during post-normalization and must not trigger this zero check.
 - Apply the underflow/subnormal mask to the final mantissa, retain the pipelined sign,
   and concatenate {final_sign, final_exponent, final_mantissa} into sum_o.
-[Marc103 + GPT-6.1 - 11/03/26]
+- If any final zero check clears the exponent, also clear every final mantissa bit.
+[Marc103 + GPT-6.1 - 11/05/26]

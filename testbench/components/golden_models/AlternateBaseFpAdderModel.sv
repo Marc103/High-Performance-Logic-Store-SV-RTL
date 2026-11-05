@@ -16,27 +16,33 @@ class AlternateBaseFpAdderModel #(type T);
         error_state = 0;
     endfunction
 
+    function automatic bit special_operand(logic [T::DATA_WIDTH - 1 : 0] word_value);
+        return (&word_value[T::MANTISSA_WIDTH + T::EXPONENT_WIDTH - 1 : T::MANTISSA_WIDTH]) &&
+               word_value[T::MANTISSA_WIDTH - 1];
+    endfunction
+
     function automatic bit finite_operand(logic [T::DATA_WIDTH - 1 : 0] word_value);
         logic [T::MANTISSA_WIDTH - 1 : 0] mantissa;
         int exponent_value;
         mantissa = word_value[T::MANTISSA_WIDTH - 1 : 0];
         exponent_value = int'(word_value[T::MANTISSA_WIDTH + T::EXPONENT_WIDTH - 1 : T::MANTISSA_WIDTH]);
-        if(mantissa == '0) return 1;
+        if(exponent_value == 0) return mantissa == '0;
         if(exponent_value == T::MAX_EXPONENT && mantissa[T::MANTISSA_WIDTH - 1]) return 0;
-        if(exponent_value == 0 && !mantissa[T::MANTISSA_WIDTH - 1]) return 0;
         return (mantissa >> max(0, T::MANTISSA_WIDTH - T::BASE_WIDTH)) != 0;
     endfunction
 
     function automatic logic [T::DATA_WIDTH - 1 : 0] add_values(alternate_base_fp_adder_io_in_t transaction);
         exact_t magnitude_a, magnitude_b, magnitude, quotient, remainder_value, half;
         int exponent_a, exponent_b, exponent_value, shift;
-        bit sign_a, sign_b, sign_value;
+        bit sign_a, sign_b, sign_value, inf_nan;
         error_state = 0;
         if($isunknown(transaction)) begin error_state = 1; return '0; end
-        if(!finite_operand(transaction.a_i) || !finite_operand(transaction.b_i)) begin
-            error_state = 2; // NaN/Inf, subnormal, or unnormalized operand: outside this model's contract.
+        if((!finite_operand(transaction.a_i) && !special_operand(transaction.a_i)) ||
+           (!finite_operand(transaction.b_i) && !special_operand(transaction.b_i))) begin
+            error_state = 2; // Malformed operand: outside this model's contract.
             return '0;
         end
+        inf_nan = special_operand(transaction.a_i) || special_operand(transaction.b_i);
         sign_a = transaction.a_i[T::DATA_WIDTH - 1];
         sign_b = transaction.b_i[T::DATA_WIDTH - 1];
         exponent_a = int'(transaction.a_i[T::MANTISSA_WIDTH + T::EXPONENT_WIDTH - 1 : T::MANTISSA_WIDTH]);
@@ -57,7 +63,11 @@ class AlternateBaseFpAdderModel #(type T);
             magnitude = magnitude_b - magnitude_a;
             sign_value = sign_b;
         end
-        if(magnitude == '0) return '0;
+        if(magnitude == '0) begin
+            if(!inf_nan) return '0;
+            // The existing subtract/convert datapath gives exact cancellation a positive sign.
+            sign_value = 0;
+        end
         exponent_value = 0;
         shift = 0;
         while((magnitude >> shift) >= (exact_t'(1) << T::MANTISSA_WIDTH)) begin
@@ -75,11 +85,15 @@ class AlternateBaseFpAdderModel #(type T);
             exponent_value++;
         end
         // Preserve the format's existing exponent/MSB reserved-value convention.
-        if(exponent_value == 0 && !quotient[T::MANTISSA_WIDTH - 1]) begin
+        if(exponent_value == 0) begin
             exponent_value = 0;
             quotient = '0;
         end else if(exponent_value > T::MAX_EXPONENT ||
                     (exponent_value == T::MAX_EXPONENT && quotient[T::MANTISSA_WIDTH - 1])) begin
+            exponent_value = T::MAX_EXPONENT;
+            quotient[T::MANTISSA_WIDTH - 1] = 1;
+        end
+        if(inf_nan) begin
             exponent_value = T::MAX_EXPONENT;
             quotient[T::MANTISSA_WIDTH - 1] = 1;
         end

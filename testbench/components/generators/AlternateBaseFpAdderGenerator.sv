@@ -28,10 +28,18 @@ class AlternateBaseFpAdderGenerator #(type T);
                 mantissa[T::MANTISSA_WIDTH - 1] = 1;
             end
         end
-        if(exponent_value == 0) mantissa[T::MANTISSA_WIDTH - 1] = 1;
+        if(exponent_value == 0)
+            return {sign_value, {T::EXPONENT_WIDTH{1'b0}}, {T::MANTISSA_WIDTH{1'b0}}};
         if((mantissa >> max(0, T::MANTISSA_WIDTH - T::BASE_WIDTH)) == 0)
             mantissa[max(0, T::MANTISSA_WIDTH - T::BASE_WIDTH)] = 1;
         return {sign_value, T::EXPONENT_WIDTH'(exponent_value), mantissa};
+    endfunction
+
+    function automatic logic [T::DATA_WIDTH - 1 : 0] special_word(
+        bit sign_value, logic [T::MANTISSA_WIDTH - 1 : 0] mantissa
+    );
+        mantissa[T::MANTISSA_WIDTH - 1] = 1;
+        return {sign_value, {T::EXPONENT_WIDTH{1'b1}}, mantissa};
     endfunction
 
     function automatic logic [T::DATA_WIDTH - 1 : 0] random_operand();
@@ -85,10 +93,32 @@ class AlternateBaseFpAdderGenerator #(type T);
         for(int signs = 0; signs < 4; signs++) begin
             add_io(io_obj, 0, finite_word(signs[0], 0, '0), finite_word(signs[1], 0, '0));
         end
+        if(T::MANTISSA_WIDTH > T::BASE_WIDTH) begin
+            // Cancellation into exponent zero must clear even a set mantissa MSB.
+            a = finite_word(0, 1, msb_mantissa);
+            b = finite_word(1, 1, msb_mantissa - (leading_min >> 1));
+            add_io(io_obj, 0, a, b);
+            add_io(io_obj, 0, b, a);
+        end
         for(int exponent_value = 0; exponent_value <= T::MAX_EXPONENT; exponent_value++) begin
             a = finite_word(0, exponent_value, msb_mantissa);
             b = a;
             b[T::DATA_WIDTH - 1] = 1;
+            add_io(io_obj, 0, a, b);
+            add_io(io_obj, 0, b, a);
+        end
+        // Preserve the combined NaN/Inf class for either input, all signs, and exact cancellation.
+        for(int signs = 0; signs < 4; signs++) begin
+            a = special_word(signs[0], msb_mantissa);
+            b = finite_word(signs[1], mid_exponent, leading_min);
+            add_io(io_obj, 0, a, b);
+            add_io(io_obj, 0, b, a);
+            b = finite_word(signs[1], 0, '0);
+            add_io(io_obj, 0, a, b);
+            add_io(io_obj, 0, b, a);
+            b = special_word(signs[1], msb_mantissa);
+            add_io(io_obj, 0, a, b);
+            b = special_word(signs[1], '1);
             add_io(io_obj, 0, a, b);
             add_io(io_obj, 0, b, a);
         end
@@ -128,6 +158,11 @@ class AlternateBaseFpAdderGenerator #(type T);
             if(i % 11 == 0) b = a;
             if(i % 17 == 0) begin b = a; b[T::DATA_WIDTH - 1] = ~b[T::DATA_WIDTH - 1]; end
             if(i % 23 == 0) b = '0;
+            if(i % 5 == 0) a = special_word(a[T::DATA_WIDTH - 1], a[T::MANTISSA_WIDTH - 1 : 0]);
+            if(i % 7 == 0) b = special_word(b[T::DATA_WIDTH - 1], b[T::MANTISSA_WIDTH - 1 : 0]);
+            // Inject canonical zeros while retaining the operand signs.
+            if(i % 29 == 0) a[T::DATA_WIDTH - 2 : 0] = '0;
+            if(i % 31 == 0) b[T::DATA_WIDTH - 2 : 0] = '0;
             add_io(io_obj, 0, a, b);
             if(i % 13 == 12) add_io(io_obj, 1, '0, '0);
         end

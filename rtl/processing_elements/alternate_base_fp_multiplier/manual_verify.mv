@@ -1,0 +1,551 @@
+////////////////////////////////////////////////////////////////
+// alternate_base_fp_multiplier
+// Review contract
+- BASE is a power of two and at least 2; BASE_WIDTH = log2(BASE).
+- EXPONENT_WIDTH is positive and MANTISSA_WIDTH >= BASE_WIDTH. Equality is supported.
+- REGISTERED_IN and REGISTERED_NORMALIZE are 0 or 1. LUTX^GRADE must exceed 1,
+  and all sticky-tree levels and padded groups must fit the existing SMALL/SOLAR map capacities.
+- Inputs are canonical: exponent zero requires mantissa zero; other zero-exponent encodings are undefined.
+- Every finite nonzero input has a nonzero leading radix digit. There is no implicit leading bit.
+- The value is (-1)^sign * (mantissa / 2^MANTISSA_WIDTH) * BASE^(exponent - bias).
+- Subnormal results flush to zero after rounding. The computed sign is retained, so both signed zeros exist.
+- There is no reset or valid port; outputs are unspecified until valid samples fill the pipeline.
+- NaN/Inf takes precedence over canonical zero: either special operand preserves the combined NaN/Inf class.
+- A single pipelined bit preserves that class; the XOR sign and the other mantissa bits use the ordinary datapath.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam DATA_WIDTH = alternate_base_fp_multiplier_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return 1 + EXPONENT_WIDTH + MANTISSA_WIDTH;
+    endfunction
+"
+- correct arguments passed in
+- total data width is indeed 1 + EXPONENT_WIDTH + MANTISSA_WIDTH
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam BASE_WIDTH = alternate_base_fp_multiplier_BASE_WIDTH(BASE),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_BASE_WIDTH(int BASE);
+        return alternate_base_fp_adder_BASE_WIDTH(BASE);
+    endfunction
+"
+- correct arguments passed in, uses already verified function 
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam EXPONENT_CALC_WIDTH = alternate_base_fp_multiplier_EXPONENT_CALC_WIDTH(EXPONENT_WIDTH),
+
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_EXPONENT_CALC_WIDTH(int EXPONENT_WIDTH);
+        return EXPONENT_WIDTH + 2;
+    endfunction
+"
+- correct arguments passed in 
+- E+2 signed bits hold unbiased operands, their sum, the rebias, and normalization/carry adjustments.
+- Before normalization the unbiased sum spans [-(2^E - 2), 2^E], and the rebiased value
+  spans [-(2^(E-1) - 1), 3*2^(E-1) - 1]. No exponent-field truncation happens here.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam EXPONENT_BIAS = alternate_base_fp_multiplier_EXPONENT_BIAS(EXPONENT_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_EXPONENT_BIAS(int EXPONENT_WIDTH);
+        return (2 ** (EXPONENT_WIDTH - 1)) - 1;
+    endfunction
+"
+- correct arguments passed in
+- yup thats the definition of the bias
+- For E <= 32 the int result is the nonnegative numeric bias. For larger E it is an
+  all-ones int bit pattern; sign extension and the module's upper-bit clear reconstruct E-1 bias bits.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam EXPONENT_MAX_VALUE = alternate_base_fp_multiplier_EXPONENT_MAX_VALUE(EXPONENT_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_EXPONENT_MAX_VALUE(int EXPONENT_WIDTH);
+        return (2 ** EXPONENT_WIDTH) - 1;
+    endfunction
+"
+- This is the maximum exponent field represented through an int bit pattern.
+- For E < 32 it is the numeric maximum; at E >= 32 the int is -1. The module widens
+  the pattern and clears the two extra bits to obtain a positive signed maximum.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam STICKY_OR_WIDTH = alternate_base_fp_multiplier_STICKY_OR_WIDTH(MANTISSA_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_STICKY_OR_WIDTH(int MANTISSA_WIDTH);
+        // A one-bit mantissa has no sticky bits; use a one-bit zero input.
+        return max(1, MANTISSA_WIDTH - 1);
+    endfunction
+"
+- correct argument passed in
+- just making sure of the edge case of one-bit mantissa
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam POST_NORMALIZE_CARRY_INDEX = alternate_base_fp_multiplier_POST_NORMALIZE_CARRY_INDEX(MANTISSA_WIDTH, BASE_WIDTH),
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_POST_NORMALIZE_CARRY_INDEX(int MANTISSA_WIDTH, int BASE_WIDTH);
+        return max(0, MANTISSA_WIDTH - BASE_WIDTH);
+    endfunction
+"
+- A rounding carry represents 2^M. Dividing by BASE moves its bit to MANTISSA_WIDTH - BASE_WIDTH.
+- MANTISSA_WIDTH == BASE_WIDTH is valid and places the bit at index zero.
+- max(0, ...) prevents a negative declared index for invalid widths; the module rejects those widths.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam STICKY_OR_GROUP_SIZE = reduction_tree_GROUP_SIZE(LUTX, GRADE),
+    localparam STICKY_OR_STAGES = reduction_tree_STAGES(STICKY_OR_GROUP_SIZE, STICKY_OR_WIDTH),
+    localparam STICKY_OR_LATENCY = reduction_tree_LATENCY(0, STICKY_OR_STAGES),
+"
+- defined as
+"
+    function automatic int reduction_tree_GROUP_SIZE(int LUTX, int GRADE);
+        return LUTX ** GRADE;
+    endfunction
+
+    function automatic int reduction_tree_STAGES(int GROUP_SIZE, int DATA_WIDTH);
+        if(DATA_WIDTH == 1) return 1;
+        return clog_base(GROUP_SIZE, DATA_WIDTH);
+    endfunction
+
+    function automatic int reduction_tree_LATENCY(int REGISTERED_IN, int STAGES);
+        int latency = 0;
+        if(REGISTERED_IN == 1) latency++;
+        latency = latency + STAGES - 1;
+        return latency;
+    endfunction
+"
+- Correct helper arguments and the same LUTX/GRADE settings as sticky_or_tree.
+- The one-bit case uses one combinational stage and zero cycles of latency.
+- Larger trees register every reduction layer except the last; all companion fields use STICKY_OR_LATENCY.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    localparam LATENCY = alternate_base_fp_multiplier_LATENCY(
+        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+    )
+"
+- defined as
+"
+    function automatic int alternate_base_fp_multiplier_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        int sticky_width, group_size, stages;
+        sticky_width = alternate_base_fp_multiplier_STICKY_OR_WIDTH(MANTISSA_WIDTH);
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+        stages = reduction_tree_STAGES(group_size, sticky_width);
+        return REGISTERED_IN + REGISTERED_NORMALIZE + reduction_tree_LATENCY(0, stages);
+    endfunction
+"
+- correct arguments passed in
+- REGISTERED_IN correct
+- REGISTERED_NORMALIZE correct
+- then yes, we have pipelines that accomodate the reduction_tree_LATENCY()
+    - where the argument (0, stages), the 0 is that the input is not registered since we do the
+      registering ourselves just outside of it
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    input clk_i,
+    input  [DATA_WIDTH - 1 : 0] a_i,
+    input  [DATA_WIDTH - 1 : 0] b_i,
+    output [DATA_WIDTH - 1 : 0] product_o
+"
+- correct bit widths
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    logic [DATA_WIDTH - 1 : 0] a;
+    logic [DATA_WIDTH - 1 : 0] b;
+
+    logic [DATA_WIDTH - 1 : 0] a_g;
+    logic [DATA_WIDTH - 1 : 0] b_g;
+
+    always@(posedge clk_i) begin
+        a <= a_i;
+        b <= b_i;
+    end
+
+    assign a_g = (REGISTERED_IN == 1) ? a : a_i;
+    assign b_g = (REGISTERED_IN == 1) ? b : b_i;
+
+    logic                          a_sign_g;
+    logic [EXPONENT_WIDTH - 1 : 0] a_exponent_g;
+    logic [MANTISSA_WIDTH - 1 : 0] a_mantissa_g;
+
+    logic                          b_sign_g;
+    logic [EXPONENT_WIDTH - 1 : 0] b_exponent_g;
+    logic [MANTISSA_WIDTH - 1 : 0] b_mantissa_g;
+
+    assign a_sign_g     = a_g[DATA_WIDTH - 1];
+    assign a_exponent_g = a_g[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH];
+    assign a_mantissa_g = a_g[MANTISSA_WIDTH - 1 : 0];
+
+    assign b_sign_g     = b_g[DATA_WIDTH - 1];
+    assign b_exponent_g = b_g[MANTISSA_WIDTH + EXPONENT_WIDTH - 1 : MANTISSA_WIDTH];
+    assign b_mantissa_g = b_g[MANTISSA_WIDTH - 1 : 0];
+
+"
+- standard REGISTERED_IN *_g behavior
+- Both operands are sampled on the same clock. All field views come from a_g/b_g, so they remain aligned.
+- The slices are sign [DATA_WIDTH-1], exponent [MANTISSA_WIDTH+EXPONENT_WIDTH-1:MANTISSA_WIDTH],
+  and mantissa [MANTISSA_WIDTH-1:0]. The unsigned exponents zero-extend before signed subtraction.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    logic inf_nan_operand;
+    assign inf_nan_operand = ((&a_exponent_g) && a_mantissa_g[MANTISSA_WIDTH - 1]) ||
+                             ((&b_exponent_g) && b_mantissa_g[MANTISSA_WIDTH - 1]);
+"
+- Either operand is special only when every exponent bit and its mantissa MSB are one.
+- A maximum exponent with mantissa MSB zero remains finite and must not set this flag.
+- Detection uses the selected input fields, so REGISTERED_IN is already reflected in its timing.
+- Keep this bit independent of zero_operand: the final special override has higher priority, including special times zero.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] exponent_bias;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] a_exponent_unbiased;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] b_exponent_unbiased;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] exponent_sum;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] exponent_rebiased;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] r_exponent;
+    logic zero_operand;
+
+    always_comb begin
+        // Size the integer constant bit patterns before signed arithmetic.
+        exponent_bias = EXPONENT_BIAS;
+        exponent_bias[EXPONENT_CALC_WIDTH - 1 : EXPONENT_WIDTH - 1] = '0;
+
+        a_exponent_unbiased = a_exponent_g;
+        a_exponent_unbiased = a_exponent_unbiased - exponent_bias;
+
+        b_exponent_unbiased = b_exponent_g;
+        b_exponent_unbiased = b_exponent_unbiased - exponent_bias;
+
+        exponent_sum = a_exponent_unbiased + b_exponent_unbiased;
+        
+        exponent_rebiased = exponent_sum + exponent_bias;
+
+        // Preserve the full exponent until normalization and final range checks.
+        zero_operand = (a_exponent_g == '0) || (b_exponent_g == '0);
+
+        if(zero_operand) begin
+            r_exponent = '0;
+        end else begin
+            r_exponent = exponent_rebiased;
+        end
+    end
+
+    logic [MANTISSA_WIDTH * 2 - 1 : 0] r_mantissa;
+    assign r_mantissa = a_mantissa_g * b_mantissa_g;
+
+    logic r_sign;
+    assign r_sign = a_sign_g ^ b_sign_g;
+"
+- essentially, with sufficiently wide bit widths determined by EXPONENT_CALC_WIDTH, and explicit signed type
+- We subtract the bias from each unsigned exponent, add the signed values, then add one bias back.
+- Sequential blocking assignments first widen each exponent without changing its positive value.
+- Zero-exponent detection makes the ordinary arithmetic zero; the final NaN/Inf override has higher priority.
+- new sign is XOR
+- and result mantissa is just the multiplication of the two mantissa
+- The multiplication is evaluated in the 2*MANTISSA_WIDTH unsigned destination, retaining the complete product.
+- Canonical zero inputs make the raw mantissa product zero; zero_operand additionally fixes the arithmetic exponent and travels with the data.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] r_exponent_reg;
+    logic [MANTISSA_WIDTH * 2 - 1 : 0] r_mantissa_reg;
+    logic r_sign_reg;
+    logic zero_operand_reg;
+    logic inf_nan_operand_reg;
+
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] r_exponent_g;
+    logic [MANTISSA_WIDTH * 2 - 1 : 0] r_mantissa_g;
+    logic r_sign_g;
+    logic zero_operand_g;
+    logic inf_nan_operand_g;
+
+    always@(posedge clk_i) begin
+        r_exponent_reg <= r_exponent;
+        r_mantissa_reg <= r_mantissa;
+        r_sign_reg <= r_sign;
+        zero_operand_reg <= zero_operand;
+        inf_nan_operand_reg <= inf_nan_operand;
+    end
+
+    assign r_exponent_g = (REGISTERED_NORMALIZE == 1) ? r_exponent_reg : r_exponent;
+    assign r_mantissa_g = (REGISTERED_NORMALIZE == 1) ? r_mantissa_reg : r_mantissa;
+    assign r_sign_g = (REGISTERED_NORMALIZE == 1) ? r_sign_reg : r_sign;
+    assign zero_operand_g = (REGISTERED_NORMALIZE == 1) ? zero_operand_reg : zero_operand;
+    assign inf_nan_operand_g = (REGISTERED_NORMALIZE == 1) ? inf_nan_operand_reg : inf_nan_operand;
+
+    initial begin
+        if(MANTISSA_WIDTH < BASE_WIDTH)
+            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
+    end
+"
+- Standard REGISTERED_NORMALIZE behavior; exponent, full product, sign, zero flag, and special flag use the same register/bypass choice.
+- The exponent remains signed and EXPONENT_CALC_WIDTH wide. No range check or narrowing occurs before normalization.
+- The carry-index clamp keeps invalid-width elaboration safe; the initial check rejects MANTISSA_WIDTH < BASE_WIDTH.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    // Normalized operand products have a nonzero radix digit in one of two groups.
+    logic normalize_shift;
+    logic [MANTISSA_WIDTH * 2 - 1 : 0] normalized;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] normalized_exponent;
+
+    assign normalize_shift = !(|r_mantissa_g[MANTISSA_WIDTH * 2 - 1 -: BASE_WIDTH]);
+    assign normalized = normalize_shift ? (r_mantissa_g << BASE_WIDTH) : r_mantissa_g;
+
+    always_comb begin
+        normalized_exponent = r_exponent_g;
+        if(normalize_shift && !zero_operand_g) begin
+            normalized_exponent = normalized_exponent - 1;
+        end
+    end
+"
+- our normalize shift condition is basically OR the MSB group, if its not true then we know we got to shift since 
+  the lead bit will then be in the group below
+- and if a shift occurs, we need to decrement our exponent
+- For normalized nonzero inputs, m_a*m_b >= 2^(2*MANTISSA_WIDTH - 2*BASE_WIDTH),
+  so the first nonzero radix digit is in one of the two groups. A single left shift is sufficient.
+- Logical left shift appends zero bits at the low end; exponent minus one preserves the represented value.
+- zero_operand_g prevents decrementing the zero exponent. This assumes normalized inputs, not arbitrary unnormalized words.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    // The first discarded bit is the round bit; all lower bits form sticky.
+    logic [STICKY_OR_WIDTH - 1 : 0] sticky_bits;
+    logic sticky;
+    generate
+        if(MANTISSA_WIDTH > 1) begin : gen_sticky_bits
+            assign sticky_bits = normalized[MANTISSA_WIDTH - 2 : 0];
+        end else begin : gen_no_sticky_bits
+            assign sticky_bits = '0;
+        end
+    endgenerate
+
+    reduction_tree #(
+        .DATA_WIDTH(STICKY_OR_WIDTH),
+        .GATE(1),
+        .REGISTERED_IN(0),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) sticky_or_tree (
+        .clk_i(clk_i),
+        .data_i(sticky_bits),
+        .reduced_o(sticky)
+    );
+
+    logic [MANTISSA_WIDTH : 0] normalized_mantissa_round;
+    logic [MANTISSA_WIDTH : 0] normalized_mantissa_round_p;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] normalized_exponent_p;
+    logic r_sign_p;
+    logic zero_operand_p;
+    logic inf_nan_operand_p;
+
+    assign normalized_mantissa_round = normalized[MANTISSA_WIDTH * 2 - 1 : MANTISSA_WIDTH - 1];
+
+    pipe #(.DATA_WIDTH(MANTISSA_WIDTH + 1), .LATENCY(STICKY_OR_LATENCY)) normalized_mantissa_round_pipe (
+        .clk_i(clk_i), .data_i(normalized_mantissa_round), .data_o(normalized_mantissa_round_p)
+    );
+    pipe #(.DATA_WIDTH(EXPONENT_CALC_WIDTH), .LATENCY(STICKY_OR_LATENCY)) normalized_exponent_pipe (
+        .clk_i(clk_i), .data_i(normalized_exponent), .data_o(normalized_exponent_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(STICKY_OR_LATENCY)) r_sign_pipe (
+        .clk_i(clk_i), .data_i(r_sign_g), .data_o(r_sign_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(STICKY_OR_LATENCY)) zero_operand_pipe (
+        .clk_i(clk_i), .data_i(zero_operand_g), .data_o(zero_operand_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(STICKY_OR_LATENCY)) inf_nan_operand_pipe (
+        .clk_i(clk_i), .data_i(inf_nan_operand_g), .data_o(inf_nan_operand_p)
+    );
+"
+- For MANTISSA_WIDTH > 1 the sticky field contains MANTISSA_WIDTH-1 bits; otherwise it is a one-bit zero input.
+- since STICKY_OR_WIDTH is guaranteed to be at least 1 bit long from previous localparam derivation,
+  theres not zero bit width issue here
+- the 'normalized_mantissa_round' is [MANTISSA_WIDTH : 0] to include round bit, thus also indexes
+  [MANTISSA_WIDTH * 2 - 1 : MANTISSA_WIDTH - 1] instead of [MANTISSA_WIDTH * 2 - 1 : MANTISSA_WIDTH]
+- then we have the respective OR tree to calculate sticky bit
+- we pipeline the relevant variables, as we need sticky bit to determine how to round.
+- sticky_bits contains every bit below normalized[MANTISSA_WIDTH-1], the first discarded round bit.
+- After a normalization left shift, the inserted low zeros are naturally included in the sticky reduction.
+- For a one-bit mantissa the tree input is zero; round still occupies normalized[0].
+- Only the retained mantissa plus round bit is delayed; the discarded bits are needed only by the sticky tree.
+- Exponent, sign, zero flag, and special flag match the tree's latency exactly, including STICKY_OR_LATENCY=0.
+- The special bit reuses existing stage boundaries; the overall LATENCY is unchanged.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    logic round;
+    logic lsb;
+    logic increment;
+    logic [MANTISSA_WIDTH : 0] normalized_rounded;
+    logic carry;
+    logic [MANTISSA_WIDTH - 1 : 0] post_normalized_mantissa;
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] post_normalized_exponent;
+
+    assign round = normalized_mantissa_round_p[0];
+    assign lsb = normalized_mantissa_round_p[1];
+    assign increment = round & (sticky | lsb);
+
+    always_comb begin
+        normalized_rounded = '0;
+        normalized_rounded[MANTISSA_WIDTH - 1 : 0] = normalized_mantissa_round_p[MANTISSA_WIDTH : 1];
+        normalized_rounded = normalized_rounded + increment;
+    end
+
+    assign carry = normalized_rounded[MANTISSA_WIDTH];
+
+    always_comb begin
+        // On carry, all retained bits are zero; insert its radix-shifted bit.
+        post_normalized_mantissa = normalized_rounded[MANTISSA_WIDTH - 1 : 0];
+        post_normalized_mantissa[POST_NORMALIZE_CARRY_INDEX] = post_normalized_mantissa[POST_NORMALIZE_CARRY_INDEX] | carry;
+        post_normalized_exponent = normalized_exponent_p;
+        if(carry && !zero_operand_p) begin
+            post_normalized_exponent = post_normalized_exponent + 1;
+        end
+    end
+"
+- round set to round bit
+- lsb is bit just above round bit 
+- we use sticky calculated prior for increment condition
+- round & (sticky | lsb) implements nearest-even: above-half values increment, and exact ties increment only odd mantissas.
+- normalized_mantissa_round_p packs the retained mantissa above the round bit.
+- Clear the M+1-bit accumulator, copy only the retained M bits into its low M positions, then add increment.
+- Bit M of normalized_rounded is the carry slot, initialized to zero before addition.
+- A rounding carry clears the low M bits; insert the shifted carry at POST_NORMALIZE_CARRY_INDEX and increment the exponent.
+- The M+1-bit accumulator retains the carry. Adding the unsigned one-bit increment adds zero or one, not a replicated mask.
+- Only the lower M retained bits become zero on carry; the carry bit itself is one.
+- OR the carry into bit MANTISSA_WIDTH-BASE_WIDTH, not necessarily the mantissa MSB. The exponent rises by one radix unit.
+- The zero flag suppresses the exponent increment for a zero operand.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+"
+    // Classify the final exponent after both normalization and rounding carry.
+    logic signed [EXPONENT_CALC_WIDTH - 1 : 0] exponent_max_value;
+    logic exponent_overflow;
+    logic exponent_underflow;
+    logic final_sign;
+    logic [EXPONENT_WIDTH - 1 : 0] final_exponent;
+    logic [MANTISSA_WIDTH - 1 : 0] final_mantissa;
+
+    always_comb begin
+        exponent_max_value = EXPONENT_MAX_VALUE;
+        exponent_max_value[EXPONENT_CALC_WIDTH - 1 : EXPONENT_WIDTH] = '0;
+
+        exponent_overflow = !zero_operand_p &&
+            ((post_normalized_exponent > exponent_max_value) ||
+             ((post_normalized_exponent == exponent_max_value) && post_normalized_mantissa[MANTISSA_WIDTH - 1]));
+        exponent_underflow = !zero_operand_p && (post_normalized_exponent <= 0);
+
+        final_sign = r_sign_p;
+        final_exponent = post_normalized_exponent[EXPONENT_WIDTH - 1 : 0];
+        final_mantissa = post_normalized_mantissa;
+
+        // An input NaN/Inf overrides zero and ordinary range classification.
+        if(inf_nan_operand_p) begin
+            final_exponent = '1;
+            final_mantissa[MANTISSA_WIDTH - 1] = 1;
+        end else if(zero_operand_p) begin
+            final_exponent = '0;
+            final_mantissa = '0;
+        end else if(exponent_underflow) begin
+            final_exponent = '0;
+            final_mantissa = '0;
+        end else if(exponent_overflow) begin
+            final_exponent = '1;
+            final_mantissa[MANTISSA_WIDTH - 1] = 1;
+        end
+        if(final_exponent == '0) begin
+            final_mantissa = '0;
+        end
+    end
+
+    assign product_o = {final_sign, final_exponent, final_mantissa};
+"
+- we test exponent > max value, or, equal to max value AND msb set,
+- and apply the appropriate outputs for zero or underflow, overflow
+- then final output mask if exponent is 0  
+- Comparisons use widened signed values before the exponent is narrowed to EXPONENT_WIDTH.
+- The maximum exponent with mantissa MSB zero remains finite; MSB one is the reserved NaN/Inf region.
+- Exponent <= 0 flushes both exponent and mantissa after rounding, so a rounding carry can rescue a boundary result first.
+- inf_nan_operand_p has highest priority and forces the reserved exponent/MSB encoding even when zero_operand_p is also set.
+- zero_operand_p has the next priority and clears both fields only when neither operand is NaN/Inf.
+- The input-class bit preserves NaN/Inf even when the ordinary product calculation would otherwise become finite.
+- Overflow sets the maximum exponent and reserved mantissa MSB while retaining the other mantissa bits.
+- The final exponent-zero mask enforces canonical output zeros; final_sign stays equal to the delayed XOR sign.
+- product_o packs {final_sign, final_exponent, final_mantissa}; there is no additional output register.
+[Marc103 + GPT-6.1 - 11/05/26]
+
+////////////////////////////////////////////////////////////////
+// Baseline input-special propagation before the special-over-zero priority revision - 11/05/26
+- WSL Verilator 5.048: 6,902 exact-integer reference vectors across four register settings,
+  totaling 27,608 transactions in 40 parameter/register combinations.
+- Ten parameter sets cover BASE 2/4/8/16/256; mantissa widths 1/2/4/5/6/12/24/64;
+  exponent widths 2/3/4/5/32/33; LUTX 4/6; GRADE 1/2; and sticky latency 0/1/2.
+- Checked outputs, the unchanged arithmetic overflow/underflow flags, and inf_nan_operand_p before
+  and after clock edges against an independent Python arbitrary-precision integer model.
+- Signed-zero signs are compared, not discarded. The existing LATENCY is checked independently for every configuration.
+- Covered both normalization choices, above/below-half rounding, even/odd ties, rounding carry,
+  exponent-zero flush, both overflow classes, finite maximum-exponent results, and range rescues
+  caused by normalization or rounding carry. Canonical zero times NaN/Inf is checked in both operand orders.
+- Covered special operands on either side, both operands special, all sign combinations, special/finite/zero
+  transitions, and finite maximum-exponent inputs with mantissa MSB zero that must not set the input flag.
+- 1,419 nonzero-special vectors would otherwise have produced a finite ordinary result; all retain the reserved class.
+- Questa 2025.2: compilation succeeded and 13 directed cases passed under the previous zero-first policy.
+- Invalid MANTISSA_WIDTH=3 with BASE=16 was rejected by the existing time-zero fatal assertion.
+- All 27 current quoted RTL/package excerpts were checked against the source files.
+
+////////////////////////////////////////////////////////////////
+// NaN/Inf-over-zero priority re-verification - 11/05/26
+- Only the final priority order changed; arithmetic, sign generation, flag pipelines, and LATENCY are unchanged.
+- WSL Verilator 5.048: 1,066 exact-integer reference vectors across all four register settings,
+  totaling 4,264 transactions in 40 parameter/register combinations using the ten baseline parameter sets.
+- Checked product_o, both ordinary range flags, inf_nan_operand_p, and zero_operand_p before and after clock edges.
+- Included special times canonical zero in both operand orders, all four sign combinations, and multiple payloads;
+  each result retains the maximum exponent and mantissa MSB one, with the existing XOR sign.
+- Interleaved ordinary finite, ordinary zero, nonzero special, and special-plus-zero flag combinations to check alignment.
+- Ordinary zero, finite underflow, finite overflow, maximum-exponent finite input, and rounding-carry controls passed.
+- Questa 2025.2: 13 directed cases passed with the revised priority. Both metadata flags may be one together;
+  the special branch is selected first, so zero cannot clear the reserved output encoding.
+- All 27 source/helper excerpts match the current RTL/package. The adder already uses the same class-first policy.
+
+////////////////////////////////////////////////////////////////
+// Single-bit NaN/Inf propagation policy - 11/05/26
+- Either input's maximum-exponent/mantissa-MSB encoding sets one bit after REGISTERED_IN selection.
+- REGISTERED_NORMALIZE and the sticky-latency pipe carry that bit alongside the existing fields without extra cycles.
+- At the output, the special bit takes priority over canonical zero and forces maximum exponent and mantissa MSB one.
+- The XOR sign and computed lower mantissa bits are retained. A single flag preserves the combined class,
+  without preserving an individual NaN payload or distinguishing NaN from Inf.
+- The former 0x7800 times 0x1100 counterexample now produces reserved output 0x7800 instead of finite 0x4800.
+
+
+

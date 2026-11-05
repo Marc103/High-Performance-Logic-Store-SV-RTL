@@ -10,8 +10,8 @@ module ooc #(
     ////////////////////////////////////////////////////////////////
     // alternate_base_fp_adder
     localparam ALTERNATE_BASE_FP_ADDER_BASE = 16,
-    localparam ALTERNATE_BASE_FP_ADDER_EXPONENT_WIDTH = 3,
-    localparam ALTERNATE_BASE_FP_ADDER_MANTISSA_WIDTH = 12,
+    localparam ALTERNATE_BASE_FP_ADDER_EXPONENT_WIDTH = 6,
+    localparam ALTERNATE_BASE_FP_ADDER_MANTISSA_WIDTH = 25,
     localparam ALTERNATE_BASE_FP_ADDER_LUTX = 6,
     localparam ALTERNATE_BASE_FP_ADDER_GRADE = 1,
     localparam ALTERNATE_BASE_FP_ADDER_REGISTERED_SWAP_IN = 1,
@@ -651,7 +651,7 @@ module ooc #(
     */
     
 
-    /*
+    
     alternate_base_fp_adder #(
         .BASE(ALTERNATE_BASE_FP_ADDER_BASE),
         .EXPONENT_WIDTH(ALTERNATE_BASE_FP_ADDER_EXPONENT_WIDTH),
@@ -675,6 +675,6 @@ module ooc #(
         .b_i(alternate_base_fp_adder_b_i),
         .sum_o(alternate_base_fp_adder_sum_o)
     );
-    */
+    
 
 endmodule

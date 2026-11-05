@@ -1006,6 +1006,51 @@ package constant_functions_pkg;
     endfunction
 
     ////////////////////////////////////////////////////////////////
+    // alternate_base_fp_multiplier
+    function automatic int alternate_base_fp_multiplier_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return 1 + EXPONENT_WIDTH + MANTISSA_WIDTH;
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_BASE_WIDTH(int BASE);
+        return alternate_base_fp_adder_BASE_WIDTH(BASE);
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_EXPONENT_CALC_WIDTH(int EXPONENT_WIDTH);
+        return EXPONENT_WIDTH + 2;
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_EXPONENT_BIAS(int EXPONENT_WIDTH);
+        return (2 ** (EXPONENT_WIDTH - 1)) - 1;
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_EXPONENT_MAX_VALUE(int EXPONENT_WIDTH);
+        return (2 ** EXPONENT_WIDTH) - 1;
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_STICKY_OR_WIDTH(int MANTISSA_WIDTH);
+        // A one-bit mantissa has no sticky bits; use a one-bit zero input.
+        return max(1, MANTISSA_WIDTH - 1);
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_POST_NORMALIZE_CARRY_INDEX(int MANTISSA_WIDTH, int BASE_WIDTH);
+        return max(0, MANTISSA_WIDTH - BASE_WIDTH);
+    endfunction
+
+    function automatic int alternate_base_fp_multiplier_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        int sticky_width, group_size, stages;
+        sticky_width = alternate_base_fp_multiplier_STICKY_OR_WIDTH(MANTISSA_WIDTH);
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+        stages = reduction_tree_STAGES(group_size, sticky_width);
+        return REGISTERED_IN + REGISTERED_NORMALIZE + reduction_tree_LATENCY(0, stages);
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
     // max
     function automatic int max_LATENCY(int REGISTERED_IN, int GRADE);
         int latency;
