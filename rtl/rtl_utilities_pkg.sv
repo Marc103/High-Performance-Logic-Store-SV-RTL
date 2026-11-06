@@ -1064,6 +1064,38 @@ package constant_functions_pkg;
     endfunction
 
     ////////////////////////////////////////////////////////////////
+    // fft_multiplier_core
+    function automatic int fft_multiplier_core_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return alternate_base_fp_multiplier_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH);
+    endfunction
+
+    function automatic int fft_multiplier_core_A_PIPE_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        // A is sampled with WrBr; WiBi is issued one clock later.
+        return alternate_base_fp_multiplier_LATENCY(
+            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        ) + 1;
+    endfunction
+
+    function automatic int fft_multiplier_core_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        // W/B capture to the fourth product's output holding register.
+        return alternate_base_fp_multiplier_LATENCY(
+            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        ) + 4;
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
     // max
     function automatic int max_LATENCY(int REGISTERED_IN, int GRADE);
         int latency;

@@ -1,0 +1,673 @@
+////////////////////////////////////////////////////////////////
+// fft_multiplier_core - AI verification draft
+// Prepared 11/06/26 for user review.
+// Style: verbatim source excerpts followed by reasoning, like manual_verify.mv.
+// Every [ ] is an unsigned user sign-off tag; no human approval is implied.
+// Reviewed inputs:
+//   fft_multiplier_core.sv
+//   ../../rtl_utilities_pkg.sv
+//   ../../io_circuits/pipe/pipe.sv
+//   ../alternate_base_fp_multiplier/alternate_base_fp_multiplier.sv
+//   diagram.jpg, cycle_datasheet.csv, cycle_datasheet.txt
+// L below means MULTIPLIER_LATENCY, not the core's aggregate LATENCY.
+// Clock T is the rising edge accepting a W/B bundle. Timing tables describe
+// signal/register values after that edge's nonblocking assignments settle.
+
+////////////////////////////////////////////////////////////////
+// 01. Review contract and scope
+- One clock domain. rst_i is synchronous, active high, and must cover a rising edge.
+- Reset affects control/validity only. Datapath registers have no reset values;
+  stored input/output words hold through reset and may be unknown before first use.
+- BASE, exponent/mantissa widths, LUTX/GRADE, and tree capacities satisfy the ABFP
+  multiplier's parameter contract. In particular BASE is a power of two >= 2,
+  EXPONENT_WIDTH >= 1, and MANTISSA_WIDTH >= log2(BASE).
+- REGISTERED_IN and REGISTERED_NORMALIZE are 0 or 1 and configure the child multiplier.
+  The core's W/B holding registers and all output holding registers are always present.
+- Wr, Wi, Br, and Bi form one bundle, captured on an accepted w_b_valid_i rising event.
+  Accepted bundles are at least four clocks apart. There is no ready port or queue.
+- Ar and Ai must be valid at T+1. Earlier arrival is allowed if held through T+1.
+  There is no independent A-input valid, and the core does not wait for a late A.
+- w_b_valid_i must be sampled low between strobes. A new value while valid stays high
+  does not constitute a new transaction.
+- Inputs use the existing ABFP contract: exponent zero implies mantissa zero;
+  malformed zero encodings are undefined, and finite nonzero operands are normalized.
+- This core routes four separately rounded ABFP products and copies Ar/Ai unchanged.
+  Tr = WrBr - WiBi and Ti = WrBi + WiBr belong to the downstream adder stage.
+- Review covers the current order WrBr, WiBi, WrBi, WiBr, with A output alongside WiBi.
+  Earlier documents/results using another order or A output at the fourth result
+  are superseded for these timing decisions.
+[ ]
+
+////////////////////////////////////////////////////////////////
+// 02. Overridable parameters
+"
+module fft_multiplier_core #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter REGISTERED_IN,
+    parameter REGISTERED_NORMALIZE,
+    parameter LUTX,
+    parameter GRADE,
+"
+- Both ABFP operands and both A words share BASE, EXPONENT_WIDTH, and MANTISSA_WIDTH.
+- LUTX and GRADE configure the child sticky tree; register flags are passed unchanged.
+- The three timing quantities are localparams derived from the overridable parameters,
+  so changing register flags or sticky-tree depth also changes companion delays.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 03. DATA_WIDTH and port widths
+"
+    localparam DATA_WIDTH = fft_multiplier_core_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
+"
+"
+    function automatic int fft_multiplier_core_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return alternate_base_fp_multiplier_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH);
+    endfunction
+"
+- DATA_WIDTH is 1 sign bit + EXPONENT_WIDTH exponent bits + MANTISSA_WIDTH mantissa bits.
+- Using the multiplier's width helper makes every core word match a_i/b_i/product_o.
+- No field is truncated or reinterpreted by the core; A preserves all DATA_WIDTH bits.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 04. Child multiplier latency
+"
+    localparam MULTIPLIER_LATENCY = alternate_base_fp_multiplier_LATENCY(
+        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+    ),
+"
+"
+    function automatic int alternate_base_fp_multiplier_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        int sticky_width, group_size, stages;
+        sticky_width = alternate_base_fp_multiplier_STICKY_OR_WIDTH(MANTISSA_WIDTH);
+        group_size = reduction_tree_GROUP_SIZE(LUTX, GRADE);
+        stages = reduction_tree_STAGES(group_size, sticky_width);
+        return REGISTERED_IN + REGISTERED_NORMALIZE + reduction_tree_LATENCY(0, stages);
+    endfunction
+"
+- The helper receives the exact same MANTISSA_WIDTH, REGISTERED_IN,
+  REGISTERED_NORMALIZE, LUTX, and GRADE as multiplier_inst.
+- L includes selected child input/normalization registers and internal sticky-tree
+  registers. The core assumes initiation interval one, with fixed latency L >= 0.
+- With the existing reduction_tree_LATENCY, sticky stages S contribute S-1 clocks.
+  Therefore L = REGISTERED_IN + REGISTERED_NORMALIZE + S - 1.
+- L can be zero. It is independent of the four-clock spacing between W/B bundles.
+- All result selector and valid delays use this same L, including when L exceeds four.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 05. A_PIPE_LATENCY derivation
+"
+    localparam A_PIPE_LATENCY = fft_multiplier_core_A_PIPE_LATENCY(
+        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+    ),
+"
+"
+    function automatic int fft_multiplier_core_A_PIPE_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        // A is sampled with WrBr; WiBi is issued one clock later.
+        return alternate_base_fp_multiplier_LATENCY(
+            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        ) + 1;
+    endfunction
+"
+- A input is sampled at T+1, when the first multiplication is issued.
+- WiBi is issued at T+2 and its output holding register updates at T+L+2.
+- A pipe of L+1 stages captures A at T+1 and presents that sample after T+L+1.
+  The A output holding register reads it on the next edge, T+L+2.
+- The output holding register is already accounted for; using L+2 pipe stages
+  would put A one clock late, and the former L+3 would align A to the fourth product.
+- L+1 is always at least one, so a_valid_l[A_PIPE_LATENCY-1:0] is valid even at L=0.
+- Full parameter arguments are used directly, matching the selected child configuration.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 06. Aggregate LATENCY derivation
+"
+    localparam LATENCY = fft_multiplier_core_LATENCY(
+        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+    )
+"
+"
+    function automatic int fft_multiplier_core_LATENCY(
+        int MANTISSA_WIDTH,
+        int REGISTERED_IN,
+        int REGISTERED_NORMALIZE,
+        int LUTX,
+        int GRADE
+    );
+        // W/B capture to the fourth product's output holding register.
+        return alternate_base_fp_multiplier_LATENCY(
+            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        ) + 4;
+    endfunction
+"
+- Capture at T is followed by four issue edges T+1 through T+4.
+- The fourth product, WiBr, reaches its output holding register at T+L+4.
+- valid_o is registered on that same edge, so aggregate LATENCY = L+4.
+- LATENCY measures W/B acceptance to completed bundle; it does not describe
+  when A alone becomes available, which is T+L+2.
+- It also does not constrain the initiation interval: new W/B may be captured at T+4
+  even while an earlier bundle is still travelling through a long multiplier pipeline.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 07. Interface and implicit A timing
+"
+    input clk_i,
+    input rst_i,
+    input [DATA_WIDTH - 1 : 0] wr_i,
+    input [DATA_WIDTH - 1 : 0] wi_i,
+    input [DATA_WIDTH - 1 : 0] br_i,
+    input [DATA_WIDTH - 1 : 0] bi_i,
+    input [DATA_WIDTH - 1 : 0] ar_i,
+    input [DATA_WIDTH - 1 : 0] ai_i,
+    input w_b_valid_i,
+    output logic [DATA_WIDTH - 1 : 0] wrbr_o,
+    output logic [DATA_WIDTH - 1 : 0] wibi_o,
+    output logic [DATA_WIDTH - 1 : 0] wrbi_o,
+    output logic [DATA_WIDTH - 1 : 0] wibr_o,
+    output logic [DATA_WIDTH - 1 : 0] ar_o,
+    output logic [DATA_WIDTH - 1 : 0] ai_o,
+    output logic valid_o
+);
+"
+- All six data inputs and all six data outputs are DATA_WIDTH bits wide.
+- One shared w_b_valid_i controls W/B acceptance; ar_valid_i/ai_valid_i are absent.
+- rst_i clears control and validity only. No datapath register has a reset value.
+  Stored outputs hold through reset, may be unknown before their first write,
+  and must be ignored while invalid. There is no backpressure output.
+- valid_o qualifies the complete output bundle, not every individual product write.
+- a_valid is internal timing for A sampling; it is not an external handshake.
+- Output names are lower-case and match diagram.jpg, including wrbr_o.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 08. Valid edge detection
+"
+    logic [DATA_WIDTH - 1 : 0] wr, wi, br, bi;
+    logic w_b_valid_previous;
+    logic w_b_strobe;
+    logic w_b_capture;
+    logic a_valid;
+
+    assign w_b_strobe = w_b_valid_i && !w_b_valid_previous;
+"
+- w_b_valid_previous is the valid level sampled on the previous rising edge.
+- A high current level with a low previous level creates exactly one strobe event.
+- The previous-level register advances every non-reset clock, including busy clocks.
+  Holding valid high across the return to IDLE cannot repeat the same bundle.
+- A low pulse that never spans a clock edge does not rearm this synchronous detector.
+- If valid rises too early while busy, that event is consumed by the history register
+  and is not queued or retried automatically when the core later becomes idle.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 09. FSM states and simultaneous final-issue capture
+"
+    typedef enum logic [2:0] {
+        IDLE,
+        ISSUE_WRBR,
+        ISSUE_WIBI,
+        ISSUE_WRBI,
+        ISSUE_WIBR
+    } state_t;
+    state_t state;
+
+    // The final issue consumes the old registers before a new W/B capture.
+    assign w_b_capture = w_b_strobe && ((state == IDLE) || (state == ISSUE_WIBR));
+    // The following first issue clock samples Ar and Ai.
+    assign a_valid = (state == ISSUE_WRBR) && !rst_i;
+"
+- Five distinct states require three enum bits: IDLE plus four issue states.
+- The issue order is explicitly WrBr -> WiBi -> WrBi -> WiBr.
+- w_b_capture is true only for a fresh strobe in IDLE or ISSUE_WIBR.
+- ISSUE_WIBR is the fourth issue. Accepting W/B there allows captures at T, T+4,
+  T+8, ... without an idle issue clock between bundles.
+- A strobe in ISSUE_WRBR, ISSUE_WIBI, or ISSUE_WRBI is ignored for data capture.
+- a_valid is high during ISSUE_WRBR before its sampling edge, so it qualifies A
+  on T+1. Seeing it high just after capture edge T identifies the upcoming T+1 sample.
+- !rst_i suppresses new A-valid/first-issue tokens while reset is asserted.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 10. W/B holding registers, input reset, and state transitions
+"
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            w_b_valid_previous <= 0;
+            state <= IDLE;
+        end else begin
+            w_b_valid_previous <= w_b_valid_i;
+            if(w_b_capture) begin
+                wr <= wr_i;
+                wi <= wi_i;
+                br <= br_i;
+                bi <= bi_i;
+            end
+            case(state)
+                IDLE: begin
+                    if(w_b_capture) state <= ISSUE_WRBR;
+                end
+                ISSUE_WRBR: state <= ISSUE_WIBI;
+                ISSUE_WIBI: state <= ISSUE_WRBI;
+                ISSUE_WRBI: state <= ISSUE_WIBR;
+                ISSUE_WIBR: state <= w_b_capture ? ISSUE_WRBR : IDLE;
+                default: state <= IDLE;
+            endcase
+        end
+    end
+"
+- wr/wi/br/bi update together only on w_b_capture. Input-bus changes on other
+  clocks cannot alter the active bundle's operands.
+- Reset clears valid history and state, while the four operand registers hold
+  their existing contents. They have no specified power-up values and are filled
+  together by the next accepted bundle before any valid product is issued.
+- In IDLE, no strobe leaves the state in IDLE; there is no timeout or assumed period.
+- After a capture, four consecutive issue states execute once each.
+- The last state returns to IDLE if no new bundle arrives; with a new strobe,
+  it transitions directly to ISSUE_WRBR for the next bundle.
+- On the overlap edge, every clocked consumer reads the old operand registers
+  before nonblocking assignments replace them with the next bundle.
+- At L=0, the result holding register captures the old final combinational product.
+  At L>0, the multiplier's pipeline captures the old sample and carries it forward.
+- Thus overwriting W/B on the fourth edge cannot replace that edge's old WiBr product.
+- The default state branch returns an invalid state encoding to IDLE; fault-tolerant
+  recovery from arbitrary state corruption is outside this functional review.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 11. Multiplier operand selection and issue tags
+"
+    logic [DATA_WIDTH - 1 : 0] multiplier_a;
+    logic [DATA_WIDTH - 1 : 0] multiplier_b;
+    logic [DATA_WIDTH - 1 : 0] product;
+    logic issue_valid;
+    logic [1:0] issue_selector;
+    logic result_valid;
+    logic [1:0] result_selector;
+
+    always_comb begin
+        multiplier_a = wr;
+        multiplier_b = br;
+        issue_valid = a_valid;
+        issue_selector = 2'd0;
+        case(state)
+            ISSUE_WIBI: begin
+                multiplier_a = wi;
+                multiplier_b = bi;
+                issue_valid = !rst_i;
+                issue_selector = 2'd1;
+            end
+            ISSUE_WRBI: begin
+                multiplier_b = bi;
+                issue_valid = !rst_i;
+                issue_selector = 2'd2;
+            end
+            ISSUE_WIBR: begin
+                multiplier_a = wi;
+                issue_valid = !rst_i;
+                issue_selector = 2'd3;
+            end
+            default: begin end
+        endcase
+    end
+"
+- Defaults select wr and br with selector 0. issue_valid is a_valid, so the
+  default operands are meaningful only in ISSUE_WRBR; IDLE does not issue a token.
+- All combinational outputs receive defaults, preventing inferred latches.
+- The active state overrides operands and selector as follows:
+
+  Issue state       Multiplier A   Multiplier B   Selector   Destination
+  ISSUE_WRBR        wr             br             0          wrbr_o
+  ISSUE_WIBI        wi             bi             1          wibi_o
+  ISSUE_WRBI        wr             bi             2          wrbi_o
+  ISSUE_WIBR        wi             br             3          wibr_o
+
+- Each active state asserts issue_valid only when reset is low.
+- The selector describes the product being issued now, not a product returning
+  from an earlier issue. Its matching return delay is reviewed below.
+- Arithmetic may evaluate during idle; a clear issue_valid prevents those
+  unrequested values from changing product output registers.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 12. Shared ABFP multiplier instance
+"
+    alternate_base_fp_multiplier #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGISTERED_IN(REGISTERED_IN),
+        .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) multiplier_inst (
+        .clk_i(clk_i),
+        .a_i(multiplier_a),
+        .b_i(multiplier_b),
+        .product_o(product)
+    );
+"
+- Exactly one alternate_base_fp_multiplier computes all four products.
+- Format, register, and LUT settings are forwarded without modification.
+- Selected W/B operands connect to a_i/b_i and product_o is routed to product.
+- The same clk_i drives the core and child, so issue and result tags share a domain.
+- There is no arithmetic recomputation, reassociation, input masking, or extra rounding.
+- Canonical zeros, signed-zero signs, exponent range handling, and combined NaN/Inf
+  propagation are inherited from the existing multiplier implementation.
+- Ar/Ai use separate full-word pipes; they are not multiplied or classified here.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 13. Product selector pipeline
+"
+    pipe #(.DATA_WIDTH(2), .LATENCY(MULTIPLIER_LATENCY)) result_selector_pipe (
+        .clk_i(clk_i), .data_i(issue_selector), .data_o(result_selector)
+    );
+"
+- The selector is two bits because it identifies exactly four product destinations.
+- result_selector is delayed by the same L as the arithmetic result.
+- L=0 uses the existing pipe module's combinational bypass, adding no selector cycle.
+- At L>0, both the product and its selector arrive from the same issue edge.
+- The selector pipe has no reset. It is safe to contain old/unknown selectors
+  because result_valid gates all product-register writes and is reset separately.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 14. Return-valid pipeline, including L=0 and L=1
+"
+    // Reset only the validity pipeline; invalid arithmetic results are ignored.
+    generate
+        if(MULTIPLIER_LATENCY == 0) begin : gen_valid_bypass
+            assign result_valid = issue_valid;
+        end else begin : gen_valid_pipe
+            logic [MULTIPLIER_LATENCY - 1 : 0] valid;
+            always @(posedge clk_i) begin
+                if(rst_i) begin
+                    valid <= '0;
+                end else begin
+                    valid[0] <= issue_valid;
+                    for(int i = 1; i < MULTIPLIER_LATENCY; i++) begin
+                        valid[i] <= valid[i - 1];
+                    end
+                end
+            end
+            assign result_valid = valid[MULTIPLIER_LATENCY - 1];
+        end
+    endgenerate
+"
+- Generate branches are mutually exclusive.
+- At L=0, issue_valid directly qualifies the current combinational result;
+  no [L-1:0] register range is elaborated for that case.
+- For L>0, valid contains exactly L bits. valid[0] captures the issued token.
+- Nonblocking assignments shift the prior contents one position per edge.
+- The loop covers indices 1 through L-1. At L=1 there are no loop iterations,
+  so the single register still gives exactly one clock of delay.
+- Reset clears all valid stages. Stale arithmetic and selector values then
+  remain unable to update outputs after reset until a new token traverses L stages.
+- Product, selector, and validity are aligned for isolated or continuous issues.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 15. Raw A-data pipes
+"
+    // Align A with WiBi, the second product, including its output holding register.
+    logic [DATA_WIDTH - 1 : 0] ar_p;
+    logic [DATA_WIDTH - 1 : 0] ai_p;
+    logic [A_PIPE_LATENCY - 1 : 0] a_valid_l;
+    logic a_valid_p;
+    pipe #(.DATA_WIDTH(DATA_WIDTH), .LATENCY(A_PIPE_LATENCY)) ar_pipe (
+        .clk_i(clk_i), .data_i(ar_i), .data_o(ar_p)
+    );
+    pipe #(.DATA_WIDTH(DATA_WIDTH), .LATENCY(A_PIPE_LATENCY)) ai_pipe (
+        .clk_i(clk_i), .data_i(ai_i), .data_o(ai_p)
+    );
+"
+- ar_i and ai_i feed their own DATA_WIDTH-bit pipes directly; there is no
+  W/B-time holding register in front of A.
+- Both data pipes use A_PIPE_LATENCY = L+1 and share clk_i.
+- They shift every clock, including cycles with unrelated input-bus data.
+  Only the delayed a_valid pulse selects which samples reach the output registers.
+- Therefore A must meet setup/hold at T+1, while its values on other clocks
+  may change independently. Ar and Ai are always captured as the same pair.
+- Their sign, exponent, mantissa, and any otherwise unused bit patterns pass intact.
+- The pipes and A-output datapath registers have no reset values. Cleared validity
+  prevents stale pipe samples from causing A-output writes after reset.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 16. A-valid pipeline and one-clock output holding stage
+"
+    // A arrives on the first issue clock. Delay its valid with the raw data.
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            a_valid_l <= '0;
+        end else begin
+            a_valid_l[0] <= a_valid;
+            for(int i = 1; i < A_PIPE_LATENCY; i++) begin
+                a_valid_l[i] <= a_valid_l[i - 1];
+            end
+        end
+    end
+    assign a_valid_p = a_valid_l[A_PIPE_LATENCY - 1];
+"
+- The first stage samples a_valid on the same edge that ar_pipe/ai_pipe sample A.
+- There are L+1 valid stages, matching the L+1 data stages exactly.
+- The loop covers 1 through A_PIPE_LATENCY-1, and becomes empty at L=0,
+  where A_PIPE_LATENCY=1. There is no zero-width declaration or negative index.
+- At T+L+1, data and valid have reached the last pipe stage after that edge settles.
+- The A output register reads those old last-stage values on T+L+2, precisely
+  when the second product, WiBi, is captured into its own holding register.
+- The separate output holding stage is why A_PIPE_LATENCY is L+1 rather than L+2.
+- Reset clears every A-valid stage, discarding old A samples even while its
+  unreset raw data pipes continue shifting.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 17. Output holding registers, destination decode, and valid_o
+"
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            valid_o <= 0;
+        end else begin
+            valid_o <= 0;
+            if(a_valid_p) begin
+                ar_o <= ar_p;
+                ai_o <= ai_p;
+            end
+            if(result_valid) begin
+                case(result_selector)
+                    2'd0: wrbr_o <= product;
+                    2'd1: wibi_o <= product;
+                    2'd2: wrbi_o <= product;
+                    2'd3: begin
+                        wibr_o <= product;
+                        valid_o <= 1;
+                    end
+                endcase
+            end
+        end
+    end
+"
+- Reset clears valid_o and suppresses normal writes; all six data outputs retain
+  their prior contents. Their values may be unknown until their first valid write.
+- No reset pin or reset value is required on any output datapath register.
+- Outside reset, valid_o defaults low on every clock, so it is a one-clock pulse
+  whenever the fourth result is written. Consecutive bundles are at least four clocks apart.
+- a_valid_p qualifies Ar/Ai writes on non-reset clocks. They update with WiBi,
+  two issue positions before the final product; the core deliberately does not wait
+  for valid_o before storing A.
+- Product writes require result_valid. Delayed selectors 0/1/2/3 select exactly
+  wrbr_o/wibi_o/wrbi_o/wibr_o, matching the operand-mux truth table.
+- Selector 3 writes WiBr and asserts valid_o on the same edge.
+- Conditional nonblocking writes give every data output holding behavior between
+  its own updates; no full bundle is promised coherent while valid_o is low.
+- At valid_o, all four products and the stored A pair refer to the same transaction.
+  The two-bit selector exhausts all four known selector values; no additional
+  default write is needed, and invalid/unknown values must not create a result write.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 18. Relative timing proof and zero-latency cycle sheet
+- Let T be the accepted W/B capture edge and L be the child multiplier latency.
+- Each product is issued one clock after the preceding one. The output holding
+  register reads its returning product L clocks after that product's issue edge.
+
+  Action                         Input/issue edge   Output update edge
+  Capture Wr/Wi/Br/Bi             T                  W/B holding regs at T
+  WrBr                           T+1                T+L+1
+  WiBi                           T+2                T+L+2
+  WrBi                           T+3                T+L+3
+  WiBr                           T+4                T+L+4
+  Sample Ar/Ai                    T+1                T+L+2
+  Complete bundle valid_o         --                 T+L+4
+  Earliest next W/B capture       T+4                --
+
+- For L=0 and T=0, the product sequence in the CSV/TXT is WrBr at 1, WiBi at 2,
+  WrBi at 3, and WiBr at 4. A input is valid at 1 and A delay first shows a0 at 2.
+- With the next W/B capture at 4, its products update at 5,6,7,8; a1 is sampled
+  at 5 and its A output appears at 6, together with that bundle's WiBi.
+- The CSV/TXT M row is a serialized result trace; it is not one shared output port.
+  The real RTL keeps each destination in its own holding register.
+- The sheets are the L=0 example. Add L to product/A output update clocks and
+  valid_o timing for a pipelined child, while input capture clocks stay unchanged.
+- diagram.jpg now lists the same product order in both numbered lists. Its
+  aggregate L+4 valid description is compatible with A already having updated at L+2.
+- No valid_o row is present in the sheet; its strobes are at 4 and 8 for L=0.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 19. Four-clock throughput, arbitrary gaps, and bundle coherence
+- At minimum spacing, next W/B capture is T+4 and next WrBr issue is T+5.
+  Thus the multiplier receives one issue per clock across the boundary.
+- Fixed multiplier latency shifts those returning products equally, preserving
+  both destination order and the four-clock interval between completed bundles.
+- Even when L>4, the fixed-latency product stream and matching selector/valid pipes
+  keep transactions in order. A separate frame ID is unnecessary for this schedule.
+- Let the next accepted capture be T+D, with D>=4. Its first product output is
+  T+D+L+1, at least one clock after the old bundle's valid_o at T+L+4.
+- Its A output is T+D+L+2, at least two clocks after the old bundle's valid_o.
+  Thus early A output never replaces the old A pair before that old bundle is complete.
+- Downstream synchronous logic sampling valid_o on the following edge reads the
+  prior stable bundle before any same-edge nonblocking output updates take effect.
+- If no new strobe occurs on the fourth issue, the FSM returns to IDLE and waits
+  indefinitely. Gaps of 5,8,20,... clocks do not manufacture a transaction.
+- Pending old products may still return while the issue FSM is idle; result_valid
+  and delayed tags, rather than the issue state, control those output writes.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 20. Reset and protocol boundaries
+- All control reset assignments are synchronous. rst_i must span a rising edge;
+  an unclocked reset pulse is not sufficient to clear state or pipe-valid registers.
+- Reset clears the FSM state, W/B valid history, both validity pipelines, and
+  valid_o. W/B holding registers and all six output data registers retain data.
+  Child arithmetic, the selector pipe, and raw A pipes also have no reset.
+- Before their first writes, data registers may be unknown. Qualified transactions
+  initialize every product and A output before valid_o is asserted.
+- Cleared validity masks all stale arithmetic, tag, and A samples. New output writes
+  require new accepted inputs and the matching pipeline traversal.
+- If reset cancels a transaction after its early A output but before WiBr/valid_o,
+  that A value remains stored but invalid. No completion is reported for the aborted
+  bundle; a fresh bundle later replaces all outputs before asserting valid_o.
+- After reset, a high w_b_valid_i is treated as a fresh event because the history
+  bit was cleared. Drive valid low if no transaction should be accepted on release.
+- Early busy strobes are ignored; holding one high until the core is idle does not
+  turn it into a queued transaction. The sender must observe the minimum spacing.
+- No reset-free power-up behavior, backpressure, clock-domain crossing, or validation
+  of malformed A/ABFP inputs is promised by this core.
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 21. Simulation evidence - 11/06/26
+- These baseline records verified the current order and A-with-WiBi timing before
+  the control-only-reset revision. They used datapath reset-to-zero checks; the
+  reset-policy re-verification below checks retained data and unknown initial values.
+- WSL Verilator: seven configurations passed 2,495 completed transactions over
+  13,023 checked clocks. Every clock compared all six output words, valid_o,
+  and internal a_valid against independent scheduling and exact-integer arithmetic.
+- The reference scheduled A independently at T+L+2 and full bundle valid at T+L+4.
+  This checks early A timing as well as final data values.
+
+  Case            BASE  E   M   LUTX GRADE RI RN   L   A out  Core LATENCY  Transactions
+  combinational   16    3   4   6    1     0  0    0   2      4             359
+  bypass_tree     16    3   12  6    1     0  0    1   3      5             357
+  input_only      16    3   12  6    1     1  0    2   4      6             356
+  normalize_only  16    3   12  6    1     0  1    2   4      6             356
+  registered      16    3   12  6    1     1  1    3   5      7             355
+  one_bit         2     2   1   6    2     0  0    0   2      4             359
+  long_pipeline   16    5   64  3    1     1  1    5   7      9             353
+
+- A out and Core LATENCY columns are clock offsets from the accepted W/B capture.
+- Stimulus includes continuous four-clock W/B spacing, A available with W/B and
+  held through its sample clock, A arriving exactly one clock later, and unrelated
+  bus changes on invalid clocks.
+- Also covered variable gaps, held-high valid across the boundary, ignored early
+  busy strobes, reset during each issue and overlap edge, and reset while results
+  remained in flight. Arithmetic includes finite, canonical-zero, and combined
+  NaN/Inf operands, including special times zero with exact full-word comparison.
+- Questa 2025.2 compatibility smoke passed 359 transactions over 1,835 clocks
+  with L=0, including A/WiBi alignment at clock 2 and completed bundle at clock 4.
+- Evidence paths from repository root (simulation outputs, not required source files):
+    simulate/fft_core_old_order_checks/results.json
+    simulate/fft_core_old_order_checks/regression.log
+    simulate/fft_core_old_order_checks/<case>/verilator.log
+    simulate/fft_core_old_order_checks/<case>/vectors.txt
+    simulate/fft_core_old_order_checks/questa/smoke.log
+- These finite simulations are supporting evidence, not an exhaustive proof over
+  every numeric encoding, parameter set, or input history. Parameter limits and
+  the upstream timing contract still require manual sign-off.
+// Control-only reset re-verification - 11/06/26
+- The reset policy was changed to clear only FSM/valid state. W/B and output
+  datapath clears were removed; timing, operand selection, and all latencies are unchanged.
+- WSL Verilator reran the same seven configurations in the table above:
+  2,495 completed transactions over 13,023 clocks, including 147 reset clocks.
+- The golden control schedule and independent exact-arithmetic golden words were
+  reused. The scoreboard preserves expected output data across reset and compares
+  each word once it has received its first qualified write.
+- Before first writes, data is unspecified. Hold checks use case equality, allowing
+  unknown initial values rather than requiring zeros. Every output must retain its
+  previous value on a clock without its qualified write, including reset clocks.
+- W/B operand holding registers were also checked for unchanged contents on every
+  reset edge. valid_o was checked every clock, including all reset/abort intervals.
+- These checks verify that stale/retained data never becomes a valid completed
+  bundle, all outputs have been written before a completion, and early A still
+  updates with WiBi at T+L+2 while complete valid remains at T+L+4.
+- Questa 2025.2 four-state compatibility smoke passed 359 transactions over
+  1,835 clocks, including 21 reset clocks, with no initial-zero assumption and
+  no compile/simulation errors or warnings.
+- Updated evidence paths from repository root:
+    simulate/fft_core_control_reset_checks/results.json
+    simulate/fft_core_control_reset_checks/regression.log
+    simulate/fft_core_control_reset_checks/<case>/verilator.log
+    simulate/fft_core_control_reset_checks/<case>/vectors.txt
+    simulate/fft_core_control_reset_checks/questa/smoke.log
+[Marc103 - 11/06/26]
+
+////////////////////////////////////////////////////////////////
+// 22. Final user sign-off
+- Confirm the accepted product order: WrBr, WiBi, WrBi, WiBr.
+- Confirm W/B acceptance at T,T+4,T+8,... and arbitrary later accepted strobes.
+- Confirm A is sampled at T+1 and ar_o/ai_o update with WiBi at T+L+2.
+- Confirm valid_o qualifies the complete stored bundle at T+L+4, including early A.
+- Confirm rising-event valid semantics, ignored busy strobes, and no backpressure.
+- Confirm control-only synchronous reset, retained/initially unknown datapath data,
+  transaction aborts, and high valid on reset release.
+- Confirm the source excerpts and reasoning above before replacing each blank tag
+  with the reviewer's normal name/date annotation.
+[Marc103 - 11/06/26]
+
