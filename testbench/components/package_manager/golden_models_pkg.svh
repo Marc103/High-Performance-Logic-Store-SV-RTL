@@ -18,4 +18,5 @@ package golden_models_pkg;
     `include "EqualTreeModel.sv"
     `include "AlternateBaseFpAdderModel.sv"
     `include "AlternateBaseFpMultiplierModel.sv"
+    `include "FftMultiplierCoreModel.sv"
 endpackage

@@ -17,4 +17,5 @@ package io_pkg;
     `include "EqualTreeIO.sv"
     `include "AlternateBaseFpAdderIO.sv"
     `include "AlternateBaseFpMultiplierIO.sv"
+    `include "FftMultiplierCoreIO.sv"
 endpackage

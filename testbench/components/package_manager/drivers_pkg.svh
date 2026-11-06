@@ -18,4 +18,5 @@ package drivers_pkg;
     `include "EqualTreeDriver.sv"
     `include "AlternateBaseFpAdderDriver.sv"
     `include "AlternateBaseFpMultiplierDriver.sv"
+    `include "FftMultiplierCoreDriver.sv"
 endpackage

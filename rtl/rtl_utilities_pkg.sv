@@ -159,6 +159,31 @@ package constant_functions_pkg;
     } alternate_base_fp_multiplier_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // fft_multiplier_core behavioral transactions
+    `define FFT_MULTIPLIER_CORE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic w_b_valid_i; \
+        logic [DATA_WIDTH - 1 : 0] wr_i; \
+        logic [DATA_WIDTH - 1 : 0] wi_i; \
+        logic [DATA_WIDTH - 1 : 0] br_i; \
+        logic [DATA_WIDTH - 1 : 0] bi_i; \
+        logic [DATA_WIDTH - 1 : 0] ar_i; \
+        logic [DATA_WIDTH - 1 : 0] ai_i; \
+    } fft_multiplier_core_io_in_t;
+
+    `define FFT_MULTIPLIER_CORE_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] wrbr_o; \
+        logic [DATA_WIDTH - 1 : 0] wibi_o; \
+        logic [DATA_WIDTH - 1 : 0] wrbi_o; \
+        logic [DATA_WIDTH - 1 : 0] wibr_o; \
+        logic [DATA_WIDTH - 1 : 0] ar_o; \
+        logic [DATA_WIDTH - 1 : 0] ai_o; \
+        logic valid_o; \
+    } fft_multiplier_core_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;

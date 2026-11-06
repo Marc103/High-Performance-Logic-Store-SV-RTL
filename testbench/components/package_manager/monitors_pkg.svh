@@ -18,4 +18,5 @@ package monitors_pkg;
     `include "EqualTreeMonitor.sv"
     `include "AlternateBaseFpAdderMonitor.sv"
     `include "AlternateBaseFpMultiplierMonitor.sv"
+    `include "FftMultiplierCoreMonitor.sv"
 endpackage

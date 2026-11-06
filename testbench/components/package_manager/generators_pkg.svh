@@ -18,4 +18,5 @@ package generators_pkg;
     `include "EqualTreeGenerator.sv"
     `include "AlternateBaseFpAdderGenerator.sv"
     `include "AlternateBaseFpMultiplierGenerator.sv"
+    `include "FftMultiplierCoreGenerator.sv"
 endpackage
