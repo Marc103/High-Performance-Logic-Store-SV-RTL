@@ -99,9 +99,9 @@ class FftMultiplierCoreModel #(type T);
                     initialized[item.destination] = 1;
                     case(item.destination)
                         0: held_outputs.wrbr_o = item.value;
-                        1: held_outputs.wibi_o = item.value;
+                        1: begin held_outputs.wibi_o = item.value; held_outputs.valid_o = 1; end
                         2: held_outputs.wrbi_o = item.value;
-                        3: begin held_outputs.wibr_o = item.value; held_outputs.valid_o = 1; end
+                        3: held_outputs.wibr_o = item.value;
                         4: held_outputs.ar_o = item.value;
                         5: held_outputs.ai_o = item.value;
                         default: $fatal(1, "Invalid model destination");
@@ -109,7 +109,8 @@ class FftMultiplierCoreModel #(type T);
                 end
             end
         end
-        if(held_outputs.valid_o && initialized != 6'h3f) $fatal(1, "Incomplete valid model bundle");
+        if(held_outputs.valid_o && (initialized & 6'h33) != 6'h33)
+            $fatal(1, "Early valid before WrBr/WiBi/A model data is ready");
         output_sequence.fft_multiplier_core_io_in_q.push_back(stimulus);
         output_sequence.fft_multiplier_core_io_out_q.push_back(held_outputs);
         output_sequence.error_state.push_back(0);

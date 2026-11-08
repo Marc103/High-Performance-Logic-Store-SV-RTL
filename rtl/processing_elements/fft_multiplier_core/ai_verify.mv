@@ -9,6 +9,10 @@
 //   ../../io_circuits/pipe/pipe.sv
 //   ../alternate_base_fp_multiplier/alternate_base_fp_multiplier.sv
 //   diagram.jpg, cycle_datasheet.csv, cycle_datasheet.txt
+// Revision 11/07/26: valid_o moves from the fourth product to WiBi, T+L+2.
+// Sections 06,07,17,18,19,20,22 are reopened; other recorded sign-offs are preserved.
+// Section 21 records historical L+4-strobe tests and is not the current valid contract.
+// The new verification block below records this revision's tests.
 // L below means MULTIPLIER_LATENCY, not the core's aggregate LATENCY.
 // Clock T is the rising edge accepting a W/B bundle. Timing tables describe
 // signal/register values after that edge's nonblocking assignments settle.
@@ -36,6 +40,9 @@
 - Review covers the current order WrBr, WiBi, WrBi, WiBr, with A output alongside WiBi.
   Earlier documents/results using another order or A output at the fourth result
   are superseded for these timing decisions.
+- Revision 11/07/26: valid_o now indicates the WiBi/A early stage at T+L+2.
+  It no longer indicates simultaneous validity of all six outputs; late products
+  remain scheduled at T+L+3 and T+L+4.
 [ ]
 
 ////////////////////////////////////////////////////////////////
@@ -149,20 +156,23 @@ module fft_multiplier_core #(
         int LUTX,
         int GRADE
     );
-        // W/B capture to the fourth product's output holding register.
+        // W/B capture to WiBi and its early valid_o strobe.
         return alternate_base_fp_multiplier_LATENCY(
             MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
-        ) + 4;
+        ) + 2;
     endfunction
 "
 - Capture at T is followed by four issue edges T+1 through T+4.
-- The fourth product, WiBr, reaches its output holding register at T+L+4.
-- valid_o is registered on that same edge, so aggregate LATENCY = L+4.
-- LATENCY measures W/B acceptance to completed bundle; it does not describe
-  when A alone becomes available, which is T+L+2.
-- It also does not constrain the initiation interval: new W/B may be captured at T+4
-  even while an earlier bundle is still travelling through a long multiplier pipeline.
-[Marc103 - 11/06/26]
+- The second product, WiBi, reaches its output holding register at T+L+2.
+  valid_o asserts on that same edge, so the public LATENCY is now L+2.
+- WrBr is already stored at T+L+1; Ar and Ai update with WiBi at T+L+2.
+  These four words are the data qualified by the early strobe.
+- WrBi and WiBr still update at T+L+3 and T+L+4. Their arrival times did not move,
+  and neither word is qualified for this transaction by the early valid_o pulse.
+- Four multiplication issues are still required: new W/B may be captured at T+4,
+  independent of L. Shorter valid latency does not reduce the initiation interval.
+- Drains and reset-test windows must still cover L+4, rather than stopping at LATENCY.
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 07. Interface and implicit A timing
@@ -187,13 +197,13 @@ module fft_multiplier_core #(
 "
 - All six data inputs and all six data outputs are DATA_WIDTH bits wide.
 - One shared w_b_valid_i controls W/B acceptance; ar_valid_i/ai_valid_i are absent.
-- rst_i clears control and validity only. No datapath register has a reset value.
-  Stored outputs hold through reset, may be unknown before their first write,
-  and must be ignored while invalid. There is no backpressure output.
-- valid_o qualifies the complete output bundle, not every individual product write.
-- a_valid is internal timing for A sampling; it is not an external handshake.
+- rst_i clears control and validity only. Stored data holds through reset and may
+  be unknown before its first write. There is no backpressure output.
+- valid_o qualifies WrBr, WiBi, Ar, and Ai for the first downstream operation.
+  WrBi/WiBr belong to the same input transaction but return one/two clocks later.
+- a_valid is internal timing for A sampling, not an external handshake.
 - Output names are lower-case and match diagram.jpg, including wrbr_o.
-[Marc103 - 11/06/26]
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 08. Valid edge detection
@@ -492,40 +502,39 @@ module fft_multiplier_core #(
             if(result_valid) begin
                 case(result_selector)
                     2'd0: wrbr_o <= product;
-                    2'd1: wibi_o <= product;
-                    2'd2: wrbi_o <= product;
-                    2'd3: begin
-                        wibr_o <= product;
+                    2'd1: begin
+                        wibi_o <= product;
                         valid_o <= 1;
                     end
+                    2'd2: wrbi_o <= product;
+                    2'd3: wibr_o <= product;
                 endcase
             end
         end
     end
 "
 - Reset clears valid_o and suppresses normal writes; all six data outputs retain
-  their prior contents. Their values may be unknown until their first valid write.
-- No reset pin or reset value is required on any output datapath register.
-- Outside reset, valid_o defaults low on every clock, so it is a one-clock pulse
-  whenever the fourth result is written. Consecutive bundles are at least four clocks apart.
-- a_valid_p qualifies Ar/Ai writes on non-reset clocks. They update with WiBi,
-  two issue positions before the final product; the core deliberately does not wait
-  for valid_o before storing A.
-- Product writes require result_valid. Delayed selectors 0/1/2/3 select exactly
-  wrbr_o/wibi_o/wrbi_o/wibr_o, matching the operand-mux truth table.
-- Selector 3 writes WiBr and asserts valid_o on the same edge.
-- Conditional nonblocking writes give every data output holding behavior between
-  its own updates; no full bundle is promised coherent while valid_o is low.
-- At valid_o, all four products and the stored A pair refer to the same transaction.
-  The two-bit selector exhausts all four known selector values; no additional
-  default write is needed, and invalid/unknown values must not create a result write.
+  their prior contents. Their values may be unknown until their first qualified write.
+- No reset pin or reset value is required on an output datapath register.
+- Outside reset, valid_o defaults low every clock, producing one-clock pulses.
+- Selector 1 writes WiBi and asserts valid_o on that same edge, T+L+2.
+- a_valid_p independently qualifies Ar/Ai writes on that same edge. WrBr was stored
+  on T+L+1, so all four early-stage input words are ready together with valid_o.
+- Selectors 0/1/2/3 still write wrbr_o/wibi_o/wrbi_o/wibr_o respectively.
+  Selector 3 writes WiBr without another valid_o strobe.
+- WrBi and WiBr may still be unknown or hold older data at the early strobe.
+  Consumers must use their documented +1/+2 clock timing, not treat valid_o as
+  simultaneous validity for all six outputs.
+- All four product writes and both A writes continue to be checked every clock,
+  including after valid_o and during reset/idle intervals.
+- Known selector values exhaust the two-bit encoding; unmatched/unknown selectors
+  cannot perform a product write through this case statement.
 [Marc103 - 11/06/26]
 
 ////////////////////////////////////////////////////////////////
 // 18. Relative timing proof and zero-latency cycle sheet
-- Let T be the accepted W/B capture edge and L be the child multiplier latency.
-- Each product is issued one clock after the preceding one. The output holding
-  register reads its returning product L clocks after that product's issue edge.
+- Let T be the accepted W/B capture edge and L be the multiplier latency.
+- Every product's output holding register updates L clocks after its issue edge.
 
   Action                         Input/issue edge   Output update edge
   Capture Wr/Wi/Br/Bi             T                  W/B holding regs at T
@@ -534,63 +543,59 @@ module fft_multiplier_core #(
   WrBi                           T+3                T+L+3
   WiBr                           T+4                T+L+4
   Sample Ar/Ai                    T+1                T+L+2
-  Complete bundle valid_o         --                 T+L+4
+  Early-stage valid_o             --                 T+L+2
   Earliest next W/B capture       T+4                --
 
-- For L=0 and T=0, the product sequence in the CSV/TXT is WrBr at 1, WiBi at 2,
-  WrBi at 3, and WiBr at 4. A input is valid at 1 and A delay first shows a0 at 2.
-- With the next W/B capture at 4, its products update at 5,6,7,8; a1 is sampled
-  at 5 and its A output appears at 6, together with that bundle's WiBi.
-- The CSV/TXT M row is a serialized result trace; it is not one shared output port.
-  The real RTL keeps each destination in its own holding register.
-- The sheets are the L=0 example. Add L to product/A output update clocks and
-  valid_o timing for a pipelined child, while input capture clocks stay unchanged.
-- diagram.jpg now lists the same product order in both numbered lists. Its
-  aggregate L+4 valid description is compatible with A already having updated at L+2.
-- No valid_o row is present in the sheet; its strobes are at 4 and 8 for L=0.
-[Marc103 - 11/06/26]
+- For L=0, the CSV/TXT trace has WrBr at 1, WiBi at 2, WrBi at 3, and WiBr at 4.
+  A input is sampled at 1; A outputs and valid_o update at 2 alongside WiBi.
+- The next W/B capture at 4 produces outputs at 5,6,7,8; its A output and valid_o
+  update at 6. The new valid_o row therefore has pulses at 2 and 6, not 4 and 8.
+- M is a serialized result trace; the real RTL keeps each destination in its own
+  holding register. Add L only to output/strobe clocks for a pipelined multiplier.
+- diagram.jpg's product order and datapath remain applicable, but its older text
+  qualifying a complete bundle at L+4 must be updated to this L+2 early-stage contract.
+[Marc103 - 11/07/26]
 
 ////////////////////////////////////////////////////////////////
 // 19. Four-clock throughput, arbitrary gaps, and bundle coherence
 - At minimum spacing, next W/B capture is T+4 and next WrBr issue is T+5.
-  Thus the multiplier receives one issue per clock across the boundary.
-- Fixed multiplier latency shifts those returning products equally, preserving
-  both destination order and the four-clock interval between completed bundles.
-- Even when L>4, the fixed-latency product stream and matching selector/valid pipes
-  keep transactions in order. A separate frame ID is unnecessary for this schedule.
-- Let the next accepted capture be T+D, with D>=4. Its first product output is
-  T+D+L+1, at least one clock after the old bundle's valid_o at T+L+4.
-- Its A output is T+D+L+2, at least two clocks after the old bundle's valid_o.
-  Thus early A output never replaces the old A pair before that old bundle is complete.
-- Downstream synchronous logic sampling valid_o on the following edge reads the
-  prior stable bundle before any same-edge nonblocking output updates take effect.
-- If no new strobe occurs on the fourth issue, the FSM returns to IDLE and waits
-  indefinitely. Gaps of 5,8,20,... clocks do not manufacture a transaction.
-- Pending old products may still return while the issue FSM is idle; result_valid
-  and delayed tags, rather than the issue state, control those output writes.
-[Marc103 - 11/06/26]
+  The multiplier receives one issue per clock across this boundary.
+- Fixed latency preserves product order and the four-clock interval between early
+  valid_o strobes, even if multiple transactions coexist in a multiplier with L>4.
+- With the next capture at T+D, D>=4, its first output is T+D+L+1, at least three
+  clocks after this transaction's early valid_o at T+L+2. Its A output is at least
+  four clocks after this strobe. Early-stage data is stable for its consumer.
+- Downstream synchronous logic reads WrBr/WiBi/Ar/Ai on the following edge before
+  any same-edge nonblocking updates. It may begin the real-part operation immediately.
+- WrBi arrives one clock after valid_o; WiBr arrives two clocks after valid_o.
+  A downstream operation needing both imaginary products must wait those two clocks.
+- All six words have arrived by T+L+4, but no extra completion strobe is generated.
+- No new strobe on the fourth issue returns the FSM to IDLE. Later/irregular
+  captures still work; no transaction is manufactured during gaps.
+- Returning product writes depend on delayed tokens, not the current issue state.
+  The testbench keeps draining to L+4 and comparing late writes after early valid_o.
+[Marc103 - 11/07/26]
 
 ////////////////////////////////////////////////////////////////
 // 20. Reset and protocol boundaries
-- All control reset assignments are synchronous. rst_i must span a rising edge;
-  an unclocked reset pulse is not sufficient to clear state or pipe-valid registers.
-- Reset clears the FSM state, W/B valid history, both validity pipelines, and
-  valid_o. W/B holding registers and all six output data registers retain data.
-  Child arithmetic, the selector pipe, and raw A pipes also have no reset.
-- Before their first writes, data registers may be unknown. Qualified transactions
-  initialize every product and A output before valid_o is asserted.
-- Cleared validity masks all stale arithmetic, tag, and A samples. New output writes
-  require new accepted inputs and the matching pipeline traversal.
-- If reset cancels a transaction after its early A output but before WiBr/valid_o,
-  that A value remains stored but invalid. No completion is reported for the aborted
-  bundle; a fresh bundle later replaces all outputs before asserting valid_o.
-- After reset, a high w_b_valid_i is treated as a fresh event because the history
-  bit was cleared. Drive valid low if no transaction should be accepted on release.
-- Early busy strobes are ignored; holding one high until the core is idle does not
-  turn it into a queued transaction. The sender must observe the minimum spacing.
-- No reset-free power-up behavior, backpressure, clock-domain crossing, or validation
-  of malformed A/ABFP inputs is promised by this core.
-[Marc103 - 11/06/26]
+- rst_i must span a rising edge to clear synchronous control/valid registers.
+- Reset clears state, W/B valid history, both validity pipelines, and valid_o.
+  W/B and output data registers hold; arithmetic, selector, and raw A pipes have
+  no reset values. No datapath zeroing or power-up value is assumed.
+- A new accepted transaction writes WrBr, WiBi, Ar, and Ai before/with its early
+  strobe. WrBi/WiBr are not required to be initialized at that strobe.
+- Reset before the WiBi token returns cancels valid_o and all remaining writes.
+  Retained old/unknown data cannot create a new valid indication.
+- If valid_o already strobed before reset, that earlier indication cannot be
+  withdrawn. Reset cancels the remaining tail; downstream pipelines that already
+  started work must also obey reset. No further core strobe is emitted for that tail.
+- After reset, high w_b_valid_i is a fresh event because its history was cleared.
+  Drive valid low if no transaction should be accepted on release.
+- Early busy strobes remain unqueued; a sender must meet the four-clock minimum
+  spacing and sample valid low between events.
+- No reset-free power-up behavior, backpressure, clock-domain crossing, or
+  malformed numeric input validation is promised by this core.
+[Marc103 - 11/07/26]
 
 ////////////////////////////////////////////////////////////////
 // 21. Simulation evidence - 11/06/26
@@ -659,15 +664,67 @@ module fft_multiplier_core #(
 [Marc103 - 11/06/26]
 
 ////////////////////////////////////////////////////////////////
+// WiBi-ready strobe re-verification - 11/07/26
+- valid_o now strobes at T+L+2 with WiBi and both A output writes. WrBr is
+  already stored; WrBi and WiBr remain scheduled at T+L+3 and T+L+4.
+- The current LATENCY helper reports L+2. Arithmetic, product order, control-only
+  reset, A timing, and four-clock W/B initiation spacing are unchanged.
+- Arithmetic still delegates to AlternateBaseFpMultiplierModel.multiply_values().
+  Signed zeros, canonical output zeros, special-over-zero priority, and complete
+  computed sign/payload bits are checked with the existing ABFP policy.
+- WSL Verilator: ten configurations passed 40,751 clock comparisons, 9,086
+  early strobes, and 36,334 product writes. Clock/product counts match the
+  previous ten-case regression because the physical stimulus and data schedule
+  were preserved. Drains still cover the final WiBr write beyond early valid_o.
+- Independent reference deadlines assert early valid on the second product.
+  At each strobe, the scoreboard requires current WiBi/Ar/Ai writes (mask 0x32)
+  and initialized WrBr/WiBi/Ar/Ai (mask 0x33), while allowing initially unknown
+  or older WrBi/WiBr values. Every late write and every idle/reset hold is checked.
+- Tests cover all four child-register combinations, zero multiplier latency,
+  minimum widths, a partial radix digit, a long pipeline, 33-bit exponent fields,
+  and an entirely idle random sequence. The first early strobe is checked before
+  the imaginary product outputs have received their first writes.
+
+  Case             L   valid_o  Clocks  Strobes  Product writes
+  default          3   5        4203    937      3747
+  bypass           1   3        4174    935      3739
+  input_only       2   4        4216    936      3743
+  normalize_only   2   4        4216    936      3743
+  combinational    0   2        4077    934      3735
+  one_bit          0   2        4001    916      3663
+  partial_radix    2   4        4216    936      3743
+  long_pipeline    5   7        4310    939      3755
+  wide_exponent    2   4        4166    936      3743
+  empty_random     3   5        3172    681      2723
+
+- New W/B captures at T+4 and arbitrary later gaps work in all configurations.
+  Held-high valid, ignored busy strobes, A on the following clock, sequence-boundary
+  A samples, reset aborts, retained datapaths, and invalid initial data are covered.
+- Early-strobe counts are not complete-bundle counts: reset after an early pulse
+  can cancel its remaining tail. The pulse already observed before reset is not
+  withdrawn; downstream work must also honor reset.
+- Questa 2025.2 four-state compatibility smoke passed 937 early strobes over
+  4,203 clocks and checked 3,747 product writes, with default L=3 and LATENCY=5.
+- Current evidence paths from repository root:
+    testbench/fft_multiplier_core_tb/simulate_early_valid_logs/verilator_results.json
+    testbench/fft_multiplier_core_tb/simulate_early_valid_logs/verilator_<case>.log
+    simulate/fft_early_valid_matrix.log
+    simulate/fft_early_valid_questa.log
+- The diagram image's old complete-bundle valid_o description is superseded by
+  this early-stage contract and needs the corresponding manual text update.
+[Marc103 - 11/07/26]
+
+////////////////////////////////////////////////////////////////
 // 22. Final user sign-off
-- Confirm the accepted product order: WrBr, WiBi, WrBi, WiBr.
-- Confirm W/B acceptance at T,T+4,T+8,... and arbitrary later accepted strobes.
-- Confirm A is sampled at T+1 and ar_o/ai_o update with WiBi at T+L+2.
-- Confirm valid_o qualifies the complete stored bundle at T+L+4, including early A.
-- Confirm rising-event valid semantics, ignored busy strobes, and no backpressure.
-- Confirm control-only synchronous reset, retained/initially unknown datapath data,
-  transaction aborts, and high valid on reset release.
-- Confirm the source excerpts and reasoning above before replacing each blank tag
-  with the reviewer's normal name/date annotation.
-[Marc103 - 11/06/26]
+- Confirm order WrBr, WiBi, WrBi, WiBr and W/B spacing T,T+4,T+8,... or later.
+- Confirm A samples at T+1, and ar_o/ai_o update with WiBi and valid_o at T+L+2.
+- Confirm valid_o qualifies WrBr/WiBi/Ar/Ai only; WrBi and WiBr return at +1/+2
+  clocks relative to that early pulse, and no second completion strobe is produced.
+- Confirm the public LATENCY is L+2 while data draining still covers L+4.
+- Confirm control-only reset, retained/initially unknown data, cancellation of future
+  tokens, and the need to reset downstream work if it already saw an early pulse.
+- Confirm rising-event handshake behavior, ignored busy strobes, and no backpressure.
+- Sign the reopened sections after reviewing the changed contract and fresh evidence.
+  Sign-offs on unchanged sections and historical evidence were preserved.
+[Marc103 - 11/07/26]
 

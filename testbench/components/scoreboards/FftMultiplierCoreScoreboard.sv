@@ -32,7 +32,7 @@ class FftMultiplierCoreScoreboard #(type T);
         logic [7:0] model_error;
         word_t value;
         bit have_previous = 0;
-        int sequences = 0, cycles = 0, bundles = 0, products = 0, resets = 0;
+        int sequences = 0, cycles = 0, strobes = 0, products = 0, resets = 0;
         int zero_products = 0, special_products = 0, finite_products = 0;
         int sequence_size;
         forever begin
@@ -82,8 +82,9 @@ class FftMultiplierCoreScoreboard #(type T);
                     end
                 end
                 if(actual.valid_o) begin
-                    if(known !== 6'h3f) $fatal(1, "Completion before all six outputs were written");
-                    bundles++;
+                    if((known & 6'h33) !== 6'h33) $fatal(1, "Early strobe before WrBr/WiBi/A were written");
+                    if(writes !== 6'h32) $fatal(1, "valid_o must coincide with WiBi and both A writes");
+                    strobes++;
                 end
                 if(stimulus.rst_i) resets++;
                 previous = actual;
@@ -97,8 +98,8 @@ class FftMultiplierCoreScoreboard #(type T);
                     $fatal(1, "Missing required zero/special/reset coverage");
                 $display("Coverage: %0d reset clocks, %0d zero, %0d special, %0d finite product writes",
                          resets, zero_products, special_products, finite_products);
-                $display("Scoreboard completed: %0d sequences, %0d cycles, %0d bundles, %0d products, LATENCY=%0d",
-                         sequences, cycles, bundles, products, T::LATENCY);
+                $display("Scoreboard completed: %0d sequences, %0d cycles, %0d strobes, %0d products, LATENCY=%0d",
+                         sequences, cycles, strobes, products, T::LATENCY);
                 $finish;
             end
         end

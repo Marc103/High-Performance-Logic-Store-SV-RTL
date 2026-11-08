@@ -1114,10 +1114,10 @@ package constant_functions_pkg;
         int LUTX,
         int GRADE
     );
-        // W/B capture to the fourth product's output holding register.
+        // W/B capture to WiBi and its early valid_o strobe.
         return alternate_base_fp_multiplier_LATENCY(
             MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
-        ) + 4;
+        ) + 2;
     endfunction
 
     ////////////////////////////////////////////////////////////////

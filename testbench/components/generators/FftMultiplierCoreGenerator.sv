@@ -63,6 +63,7 @@ class FftMultiplierCoreGenerator #(type T);
         bundle_t values, buses, next_values, boundary_values;
         bit source_idle, last_source, first_source;
         int pair_index, spacing;
+        // Drains/abort windows include all four products, beyond the early valid_o strobe.
         // Reuse every directed and random ABFP arithmetic stimulus, not a second encoding policy.
         source.run();
         io_obj = new();
@@ -81,15 +82,15 @@ class FftMultiplierCoreGenerator #(type T);
             end
             send_bundle(io_obj, values, 4, i[0]);
         end
-        wait_clocks(io_obj, T::LATENCY + 2);
+        wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 2);
         // A held-high valid must not relaunch a bundle after the fourth issue.
-        send_bundle(io_obj, random_bundle(), T::LATENCY + 12, 0, T::LATENCY + 12);
+        send_bundle(io_obj, random_bundle(), (T::MULTIPLIER_LATENCY + 4) + 12, 0, (T::MULTIPLIER_LATENCY + 4) + 12);
         wait_clocks(io_obj, 3);
         // Ignore new rising strobes during the first three issues.
         for(int offset = 1; offset <= 3; offset++) begin
             values = random_bundle();
             add_io(io_obj, 0, 1, values);
-            for(int i = 1; i < T::LATENCY + 8; i++) begin
+            for(int i = 1; i < (T::MULTIPLIER_LATENCY + 4) + 8; i++) begin
                 buses = random_bundle();
                 if(i == 1) buses[5:4] = values[5:4];
                 add_io(io_obj, 0, i == offset, buses);
@@ -97,7 +98,7 @@ class FftMultiplierCoreGenerator #(type T);
             wait_clocks(io_obj, 3);
         end
         // Abort during each issue, the overlap edge, and the returning-result pipeline.
-        for(int delay = 1; delay <= T::LATENCY + 2; delay++) begin
+        for(int delay = 1; delay <= (T::MULTIPLIER_LATENCY + 4) + 2; delay++) begin
             values = random_bundle();
             next_values = random_bundle();
             add_io(io_obj, 0, 1, values);
@@ -111,9 +112,9 @@ class FftMultiplierCoreGenerator #(type T);
             repeat(2) add_io(io_obj, 1, 0, random_bundle());
             wait_clocks(io_obj, 2);
             send_bundle(io_obj, random_bundle());
-            wait_clocks(io_obj, T::LATENCY + 2);
+            wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 2);
         end
-        wait_clocks(io_obj, T::LATENCY + 2);
+        wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 2);
         // Deliberately put the W/B capture and following implicit A in different objects.
         boundary_values = random_bundle();
         add_io(io_obj, 0, 1, boundary_values);
@@ -152,7 +153,7 @@ class FftMultiplierCoreGenerator #(type T);
                 pair_index++;
             end
             // This also supplies an entirely idle object when RANDOM_TRANSACTIONS=0.
-            wait_clocks(io_obj, T::LATENCY + 2);
+            wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 2);
             out_broadcaster.push(io_obj);
         end while(!last_source);
 
@@ -160,7 +161,7 @@ class FftMultiplierCoreGenerator #(type T);
         wait_clocks(io_obj, 1);
         send_bundle(io_obj, random_bundle());
         send_bundle(io_obj, random_bundle());
-        wait_clocks(io_obj, T::LATENCY + 2);
+        wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 2);
         // Reset release with valid high is a fresh event because history was cleared.
         repeat(2) add_io(io_obj, 1, 1, random_bundle());
         values = random_bundle();
@@ -168,7 +169,7 @@ class FftMultiplierCoreGenerator #(type T);
         buses = random_bundle();
         buses[5:4] = values[5:4];
         add_io(io_obj, 0, 1, buses);
-        wait_clocks(io_obj, T::LATENCY + 4);
+        wait_clocks(io_obj, (T::MULTIPLIER_LATENCY + 4) + 4);
         io_obj.end_last_sequence = 1;
         out_broadcaster.push(io_obj);
     endtask

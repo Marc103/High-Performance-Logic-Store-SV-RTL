@@ -12,8 +12,9 @@ For example, W/B may arrive on clocks 0, 4, 8 and A is sampled on 1, 5, 9.
 
 Individual product registers update as their results arrive. Ar/Ai update
 with the second product, WiBi, at multiplier latency + 2 clocks after W/B
-capture. The four products and Ar/Ai are coherent together on the one-clock
-valid_o pulse at multiplier latency + 4 clocks after W/B capture.
+capture. valid_o strobes on that same edge, qualifying WrBr, WiBi, Ar, and Ai
+for the first downstream adder operation. WrBi and WiBr update one and two
+clocks later; valid_o does not qualify all six outputs at once.
 Outputs hold their values between updates. The downstream operations
 Tr = WrBr - WiBi and Ti = WrBi + WiBr are outside this core.
 
@@ -227,12 +228,12 @@ module fft_multiplier_core #(
             if(result_valid) begin
                 case(result_selector)
                     2'd0: wrbr_o <= product;
-                    2'd1: wibi_o <= product;
-                    2'd2: wrbi_o <= product;
-                    2'd3: begin
-                        wibr_o <= product;
+                    2'd1: begin
+                        wibi_o <= product;
                         valid_o <= 1;
                     end
+                    2'd2: wrbi_o <= product;
+                    2'd3: wibr_o <= product;
                 endcase
             end
         end
