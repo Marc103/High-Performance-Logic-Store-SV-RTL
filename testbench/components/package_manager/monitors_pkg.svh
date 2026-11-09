@@ -19,4 +19,5 @@ package monitors_pkg;
     `include "AlternateBaseFpAdderMonitor.sv"
     `include "AlternateBaseFpMultiplierMonitor.sv"
     `include "FftMultiplierCoreMonitor.sv"
+    `include "FftAdderCoreMonitor.sv"
 endpackage

@@ -1,0 +1,670 @@
+////////////////////////////////////////////////////////////////
+// fft_adder_core - AI verification draft
+// Prepared 11/08/26 for user review, following manual_verify.mv style.
+// Every [ ] is an unsigned user sign-off tag. No human approval is implied.
+// Source excerpts below are verbatim; prose explains their intent and timing.
+// Reviewed: fft_adder_core.sv, diagram.jpg, ../../rtl_utilities_pkg.sv,
+// ../../io_circuits/pipe/pipe.sv, ../alternate_base_fp_adder/alternate_base_fp_adder.sv,
+// ../fft_multiplier_core/fft_multiplier_core.sv and its early-valid contract.
+// T means the edge accepting valid_i. A means the child ADDER_LATENCY.
+// Register update edges refer to values after nonblocking assignments settle.
+////////////////////////////////////////////////////////////////
+// 01. Scope and assumptions
+- One clock domain; rst_i is synchronous active high and must span a rising edge.
+- BASE is a power of two >=2; EXPONENT_WIDTH>=1; MANTISSA_WIDTH>=log2(BASE).
+  LUTX/GRADE and tree capacities must satisfy the existing ABFP adder contract.
+- All eleven REGISTERED_* flags are 0 or 1 and configure both child adders alike.
+- Numeric inputs obey the established ABFP format: exponent zero implies mantissa
+  zero, normalized finite nonzero mantissas have a nonzero leading radix digit,
+  and exponent all ones with mantissa MSB one is the combined NaN/Inf class.
+  Exponent all ones with mantissa MSB zero can still represent a finite value.
+- Malformed numeric inputs are undefined; this routing core adds no input masking.
+- The two shared adders round independently. This is not a fused butterfly.
+- The diagram leaves FSM details unspecified. The implemented real-pair-first
+  final issue order Y0r,Y1r,Y0i,Y1i preserves the diagram's equations and II=4.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 02. Parameters, widths, and latency helpers
+"
+module fft_adder_core #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter LUTX,
+    parameter GRADE,
+    parameter REGISTERED_SWAP_IN,
+    parameter REGISTERED_SWAP_MUX,
+    parameter REGISTERED_ALIGN_STICKY_IN,
+    parameter REGISTERED_ALIGN_EXPONENT_MUX,
+    parameter REGISTERED_ALIGN_MUX,
+    parameter REGISTERED_ADD_CONVERT,
+    parameter REGISTERED_ADD_CONVERT_CONVERT,
+    parameter REGISTERED_PRIORITY_ENCODE,
+    parameter REGISTERED_PRIORITY_ENCODE_ENCODER,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam DATA_WIDTH = fft_adder_core_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
+    localparam ADDER_LATENCY = alternate_base_fp_adder_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    ),
+    localparam A_PIPE_LATENCY = fft_adder_core_A_PIPE_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    ),
+    localparam LATENCY = fft_adder_core_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    )
+"
+- DATA_WIDTH is 1+EXPONENT_WIDTH+MANTISSA_WIDTH through the existing adder helper.
+- Every latency derivation receives the public overridable parameters directly.
+- ADDER_LATENCY includes the selected child registers and internal tree/mux stages.
+- A_PIPE_LATENCY=A aligns the A sample with the first intermediate holding write.
+- Public LATENCY=2*A+4 includes both arithmetic delays and the four final issue/
+  holding-register edges. Internal tree pipelines can keep A nonzero even when
+  every REGISTERED_* flag is zero.
+- A=0 is supported: pipe bypasses and validity bypasses preserve the same schedule.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 03. Package helper definitions
+"
+    // fft_adder_core
+    function automatic int fft_adder_core_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return alternate_base_fp_adder_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH);
+    endfunction
+
+    function automatic int fft_adder_core_A_PIPE_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    );
+        // A is sampled with Tr inputs and stored with its first-stage result.
+        return alternate_base_fp_adder_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        );
+    endfunction
+
+    function automatic int fft_adder_core_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    );
+        // First Tr result, then four consecutive second-stage issues and final capture.
+        return 2 * alternate_base_fp_adder_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 4;
+    endfunction
+"
+- GDLS helper functions return ordinary int, consistent with the repository.
+- The A helper returns exactly the child arithmetic delay; the overall helper
+  returns twice that delay plus four. Neither relies on a module localparam.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 04. Interface and early multiplier handoff
+"
+    input clk_i,
+    input rst_i,
+    input valid_i,
+    input [DATA_WIDTH - 1 : 0] wrbr_i,
+    input [DATA_WIDTH - 1 : 0] wibi_i,
+    input [DATA_WIDTH - 1 : 0] wrbi_i,
+    input [DATA_WIDTH - 1 : 0] wibr_i,
+    input [DATA_WIDTH - 1 : 0] ar_i,
+    input [DATA_WIDTH - 1 : 0] ai_i,
+    output logic [DATA_WIDTH - 1 : 0] y0r_o,
+    output logic [DATA_WIDTH - 1 : 0] y0i_o,
+    output logic [DATA_WIDTH - 1 : 0] y1r_o,
+    output logic [DATA_WIDTH - 1 : 0] y1i_o,
+    output logic valid_o
+);
+"
+- At accepted T, WrBr,WiBi,Ar,Ai must be valid. WrBi arrives by T+1 and must remain
+  valid through T+2; WiBr arrives by T+2. The imaginary pair is read at T+2.
+- Ar/Ai sample at T, not the next clock as in the upstream multiplier's raw inputs.
+- A directly connected multiplier updates its early valid/data after an edge;
+  this synchronous consumer reads that level on the following edge. Its relative
+  late-product offsets remain +1/+2, so no extra external delay is needed.
+- valid_o qualifies the complete four-word butterfly; output registers otherwise
+  update individually. There is no ready signal, queue, or backpressure.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 05. Rising-event detection and input controller
+"
+    typedef enum logic [1:0] {INPUT_IDLE, WAIT_TI, ISSUE_TI, INPUT_RECOVER} input_state_t;
+    input_state_t input_state;
+    logic valid_previous;
+    logic accept;
+    logic [DATA_WIDTH - 1 : 0] wibi_negated;
+    logic [DATA_WIDTH - 1 : 0] first_a, first_b, first_sum;
+    logic first_issue_valid, first_issue_selector;
+    logic first_result_valid, first_result_selector;
+    logic tr_valid, ti_valid;
+
+    assign accept = valid_i && !valid_previous && (input_state == INPUT_IDLE) && !rst_i;
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            valid_previous <= 0;
+            input_state <= INPUT_IDLE;
+        end else begin
+            valid_previous <= valid_i;
+            case(input_state)
+                INPUT_IDLE: if(accept) input_state <= WAIT_TI;
+                WAIT_TI: input_state <= ISSUE_TI;
+                ISSUE_TI: input_state <= INPUT_RECOVER;
+                INPUT_RECOVER: input_state <= INPUT_IDLE;
+                default: input_state <= INPUT_IDLE;
+            endcase
+        end
+    end
+"
+- accept is asserted only for a sampled rising event in INPUT_IDLE outside reset.
+- The previous level is sampled on every non-reset clock, including busy clocks.
+  A held-high valid never launches the same transaction again after returning idle.
+- Acceptance at T advances WAIT_TI after T, ISSUE_TI after T+1, INPUT_RECOVER after
+  T+2, and INPUT_IDLE after T+3. The next acceptance can occur at T+4.
+- Rising events at +2/+3 are consumed and ignored, not queued. A high level at +1
+  immediately after the accepted high is a continued level, not a new event.
+- Arbitrary gaps >=4 work; no next bundle is assumed to arrive automatically.
+- Reset clears state/history. A high valid on reset release is a fresh event.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 06. First-stage operand mux and subtraction
+"
+    always_comb begin
+        wibi_negated = wibi_i;
+        wibi_negated[DATA_WIDTH - 1] = ~wibi_i[DATA_WIDTH - 1];
+        first_a = wrbr_i;
+        first_b = wibi_negated;
+        first_issue_valid = accept;
+        first_issue_selector = 0;
+        if(input_state == ISSUE_TI) begin
+            first_a = wrbi_i;
+            first_b = wibr_i;
+            first_issue_valid = !rst_i;
+            first_issue_selector = 1;
+        end
+    end
+"
+- Default path issues WrBr+(-WiBi) only on accept, creating the Tr token.
+- Subtraction flips the packed sign bit only. Inverting all bits or using integer
+  two's-complement negation would corrupt the ABFP exponent/mantissa fields.
+- ISSUE_TI selects WrBi+WiBr at T+2 with selector one; reset suppresses the token.
+- Arithmetic may continue on irrelevant mux data between tokens. Those numerical
+  values cannot update holding registers without a matching valid token.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 07. First ABFP adder and selector delay
+"
+    alternate_base_fp_adder #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .LUTX(LUTX),
+        .GRADE(GRADE),
+        .REGISTERED_SWAP_IN(REGISTERED_SWAP_IN),
+        .REGISTERED_SWAP_MUX(REGISTERED_SWAP_MUX),
+        .REGISTERED_ALIGN_STICKY_IN(REGISTERED_ALIGN_STICKY_IN),
+        .REGISTERED_ALIGN_EXPONENT_MUX(REGISTERED_ALIGN_EXPONENT_MUX),
+        .REGISTERED_ALIGN_MUX(REGISTERED_ALIGN_MUX),
+        .REGISTERED_ADD_CONVERT(REGISTERED_ADD_CONVERT),
+        .REGISTERED_ADD_CONVERT_CONVERT(REGISTERED_ADD_CONVERT_CONVERT),
+        .REGISTERED_PRIORITY_ENCODE(REGISTERED_PRIORITY_ENCODE),
+        .REGISTERED_PRIORITY_ENCODE_ENCODER(REGISTERED_PRIORITY_ENCODE_ENCODER),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND)
+    ) first_adder (
+        .clk_i(clk_i), .a_i(first_a), .b_i(first_b), .sum_o(first_sum)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(ADDER_LATENCY)) first_selector_pipe (
+        .clk_i(clk_i), .data_i(first_issue_selector), .data_o(first_result_selector)
+    );
+"
+- All public arithmetic parameters map by name to the child adder unchanged.
+- The one-bit selector is delayed by A, the same delay as first_sum.
+- Selector zero routes Tr; selector one routes Ti. Selector pipe needs no reset
+  because a separate resettable validity pipeline qualifies its consumption.
+- With input consumed at T, the A-stage arithmetic output is ready to be read
+  by the holding register at T+A. For A=0 that holding write occurs at T itself.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 08. Intermediate data and A alignment
+"
+    logic [DATA_WIDTH - 1 : 0] tr, ti, ar, ai;
+    logic [DATA_WIDTH - 1 : 0] ar_p, ai_p;
+    assign tr_valid = first_result_valid && !first_result_selector;
+    assign ti_valid = first_result_valid && first_result_selector;
+    pipe #(.DATA_WIDTH(DATA_WIDTH), .LATENCY(A_PIPE_LATENCY)) ar_pipe (
+        .clk_i(clk_i), .data_i(ar_i), .data_o(ar_p)
+    );
+    pipe #(.DATA_WIDTH(DATA_WIDTH), .LATENCY(A_PIPE_LATENCY)) ai_pipe (
+        .clk_i(clk_i), .data_i(ai_i), .data_o(ai_p)
+    );
+    always @(posedge clk_i) begin
+        if(!rst_i) begin
+            if(tr_valid) begin
+                tr <= first_sum;
+                ar <= ar_p;
+                ai <= ai_p;
+            end
+            if(ti_valid) ti <= first_sum;
+        end
+    end
+"
+- tr_valid writes Tr,Ar,Ai together at T+A. ti_valid writes Ti at T+A+2.
+- Both A pipes have A stages. Their sample from T is read by the holding registers
+  at T+A, matching Tr including the A=0 passthrough case.
+- A separate A-valid pipe is unnecessary here: the real-result token comes from
+  the very same accepted edge and qualifies the A sample as well.
+- No intermediate datapath register is reset. rst_i inhibits writes and all stored
+  values hold; unreset data/selector pipes may contain invalid values after reset.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 09. Final-issue controller and overlap
+"
+    typedef enum logic [2:0] {
+        OUTPUT_IDLE, ISSUE_Y0R, ISSUE_Y1R, ISSUE_Y0I, ISSUE_Y1I
+    } output_state_t;
+    output_state_t output_state;
+    logic [DATA_WIDTH - 1 : 0] selected_t, second_a, second_b, second_sum;
+    logic negate_t;
+    logic second_issue_valid, second_result_valid;
+    logic [1:0] second_issue_selector, second_result_selector;
+
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            output_state <= OUTPUT_IDLE;
+        end else begin
+            case(output_state)
+                OUTPUT_IDLE: if(tr_valid) output_state <= ISSUE_Y0R;
+                ISSUE_Y0R: output_state <= ISSUE_Y1R;
+                ISSUE_Y1R: output_state <= ISSUE_Y0I;
+                ISSUE_Y0I: output_state <= ISSUE_Y1I;
+                // New Tr/A may be stored while the old final imaginary operation is issued.
+                ISSUE_Y1I: output_state <= tr_valid ? ISSUE_Y0R : OUTPUT_IDLE;
+                default: output_state <= OUTPUT_IDLE;
+            endcase
+        end
+    end
+"
+- Tr capture at T+A transitions the controller to ISSUE_Y0R. Four operations are
+  consumed on edges T+A+1,+2,+3,+4 in order Y0r,Y1r,Y0i,Y1i.
+- Ti is captured at T+A+2, before its first use at T+A+3.
+- With next input at T+4, its Tr/Ar/Ai arrive at T+A+4, exactly while the old Y1i
+  consumes old Ai/Ti. Nonblocking assignments preserve those old operands at that
+  edge. The controller immediately starts the next real pair without a bubble.
+- Next Ti arrives at T+A+6, after the old imaginary pair has finished. The holding
+  banks therefore never overwrite an operand before its final use.
+- No new Tr on Y1i returns to idle; later transactions restart from their tokens.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 10. Final operand mux and equations
+"
+    always_comb begin
+        selected_t = tr;
+        second_b = ar;
+        negate_t = 0;
+        second_issue_valid = 0;
+        second_issue_selector = 2'd0;
+        case(output_state)
+            ISSUE_Y0R: begin
+                second_issue_valid = !rst_i;
+                second_issue_selector = 2'd0;
+            end
+            ISSUE_Y1R: begin
+                negate_t = 1;
+                second_issue_valid = !rst_i;
+                second_issue_selector = 2'd1;
+            end
+            ISSUE_Y0I: begin
+                selected_t = ti;
+                second_b = ai;
+                second_issue_valid = !rst_i;
+                second_issue_selector = 2'd2;
+            end
+            ISSUE_Y1I: begin
+                selected_t = ti;
+                second_b = ai;
+                negate_t = 1;
+                second_issue_valid = !rst_i;
+                second_issue_selector = 2'd3;
+            end
+            default: begin end
+        endcase
+        second_a = selected_t;
+        if(negate_t) second_a[DATA_WIDTH - 1] = ~selected_t[DATA_WIDTH - 1];
+    end
+"
+- Y0r/Y1r select Tr with Ar. Y0i/Y1i select Ti with Ai.
+- The minus phases invert only selected_t's sign bit; addition uses the selected
+  signed word unchanged. All exponent/mantissa bits reach the child unmodified.
+- Selector values 0,1,2,3 mean Y0r,Y1r,Y0i,Y1i respectively. This issue ordering
+  differs from port declaration order and must be decoded explicitly.
+- The first child computes Tr and Ti, and the second child computes the four final
+  additions. There are exactly two shared arithmetic instances as in the diagram.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 11. Final ABFP adder and destination token
+"
+    alternate_base_fp_adder #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .LUTX(LUTX),
+        .GRADE(GRADE),
+        .REGISTERED_SWAP_IN(REGISTERED_SWAP_IN),
+        .REGISTERED_SWAP_MUX(REGISTERED_SWAP_MUX),
+        .REGISTERED_ALIGN_STICKY_IN(REGISTERED_ALIGN_STICKY_IN),
+        .REGISTERED_ALIGN_EXPONENT_MUX(REGISTERED_ALIGN_EXPONENT_MUX),
+        .REGISTERED_ALIGN_MUX(REGISTERED_ALIGN_MUX),
+        .REGISTERED_ADD_CONVERT(REGISTERED_ADD_CONVERT),
+        .REGISTERED_ADD_CONVERT_CONVERT(REGISTERED_ADD_CONVERT_CONVERT),
+        .REGISTERED_PRIORITY_ENCODE(REGISTERED_PRIORITY_ENCODE),
+        .REGISTERED_PRIORITY_ENCODE_ENCODER(REGISTERED_PRIORITY_ENCODE_ENCODER),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND)
+    ) second_adder (
+        .clk_i(clk_i), .a_i(second_a), .b_i(second_b), .sum_o(second_sum)
+    );
+    pipe #(.DATA_WIDTH(2), .LATENCY(ADDER_LATENCY)) second_selector_pipe (
+        .clk_i(clk_i), .data_i(second_issue_selector), .data_o(second_result_selector)
+    );
+"
+- The second adder receives exactly the same settings as the first, so it also
+  contributes A clocks. Its two-bit selector pipe uses that same A.
+- Operand order is selected T (possibly negated) as a_i and selected A as b_i.
+  The golden model uses this order too, including special payload/sign behavior.
+- Tokens retain order for A>4 as well as A=0; several transactions may be in flight.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 12. Resettable valid pipelines and zero-delay case
+"
+    generate
+        if(ADDER_LATENCY == 0) begin : gen_valid_bypass
+            assign first_result_valid = first_issue_valid;
+            assign second_result_valid = second_issue_valid;
+        end else begin : gen_valid_pipes
+            logic [ADDER_LATENCY - 1 : 0] first_valid, second_valid;
+            always @(posedge clk_i) begin
+                if(rst_i) begin
+                    first_valid <= '0;
+                    second_valid <= '0;
+                end else begin
+                    first_valid[0] <= first_issue_valid;
+                    second_valid[0] <= second_issue_valid;
+                    for(int i = 1; i < ADDER_LATENCY; i++) begin
+                        first_valid[i] <= first_valid[i - 1];
+                        second_valid[i] <= second_valid[i - 1];
+                    end
+                end
+            end
+            assign first_result_valid = first_valid[ADDER_LATENCY - 1];
+            assign second_result_valid = second_valid[ADDER_LATENCY - 1];
+        end
+    endgenerate
+"
+- Separate A-bit valid pipelines track first/second issues and are cleared by reset.
+- Tags and numerical pipelines are unreset. Clearing validity prevents stale data
+  from becoming a future holding write after a reset aborts in-flight operations.
+- The generate bypass avoids negative/empty vector ranges when A=0 and consumes
+  the combinational arithmetic on its issue edge. For A=1 the shift loop is empty.
+- Reset also suppresses new issues and gates all holding writes.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 13. Output holding registers and completion
+"
+    always @(posedge clk_i) begin
+        if(rst_i) begin
+            valid_o <= 0;
+        end else begin
+            valid_o <= 0;
+            if(second_result_valid) begin
+                case(second_result_selector)
+                    2'd0: y0r_o <= second_sum;
+                    2'd1: y1r_o <= second_sum;
+                    2'd2: y0i_o <= second_sum;
+                    2'd3: begin
+                        y1i_o <= second_sum;
+                        valid_o <= 1;
+                    end
+                endcase
+            end
+        end
+    end
+endmodule
+"
+- Destination decode explicitly maps 0->Y0r,1->Y1r,2->Y0i,3->Y1i.
+- Each output writes only on its own delayed valid token and otherwise holds.
+- valid_o pulses on the Y1i write, when this bundle's other three outputs are
+  already present. It deasserts on the following clock, including between bundles.
+- Reset clears valid_o only; no output datapath is assigned a reset value.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 14. Cycle proof and public LATENCY
+Action                         Consumed edge        Holding update edge
+  Accept real inputs and Ar/Ai    T                    --
+  Tr = WrBr - WiBi                T                    T+A
+  Ti = WrBi + WiBr                T+2                  T+A+2
+  Ar/Ai sampled with real input   T                    T+A
+  Y0r = Tr + Ar                   T+A+1                T+2*A+1
+  Y1r = (-Tr) + Ar                T+A+2                T+2*A+2
+  Y0i = Ti + Ai                   T+A+3                T+2*A+3
+  Y1i = (-Ti) + Ai                T+A+4                T+2*A+4
+  valid_o                        --                   T+2*A+4
+  Earliest next acceptance        T+4                  --
+
+- For A=0: Tr/A update T, Ti T+2, final outputs T+1,T+2,T+3,T+4; valid T+4.
+- For default BASE16/E3/M12/LUT6/GRADE1 and all flags one: A=13, LATENCY=30.
+- At II=4, the next Y0r updates one clock after this bundle's valid_o. Consumers
+  must sample the complete bundle when qualified, rather than assume it is frozen.
+- Upstream multiplier W/B acceptance to this adder's complete output is L+2
+  (upstream early strobe), plus one synchronous boundary edge, plus 2*A+4.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 15. Reset boundary and numeric behavior
+- Reset before completion cancels future writes/strobes; outputs already written
+  cannot be withdrawn and remain held until replaced by valid writes.
+- A downstream consumer must honor reset and consume only valid_o bundles, since
+  partially updated or uninitialized output sets may exist between completions.
+- No power-up data value is promised. Synchronous reset is required for control.
+- Canonical zero and NaN/Inf policy is inherited from each child ABFP operation.
+  No special value is removed by the routing core, and no mantissa mask is added.
+- Each intermediate rounds before its two final uses; an exact mathematical
+  complex sum evaluated with just one final rounding need not match this hardware.
+- The existing adder oracle treats the sign of a canonical zero as equivalent;
+  nonzero/special results, payload bits, and output-hold behavior are checked fully.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 16. Persistent scaffold verification design
+- FftAdderCoreIO and fft_adder_core_inf mirror public parameters and derive widths/
+  delays from package helpers; top parameters support Verilator/Questa overrides.
+- The existing exact-integer oracle limits testbench EXPONENT_WIDTH to 1..10.
+  The watchdog scales with exponent range, mantissa width, random count, and
+  pipeline depth so a large directed sweep is not mistaken for a stalled test.
+- FftAdderCoreGenerator reuses AlternateBaseFpAdderGenerator. Every directed and
+  random pair is exercised in all six arithmetic paths. Additional random bundles
+  overlap continuously at II=4, and longer irregular gaps are included.
+- Late buses are X until their promised arrival in four-state simulation. Raw A
+  changes after acceptance, exposing an incorrect A delay or resampling edge.
+- Protocol stimulus includes held-high valid, ignored busy events, reset at every
+  issue/return offset, overlapping bundles, high valid on reset release, an idle
+  object, and a transaction whose late inputs cross a sequence-object boundary.
+- FftAdderCoreModel calls AlternateBaseFpAdderModel.add_values independently for
+  Tr,Ti and each final addition. Its absolute deadlines do not copy RTL FSM states.
+- Scoreboard checks all four output words every clock after initialization, exact
+  valid timing, canonical zero mantissas, retained/unknown data on non-write edges,
+  stimulus equality, sequence markers, initialization masks and final-write masks.
+- Only the sign of canonical numeric zero is ignored, matching the existing ABFP
+  adder scoreboard. Even signed-zero sign bits must hold on non-write/reset edges.
+- Required zero/special/reset, accepted/busy/cancel coverage must be nonzero. A
+  completion marker is mandatory; timeout, compile failure, or model mismatch fails.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 17. Simulation evidence - 11/08/26
+- Historical pre-scaffold checks from 11/07/26 remain in simulate/fft_adder_checks:
+  six WSL Verilator configurations passed 24,160 checked clocks, 2,680 standalone
+  completions, 2,662 multiplier-to-adder completions, and 21,433 output writes.
+- Those earlier checks covered A=0, mixed/all/bypassed registering, partial radix,
+  and 64-bit mantissas; they are separate from today's persistent scaffold evidence.
+- Today's regression uses WSL Verilator on this machine; Questa is the four-state
+  compatibility smoke. The testbench golden arithmetic is unchanged.
+
+- Persistent scaffold: ten WSL Verilator configurations passed on this machine:
+  125,432 clock comparisons, 26,224 completed butterflies, 104,986 output writes.
+  Each case completed all five sequence objects and required coverage checks.
+- Mask bit 0..10 corresponds to REGISTERED_* flags in public declaration order.
+  Detailed named overrides and counts are preserved in verilator_results.json.
+
+  Case                BASE  E   M   LUT G  Mask  Random   A  LAT  Clocks Strobes  Writes
+  default               16  3  12     6 1   7FF     256  13   30   11581    2244    8985
+  bypass                16  3  12     6 1   000     128   3   10    6605    1456    5833
+  mixed                 16  3  12     6 1   555     128   9   22    7488    1468    5881
+  mixed_inverse          4  3   6     6 2   2AA     128   5   14    6853    1460    5849
+  zero_latency           2  2   1     6 2   000     128   0    4    5649    1294    5185
+  partial_radix          8  4   5     4 2   000     128   0    4    6501    1498    6001
+  wide_mantissa         16  5  64     3 1   7FF     128  29   62   16208    2108    8441
+  empty_random          16  3  12     6 1   7FF       0  13   30    5076     708    2841
+  one_bit_exponent       2  1   1     6 2   000     128   0    4    5155    1174    4705
+  upper_exponent         2 10   1     6 2   000       0   0    4   54316   12814   51265
+
+- A is child ADDER_LATENCY; LAT is complete-butterfly latency from accepted valid_i.
+- The E=10, M=1, random=0 run checks the oracle's upper exponent bound. Its 54,316
+  clocks exceed the earlier watchdog budget; the exponent-scaled watchdog passes.
+- Questa four-state compatibility smoke passed the default configuration: five
+  sequences, 11,581 clocks, 2,244 completed butterflies, and 8,985 output writes.
+  It checked 71 reset clocks, 4,892 zero, 1,312 special, and 2,781 finite writes.
+  Early imaginary buses and initial datapaths are allowed to be X; required input
+  reads, full known results, reset holds, and idle holds are still checked.
+- Questa and WSL default counts agree. No RTL functional changes were required.
+- Evidence paths from repository root:
+    testbench/fft_adder_core_tb/simulate_regression_logs/verilator_results.json
+    testbench/fft_adder_core_tb/simulate_regression_logs/verilator_<case>.log
+    testbench/fft_adder_core_tb/simulate/transcript
+    simulate/fft_adder_scaffold_questa.log
+- Launchers accept parameter overrides. WSL example from repository root:
+    wsl bash testbench/fft_adder_core_tb/simulate_verilator.sh -GRANDOM_TRANSACTIONS=0
+  Questa: run testbench/fft_adder_core_tb/simulate.bat with Questa binaries on PATH.
+  Its optional overrides use -gNAME=value; Verilator uses -GNAME=value.
+[Marc103 - 11/08/26]
+
+////////////////////////////////////////////////////////////////
+// 18. Final user sign-off
+- Confirm equations and independently rounded ABFP arithmetic match diagram.jpg.
+- Confirm real-input acceptance at T, imaginary pair read at T+2, and A sample at T.
+- Confirm real-pair-first final order, II=4, arbitrary later gaps and rising-event
+  valid detection, ignored busy events, and absence of queue/backpressure.
+- Confirm LATENCY=2*A+4 and valid_o only when all four output registers are complete.
+- Confirm control-only synchronous reset, retained datapaths, cancellation of future
+  tokens, and no initialized numeric outputs before their first valid writes.
+- Review and sign each [ ] tag; this AI draft does not fill in user approval.
+[Marc103 - 11/08/26]

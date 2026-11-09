@@ -184,6 +184,29 @@ package constant_functions_pkg;
     } fft_multiplier_core_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // fft_adder_core behavioral transactions
+    `define FFT_ADDER_CORE_IO_IN_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic valid_i; \
+        logic [DATA_WIDTH - 1 : 0] wrbr_i; \
+        logic [DATA_WIDTH - 1 : 0] wibi_i; \
+        logic [DATA_WIDTH - 1 : 0] wrbi_i; \
+        logic [DATA_WIDTH - 1 : 0] wibr_i; \
+        logic [DATA_WIDTH - 1 : 0] ar_i; \
+        logic [DATA_WIDTH - 1 : 0] ai_i; \
+    } fft_adder_core_io_in_t;
+
+    `define FFT_ADDER_CORE_IO_OUT_STRUCT(DATA_WIDTH) \
+    typedef struct packed { \
+        logic [DATA_WIDTH - 1 : 0] y0r_o; \
+        logic [DATA_WIDTH - 1 : 0] y0i_o; \
+        logic [DATA_WIDTH - 1 : 0] y1r_o; \
+        logic [DATA_WIDTH - 1 : 0] y1i_o; \
+        logic valid_o; \
+    } fft_adder_core_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;
@@ -1118,6 +1141,86 @@ package constant_functions_pkg;
         return alternate_base_fp_multiplier_LATENCY(
             MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
         ) + 2;
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
+    // fft_adder_core
+    function automatic int fft_adder_core_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return alternate_base_fp_adder_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH);
+    endfunction
+
+    function automatic int fft_adder_core_A_PIPE_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    );
+        // A is sampled with Tr inputs and stored with its first-stage result.
+        return alternate_base_fp_adder_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        );
+    endfunction
+
+    function automatic int fft_adder_core_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    );
+        // First Tr result, then four consecutive second-stage issues and final capture.
+        return 2 * alternate_base_fp_adder_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 4;
     endfunction
 
     ////////////////////////////////////////////////////////////////

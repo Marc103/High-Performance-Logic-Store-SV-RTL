@@ -1,0 +1,90 @@
+import constant_functions_pkg::*;
+
+class FftAdderCoreIO #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter LUTX,
+    parameter GRADE,
+    parameter REGISTERED_SWAP_IN,
+    parameter REGISTERED_SWAP_MUX,
+    parameter REGISTERED_ALIGN_STICKY_IN,
+    parameter REGISTERED_ALIGN_EXPONENT_MUX,
+    parameter REGISTERED_ALIGN_MUX,
+    parameter REGISTERED_ADD_CONVERT,
+    parameter REGISTERED_ADD_CONVERT_CONVERT,
+    parameter REGISTERED_PRIORITY_ENCODE,
+    parameter REGISTERED_PRIORITY_ENCODE_ENCODER,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+    parameter RANDOM_TRANSACTIONS = 256,
+    localparam DATA_WIDTH = fft_adder_core_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
+    localparam BASE_WIDTH = alternate_base_fp_adder_BASE_WIDTH(BASE),
+    localparam ADDER_LATENCY = alternate_base_fp_adder_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    ),
+    localparam LATENCY = fft_adder_core_LATENCY(
+        BASE,
+        MANTISSA_WIDTH,
+        LUTX,
+        GRADE,
+        REGISTERED_SWAP_IN,
+        REGISTERED_SWAP_MUX,
+        REGISTERED_ALIGN_STICKY_IN,
+        REGISTERED_ALIGN_EXPONENT_MUX,
+        REGISTERED_ALIGN_MUX,
+        REGISTERED_ADD_CONVERT,
+        REGISTERED_ADD_CONVERT_CONVERT,
+        REGISTERED_PRIORITY_ENCODE,
+        REGISTERED_PRIORITY_ENCODE_ENCODER,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+    )
+);
+    // Reuse the established arithmetic model and canonical stimulus generator.
+    typedef AlternateBaseFpAdderIO #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .LUTX(LUTX),
+        .GRADE(GRADE),
+        .REGISTERED_SWAP_IN(REGISTERED_SWAP_IN),
+        .REGISTERED_SWAP_MUX(REGISTERED_SWAP_MUX),
+        .REGISTERED_ALIGN_STICKY_IN(REGISTERED_ALIGN_STICKY_IN),
+        .REGISTERED_ALIGN_EXPONENT_MUX(REGISTERED_ALIGN_EXPONENT_MUX),
+        .REGISTERED_ALIGN_MUX(REGISTERED_ALIGN_MUX),
+        .REGISTERED_ADD_CONVERT(REGISTERED_ADD_CONVERT),
+        .REGISTERED_ADD_CONVERT_CONVERT(REGISTERED_ADD_CONVERT_CONVERT),
+        .REGISTERED_PRIORITY_ENCODE(REGISTERED_PRIORITY_ENCODE),
+        .REGISTERED_PRIORITY_ENCODE_ENCODER(REGISTERED_PRIORITY_ENCODE_ENCODER),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE),
+        .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND),
+        .RANDOM_TRANSACTIONS(RANDOM_TRANSACTIONS)
+    ) adder_io_t;
+    `FFT_ADDER_CORE_IO_IN_STRUCT(DATA_WIDTH)
+    `FFT_ADDER_CORE_IO_OUT_STRUCT(DATA_WIDTH)
+    fft_adder_core_io_in_t fft_adder_core_io_in_q[$];
+    fft_adder_core_io_out_t fft_adder_core_io_out_q[$];
+    // Every item represents one clock, even when the external valid is low.
+    bit idle[$];
+    logic [7:0] error_state[$];
+    logic [3:0] known_mask[$];
+    logic [3:0] write_mask[$];
+    logic end_last_sequence = 0;
+    function new();
+    endfunction
+endclass
