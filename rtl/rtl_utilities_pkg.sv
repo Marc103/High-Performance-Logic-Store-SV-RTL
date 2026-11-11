@@ -1482,6 +1482,12 @@ package constant_functions_pkg;
     endfunction
 
     ////////////////////////////////////////////////////////////////
+    // fsm fft reader
+    function automatic int fsm_fft_reader_CYCLES_WIDTH(int II_CYCLES);
+        return max(1, $clog2(II_CYCLES));
+    endfunction
+
+    ////////////////////////////////////////////////////////////////
     // fsm timeout
     function automatic int fsm_timeout_COUNTER_WIDTH(int TIMEOUT);
         if (TIMEOUT == 0) return 2;
