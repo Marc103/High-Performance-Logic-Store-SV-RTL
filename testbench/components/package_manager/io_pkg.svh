@@ -19,4 +19,5 @@ package io_pkg;
     `include "AlternateBaseFpMultiplierIO.sv"
     `include "FftMultiplierCoreIO.sv"
     `include "FftAdderCoreIO.sv"
+    `include "FsmFftReaderIO.sv"
 endpackage

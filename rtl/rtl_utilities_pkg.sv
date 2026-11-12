@@ -207,6 +207,29 @@ package constant_functions_pkg;
     } fft_adder_core_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // fsm_fft_reader behavioral transactions
+    `define FSM_FFT_READER_IO_IN_STRUCT(SAMPLES_ADDR_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic [SAMPLES_ADDR_WIDTH : 0] fft_point_size_i; \
+        logic [SAMPLES_ADDR_WIDTH - 1 : 0] fft_whole_iterations_i; \
+        logic go_i; \
+    } fsm_fft_reader_io_in_t;
+
+    `define FSM_FFT_READER_IO_OUT_STRUCT(SAMPLES_ADDR_WIDTH, TWIDDLES_ADDR_WIDTH) \
+    typedef struct packed { \
+        logic [SAMPLES_ADDR_WIDTH - 1 : 0] a_b_rd_addr_o; \
+        logic a_b_rd_en_o; \
+        logic a_valid_o; \
+        logic b_valid_o; \
+        logic [TWIDDLES_ADDR_WIDTH - 1 : 0] w_rd_addr_o; \
+        logic w_rd_en_o; \
+        logic w_valid_o; \
+        logic busy_o; \
+        logic fft_done_o; \
+    } fsm_fft_reader_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;
@@ -1119,27 +1142,27 @@ package constant_functions_pkg;
 
     function automatic int fft_multiplier_core_A_PIPE_LATENCY(
         int MANTISSA_WIDTH,
-        int REGISTERED_IN,
+        int REGSITERED_MULTIPLIER,
         int REGISTERED_NORMALIZE,
         int LUTX,
         int GRADE
     );
         // A is sampled with WrBr; WiBi is issued one clock later.
         return alternate_base_fp_multiplier_LATENCY(
-            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+            MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
         ) + 1;
     endfunction
 
     function automatic int fft_multiplier_core_LATENCY(
         int MANTISSA_WIDTH,
-        int REGISTERED_IN,
+        int REGSITERED_MULTIPLIER,
         int REGISTERED_NORMALIZE,
         int LUTX,
         int GRADE
     );
         // W/B capture to WiBi and its early valid_o strobe.
         return alternate_base_fp_multiplier_LATENCY(
-            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+            MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
         ) + 2;
     endfunction
 

@@ -8,15 +8,15 @@ interface fft_multiplier_core_inf #(
     parameter MANTISSA_WIDTH,
     parameter LUTX,
     parameter GRADE,
-    parameter REGISTERED_IN,
+    parameter REGSITERED_MULTIPLIER,
     parameter REGISTERED_NORMALIZE,
     localparam DATA_WIDTH = fft_multiplier_core_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
     localparam BASE_WIDTH = alternate_base_fp_multiplier_BASE_WIDTH(BASE),
     localparam MULTIPLIER_LATENCY = alternate_base_fp_multiplier_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     ),
     localparam LATENCY = fft_multiplier_core_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     )
 ) (input clk_i);
     logic rst_i = 1;

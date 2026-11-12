@@ -23,8 +23,41 @@ valid_o. Reset is synchronous, clears control/valid state, and discards pending
 inputs and in-flight results. Datapath registers are not reset; data is meaningful
 only with the corresponding validity. The ABFP format and arithmetic rules are inherited
 from alternate_base_fp_multiplier.
-REGISTERED_IN and REGISTERED_NORMALIZE configure that multiplier; the input
-holding registers and the output holding registers are always present.
+REGSITERED_MULTIPLIER and REGISTERED_NORMALIZE configure that multiplier;
+the input holding registers and the output holding registers are always present.
+
+BASE [2,4,8,16,...]:
+- ABFP numeric radix; must be a power of two >= 2. This is independent of FFT radix.
+
+EXPONENT_WIDTH [>= 1]:
+- Exponent-field bits. The ABFP bias is 2**(EXPONENT_WIDTH - 1) - 1.
+
+MANTISSA_WIDTH [>= log2(BASE)]:
+- Explicit mantissa bits, excluding sign/exponent; there is no implicit leading bit.
+- All six input/output words use 1 + EXPONENT_WIDTH + MANTISSA_WIDTH bits.
+
+REGSITERED_MULTIPLIER [0,1]:
+- Enable the shared ABFP multiplier's input register stage, after operand selection.
+- Maps to the child multiplier's REGISTERED_IN parameter. Core W/B capture,
+  A alignment, and output holding registers remain present for either setting.
+- REGISTERED_IN is reserved for direct registration of a module's *_i signals;
+  this core option controls an internal arithmetic stage instead.
+
+REGISTERED_NORMALIZE [0,1]:
+- Register the shared multiplier's product and associated fields before its
+  normalize/round/post-normalize logic.
+
+LUTX [>= 3]:
+- LUT input count used to size the multiplier's sticky-OR reduction tree.
+
+GRADE [1,2]:
+- Combinational LUT levels grouped per reduction-tree stage; the group size is
+  LUTX**GRADE. Changing LUTX/GRADE can change the internal multiplier latency.
+
+All register flags are binary. MULTIPLIER_LATENCY includes the selected child
+registers and internal sticky-tree registers. A_PIPE_LATENCY is that latency + 1;
+the public LATENCY to the WiBi/A early strobe is that latency + 2. These choices
+change companion delays automatically; the minimum bundle spacing stays four clocks.
 */
 
 import constant_functions_pkg::*;
@@ -33,7 +66,7 @@ module fft_multiplier_core #(
     parameter BASE,
     parameter EXPONENT_WIDTH,
     parameter MANTISSA_WIDTH,
-    parameter REGISTERED_IN,
+    parameter REGSITERED_MULTIPLIER,
     parameter REGISTERED_NORMALIZE,
     parameter LUTX,
     parameter GRADE,
@@ -42,13 +75,13 @@ module fft_multiplier_core #(
     // Globally Defined Locally Set Parameters
     localparam DATA_WIDTH = fft_multiplier_core_DATA_WIDTH(EXPONENT_WIDTH, MANTISSA_WIDTH),
     localparam MULTIPLIER_LATENCY = alternate_base_fp_multiplier_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     ),
     localparam A_PIPE_LATENCY = fft_multiplier_core_A_PIPE_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     ),
     localparam LATENCY = fft_multiplier_core_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     )
 ) (
     input clk_i,
@@ -155,7 +188,7 @@ module fft_multiplier_core #(
         .BASE(BASE),
         .EXPONENT_WIDTH(EXPONENT_WIDTH),
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGISTERED_IN(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE),
         .LUTX(LUTX),
         .GRADE(GRADE)

@@ -20,6 +20,60 @@ All four output registers are coherent on valid_o at T+2*A+4. They otherwise
 update individually and hold. Reset is synchronous and clears control/valid
 state only; datapaths are unreset and may be unknown before their first writes.
 All REGISTERED_* flags configure both shared adders identically.
+
+BASE [2,4,8,16,...]:
+- ABFP numeric radix; must be a power of two >= 2. This is independent of FFT radix.
+
+EXPONENT_WIDTH [>= 1]:
+- Exponent-field bits. The ABFP bias is 2**(EXPONENT_WIDTH - 1) - 1.
+
+MANTISSA_WIDTH [>= log2(BASE)]:
+- Explicit mantissa bits, excluding sign/exponent; there is no implicit leading bit.
+- All input/output words use 1 + EXPONENT_WIDTH + MANTISSA_WIDTH bits.
+
+LUTX [>= 3]:
+- LUT input count used to size the child adders' reduction, priority, and mux trees.
+
+GRADE [1,2]:
+- Combinational LUT levels grouped per tree/mux stage. Larger groups can reduce
+  internal pipeline depth at the cost of more combinational logic per stage.
+
+The following REGISTERED_* flags are all [0,1] and are forwarded to both adders:
+
+REGISTERED_SWAP_IN:
+- Register operands entering the exponent-comparison/swap stage.
+REGISTERED_SWAP_MUX:
+- Register the operands and comparison decision before the swap-selection muxes.
+
+REGISTERED_ALIGN_STICKY_IN:
+- Register operands entering mantissa alignment and sticky-bit generation.
+REGISTERED_ALIGN_EXPONENT_MUX:
+- Register the exponent difference/comparison used to select the alignment shift.
+REGISTERED_ALIGN_MUX:
+- Register inputs to the mantissa/sticky alignment mux trees.
+
+REGISTERED_ADD_CONVERT:
+- Register aligned operands entering signed mantissa addition/subtraction.
+REGISTERED_ADD_CONVERT_CONVERT:
+- Register the arithmetic result before conversion back to sign and magnitude.
+
+REGISTERED_PRIORITY_ENCODE:
+- Register inputs to leading-radix-digit reduction and priority encoding.
+REGISTERED_PRIORITY_ENCODE_ENCODER:
+- Register inputs to the priority encoder after the radix-digit OR reductions.
+
+REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE:
+- Register inputs to normalization and exponent adjustment.
+REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND:
+- Register the normalized mantissa, adjusted exponent, and sign before rounding.
+
+These flags control arithmetic stages after the core operand muxes. A standalone
+REGISTERED_IN name is reserved for direct registration of a module's *_i signals.
+ADDER_LATENCY includes the selected registers and internal tree/mux pipelines;
+disabling every flag does not necessarily make the arithmetic combinational.
+A_PIPE_LATENCY equals ADDER_LATENCY, and public LATENCY is 2*ADDER_LATENCY + 4.
+The core's intermediate/output holding registers remain present, and the minimum
+bundle spacing stays four clocks for every supported register configuration.
 */
 
 import constant_functions_pkg::*;

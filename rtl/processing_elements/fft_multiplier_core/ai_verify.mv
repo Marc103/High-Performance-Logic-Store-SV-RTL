@@ -13,6 +13,13 @@
 // Sections 06,07,17,18,19,20,22 are reopened; other recorded sign-offs are preserved.
 // Section 21 records historical L+4-strobe tests and is not the current valid contract.
 // The new verification block below records this revision's tests.
+// Revision 11/12/26: core REGISTERED_IN is renamed REGSITERED_MULTIPLIER.
+// The child ABFP multiplier still calls its direct input-stage flag REGISTERED_IN.
+// Matching core excerpts/helper arguments are updated; timing/arithmetic is unchanged.
+// Sections 02,04,05,12 are reopened; previous sign-offs are retained beside their tags.
+// Rename checks 11/12/26: WSL Verilator passed three configurations, 12,496 clocks,
+// 2,807 early strobes and 11,225 product writes. Questa default smoke also passed.
+// Evidence: simulate/fft_core_parameter_rename/results.json and questa.log.
 // L below means MULTIPLIER_LATENCY, not the core's aggregate LATENCY.
 // Clock T is the rising edge accepting a W/B bundle. Timing tables describe
 // signal/register values after that edge's nonblocking assignments settle.
@@ -25,7 +32,7 @@
 - BASE, exponent/mantissa widths, LUTX/GRADE, and tree capacities satisfy the ABFP
   multiplier's parameter contract. In particular BASE is a power of two >= 2,
   EXPONENT_WIDTH >= 1, and MANTISSA_WIDTH >= log2(BASE).
-- REGISTERED_IN and REGISTERED_NORMALIZE are 0 or 1 and configure the child multiplier.
+- REGSITERED_MULTIPLIER and REGISTERED_NORMALIZE are 0 or 1 and configure the child multiplier.
   The core's W/B holding registers and all output holding registers are always present.
 - Wr, Wi, Br, and Bi form one bundle, captured on an accepted w_b_valid_i rising event.
   Accepted bundles are at least four clocks apart. There is no ready port or queue.
@@ -52,7 +59,7 @@ module fft_multiplier_core #(
     parameter BASE,
     parameter EXPONENT_WIDTH,
     parameter MANTISSA_WIDTH,
-    parameter REGISTERED_IN,
+    parameter REGSITERED_MULTIPLIER,
     parameter REGISTERED_NORMALIZE,
     parameter LUTX,
     parameter GRADE,
@@ -61,7 +68,8 @@ module fft_multiplier_core #(
 - LUTX and GRADE configure the child sticky tree; register flags are passed unchanged.
 - The three timing quantities are localparams derived from the overridable parameters,
   so changing register flags or sticky-tree depth also changes companion delays.
-[Marc103 - 11/06/26]
+// Previous sign-off before the parameter rename: [Marc103 - 11/06/26]
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 03. DATA_WIDTH and port widths
@@ -82,7 +90,7 @@ module fft_multiplier_core #(
 // 04. Child multiplier latency
 "
     localparam MULTIPLIER_LATENCY = alternate_base_fp_multiplier_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     ),
 "
 "
@@ -100,34 +108,35 @@ module fft_multiplier_core #(
         return REGISTERED_IN + REGISTERED_NORMALIZE + reduction_tree_LATENCY(0, stages);
     endfunction
 "
-- The helper receives the exact same MANTISSA_WIDTH, REGISTERED_IN,
+- The helper receives the exact same MANTISSA_WIDTH, REGSITERED_MULTIPLIER,
   REGISTERED_NORMALIZE, LUTX, and GRADE as multiplier_inst.
 - L includes selected child input/normalization registers and internal sticky-tree
   registers. The core assumes initiation interval one, with fixed latency L >= 0.
 - With the existing reduction_tree_LATENCY, sticky stages S contribute S-1 clocks.
-  Therefore L = REGISTERED_IN + REGISTERED_NORMALIZE + S - 1.
+  Therefore L = REGSITERED_MULTIPLIER + REGISTERED_NORMALIZE + S - 1.
 - L can be zero. It is independent of the four-clock spacing between W/B bundles.
 - All result selector and valid delays use this same L, including when L exceeds four.
-[Marc103 - 11/06/26]
+// Previous sign-off before the parameter rename: [Marc103 - 11/06/26]
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 05. A_PIPE_LATENCY derivation
 "
     localparam A_PIPE_LATENCY = fft_multiplier_core_A_PIPE_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     ),
 "
 "
     function automatic int fft_multiplier_core_A_PIPE_LATENCY(
         int MANTISSA_WIDTH,
-        int REGISTERED_IN,
+        int REGSITERED_MULTIPLIER,
         int REGISTERED_NORMALIZE,
         int LUTX,
         int GRADE
     );
         // A is sampled with WrBr; WiBi is issued one clock later.
         return alternate_base_fp_multiplier_LATENCY(
-            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+            MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
         ) + 1;
     endfunction
 "
@@ -139,26 +148,27 @@ module fft_multiplier_core #(
   would put A one clock late, and the former L+3 would align A to the fourth product.
 - L+1 is always at least one, so a_valid_l[A_PIPE_LATENCY-1:0] is valid even at L=0.
 - Full parameter arguments are used directly, matching the selected child configuration.
-[Marc103 - 11/06/26]
+// Previous sign-off before the parameter rename: [Marc103 - 11/06/26]
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 06. Aggregate LATENCY derivation
 "
     localparam LATENCY = fft_multiplier_core_LATENCY(
-        MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+        MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
     )
 "
 "
     function automatic int fft_multiplier_core_LATENCY(
         int MANTISSA_WIDTH,
-        int REGISTERED_IN,
+        int REGSITERED_MULTIPLIER,
         int REGISTERED_NORMALIZE,
         int LUTX,
         int GRADE
     );
         // W/B capture to WiBi and its early valid_o strobe.
         return alternate_base_fp_multiplier_LATENCY(
-            MANTISSA_WIDTH, REGISTERED_IN, REGISTERED_NORMALIZE, LUTX, GRADE
+            MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE
         ) + 2;
     endfunction
 "
@@ -361,7 +371,7 @@ module fft_multiplier_core #(
         .BASE(BASE),
         .EXPONENT_WIDTH(EXPONENT_WIDTH),
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGISTERED_IN(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE),
         .LUTX(LUTX),
         .GRADE(GRADE)
@@ -380,7 +390,8 @@ module fft_multiplier_core #(
 - Canonical zeros, signed-zero signs, exponent range handling, and combined NaN/Inf
   propagation are inherited from the existing multiplier implementation.
 - Ar/Ai use separate full-word pipes; they are not multiplied or classified here.
-[Marc103 - 11/06/26]
+// Previous sign-off before the parameter rename: [Marc103 - 11/06/26]
+[ ]
 
 ////////////////////////////////////////////////////////////////
 // 13. Product selector pipeline

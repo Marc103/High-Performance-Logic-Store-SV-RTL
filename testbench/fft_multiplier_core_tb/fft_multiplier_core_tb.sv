@@ -28,7 +28,7 @@ module fft_multiplier_core_tb #(
     parameter MANTISSA_WIDTH = 12,
     parameter LUTX = 6,
     parameter GRADE = 1,
-    parameter REGISTERED_IN = 1,
+    parameter REGSITERED_MULTIPLIER = 1,
     parameter REGISTERED_NORMALIZE = 1,
     parameter RANDOM_TRANSACTIONS = 256
 ) ();
@@ -39,7 +39,7 @@ module fft_multiplier_core_tb #(
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
         .LUTX(LUTX),
         .GRADE(GRADE),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGSITERED_MULTIPLIER(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE),
         .RANDOM_TRANSACTIONS(RANDOM_TRANSACTIONS)
     );
@@ -49,7 +49,7 @@ module fft_multiplier_core_tb #(
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
         .LUTX(LUTX),
         .GRADE(GRADE),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGSITERED_MULTIPLIER(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE)
     );
     logic clk = 0;
@@ -60,7 +60,7 @@ module fft_multiplier_core_tb #(
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
         .LUTX(LUTX),
         .GRADE(GRADE),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGSITERED_MULTIPLIER(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE)
     ) bfm(.clk_i(clk));
     fft_multiplier_core #(
@@ -69,7 +69,7 @@ module fft_multiplier_core_tb #(
         .MANTISSA_WIDTH(MANTISSA_WIDTH),
         .LUTX(LUTX),
         .GRADE(GRADE),
-        .REGISTERED_IN(REGISTERED_IN),
+        .REGSITERED_MULTIPLIER(REGSITERED_MULTIPLIER),
         .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE)
     ) dut(
         .clk_i(clk), .rst_i(bfm.rst_i), .w_b_valid_i(bfm.w_b_valid_i),
@@ -99,7 +99,7 @@ module fft_multiplier_core_tb #(
         if(EXPONENT_WIDTH < 1) $fatal(1, "EXPONENT_WIDTH must be positive");
         if(MANTISSA_WIDTH < T::BASE_WIDTH) $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH");
         if(LUTX < 3 || (GRADE != 1 && GRADE != 2)) $fatal(1, "Use LUTX>=3 and GRADE=1 or 2");
-        if((REGISTERED_IN != 0 && REGISTERED_IN != 1) ||
+        if((REGSITERED_MULTIPLIER != 0 && REGSITERED_MULTIPLIER != 1) ||
            (REGISTERED_NORMALIZE != 0 && REGISTERED_NORMALIZE != 1))
             $fatal(1, "REGISTERED_* parameters must be 0 or 1");
         if(RANDOM_TRANSACTIONS < 0) $fatal(1, "RANDOM_TRANSACTIONS must be nonnegative");

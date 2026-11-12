@@ -20,4 +20,5 @@ package golden_models_pkg;
     `include "AlternateBaseFpMultiplierModel.sv"
     `include "FftMultiplierCoreModel.sv"
     `include "FftAdderCoreModel.sv"
+    `include "FsmFftReaderModel.sv"
 endpackage
