@@ -1,0 +1,557 @@
+////////////////////////////////////////////////////////////////
+// fsm_fft_reader - AI verification review, signed 11/12/26
+// Sign-off tags applied at Marc103's explicit request on 11/12/26.
+// Revision: request sequencer only, as requested. No downstream completion wait.
+// RTL SHA-256: d325962b7ce2d103699479b17df8d9885813caa98c937acb0977a5c92de7a91d
+// Reviewed fsm_fft_reader.sv and ../../rtl_utilities_pkg.sv.
+// S=SAMPLES_ADDR_WIDTH, W=TWIDDLES_ADDR_WIDTH, I=II_CYCLES,
+// R=READ_LATENCY, N=fft_point_size, M=fft_whole_iterations.
+// Edge descriptions use values after nonblocking assignments settle.
+// A command is presented after an edge; receiving memory samples it later.
+
+////////////////////////////////////////////////////////////////
+// 01. Scope and traversal
+- Generate FFT sample/twiddle read requests. Do not track arithmetic, writes,
+  downstream completion, or memory dependencies.
+- Traversal is stage -> whole FFT -> group -> pair -> issue/wait clocks.
+- For each pair, usher B and W together, then A one clock later. Every B/W pair
+  is I clocks after the preceding pair, including across stage boundaries.
+- The FSM has only IDLE_RESET and RUNNING. busy_o describes request generation;
+  fft_done_o describes the end of the read schedule, not backend completion.
+- Review assessment: no remaining sequencing, initialization, or width error was
+  identified for valid configurations satisfying the contracts below. Source
+  review and the section-17 simulations support this request-sequencer assessment.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 02. Parameters and width helpers
+// Source: fsm_fft_reader.sv
+"
+module fsm_fft_reader #(
+    parameter DATA_WIDTH,
+    parameter SAMPLES_ADDR_WIDTH,
+    parameter TWIDDLES_ADDR_WIDTH,
+    parameter II_CYCLES,
+    parameter READ_LATENCY = 1,
+
+    ////////////////////////////////////////////////////////////////
+    // Globally Defined Locally Set Parameters
+    localparam DATA_DEPTH   = bram_single_port_DATA_DEPTH(SAMPLES_ADDR_WIDTH),
+    localparam CYCLES_WIDTH = fsm_fft_reader_CYCLES_WIDTH(II_CYCLES)
+"
+// Source: ../../rtl_utilities_pkg.sv
+"
+    function automatic int bram_single_port_DATA_DEPTH(int ADDR_WIDTH);
+        return (2 ** ADDR_WIDTH);
+    endfunction
+"
+// Source: ../../rtl_utilities_pkg.sv
+"
+    function automatic int fsm_fft_reader_CYCLES_WIDTH(int II_CYCLES);
+        return max(1, $clog2(II_CYCLES));
+    endfunction
+"
+- S sizes sample addresses and 2**S memory positions. W independently sizes the
+  twiddle address. DATA_WIDTH remains unused by this control-only module.
+- Existing int DATA_DEPTH supports S=1..30. I is a positive int >=4, matching the
+  present shared FFT cores. The interval counter width covers 0..I-1.
+- R defaults to one and matches the common sample/twiddle returned-data latency.
+- No writeback parameter, derived wait helper, countdown, or additional state is
+  required. Parameter checks retain the supported address/interval/read widths.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 03. Configuration and capacity
+- N is a power of two >=2 and N<=2**S. M is positive and M*N<=2**S.
+- With N/2 coefficients W_N**k, require N<=2**(W+1). Populate coefficient addresses
+  for the requested N; enough address capacity does not create ROM contents.
+- The reader emits k directly. If a fixed ROM instead contains W_L**j for a larger
+  FFT L, the required address is j=k*(L/N). For example, W_16**k is at address 2*k
+  in a W_32 table. Such scaling or per-N ROM contents must be provided externally.
+- N has S+1 bits to include 2**S. M has S bits and counts whole FFTs, not samples.
+- Keep configuration stable through a run. go_i is level-sensitive, not an edge
+  detector; a held-high go can launch another schedule after returning idle.
+- Provide valid configuration before launch. Keep it unchanged for held-go repeat
+  runs, or lower go to allow new registered configuration and idle initialization.
+- Read requests have no backpressure. Runtime size validity is a caller contract.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 04. Input registers
+// Source: fsm_fft_reader.sv
+"
+    // Unconditional input register stage, including reset.
+    logic                                     rst;
+    logic   [SAMPLES_ADDR_WIDTH : 0]          fft_point_size;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      fft_whole_iterations;        // how many N-point FFTs to process in the Sample space
+    logic                                     go;
+"
+// Source: fsm_fft_reader.sv
+"
+    always @(posedge clk_i) begin
+        rst                    <= rst_i;
+        fft_point_size         <= fft_point_size_i;
+        fft_whole_iterations   <= fft_whole_iterations_i;
+        go                     <= go_i;
+"
+- rst_i, N, M, and go_i register unconditionally once; clk_i stays the clock.
+- Combinational next-state logic observes those registered inputs. Clocked state
+  consumes next values calculated before that edge, preserving synchronous timing.
+- There is no optional input-register parameter. Reset is also registered.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 05. State variables and corresponding next values
+// Source: fsm_fft_reader.sv
+"
+    // Current values.
+    typedef enum logic {IDLE_RESET, RUNNING} state_t;
+    state_t                                   state;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbi_a;                       // 'gbi' stands for group base index
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbo_a;                       // 'gbo' stands for group base offset
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbi_b;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbo_b;
+    logic   [TWIDDLES_ADDR_WIDTH - 1 : 0]     tbo_w;                       // 'tbo' stands for twiddle base offset
+    logic   [SAMPLES_ADDR_WIDTH : 0]          group_size;                  // up to N, including the full memory depth
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      a_b_gap_size;                // gap between A, B base addresses, starts at 1
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      no_of_groups;                // groups in a given stage in an N-point FFT, starts at N/2
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      pairs_per_group;             // pairs per group in a given stage, starts at 1
+
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      pair_counter;                // pair counter
+    logic   [SAMPLES_ADDR_WIDTH - 0 : 0]      group_counter;               // group counter
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      whole_counter;               // counts fft whole iterations
+    logic   [CYCLES_WIDTH - 1 : 0]            cycles_counter;              // cycle counter to wait after both b/w then a reads are ushered
+
+    logic                                     a_bw_toggle;                 // b/w or a read being ushered?
+    logic   [1:0]                             a_bw_done;                   // both b/w and a done, need 2-bits to separate idle/transmission
+
+    logic                                     fft_done;
+
+    logic                                     usher_a;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      usher_a_addr;
+
+    logic                                     usher_b;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      usher_b_addr;
+
+    logic                                     usher_w;
+    logic   [TWIDDLES_ADDR_WIDTH - 1 : 0]     usher_w_addr;
+"
+// Source: fsm_fft_reader.sv
+"
+    // Corresponding next values
+    state_t                                   state_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbi_a_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbo_a_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbi_b_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      gbo_b_next;
+    logic   [TWIDDLES_ADDR_WIDTH - 1 : 0]     tbo_w_next;
+    logic   [SAMPLES_ADDR_WIDTH : 0]          group_size_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      a_b_gap_size_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      no_of_groups_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      pairs_per_group_next;
+
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      pair_counter_next;
+    logic   [SAMPLES_ADDR_WIDTH - 0 : 0]      group_counter_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      whole_counter_next;
+    logic   [CYCLES_WIDTH - 1 : 0]            cycles_counter_next;
+
+    logic                                     a_bw_toggle_next;
+    logic   [1:0]                             a_bw_done_next;
+
+    logic                                     fft_done_next;
+
+    logic                                     usher_a_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      usher_a_addr_next;
+
+    logic                                     usher_b_next;
+    logic   [SAMPLES_ADDR_WIDTH - 1 : 0]      usher_b_addr_next;
+
+    logic                                     usher_w_next;
+    logic   [TWIDDLES_ADDR_WIDTH - 1 : 0]     usher_w_addr_next;
+"
+- The one-bit enum has two states. All 23 FSM variables have same-type/same-width
+  *_next counterparts. There is no separate writeback counter.
+- gbi_a/b hold group base addresses; gbo_a/b are actual sample read addresses.
+  tbo_w is coefficient index k. group_size=2*P, gap=P, pairs_per_group=P,
+  no_of_groups=G=N/(2*P).
+- Pair/group/whole counters implement the nested loops. cycles_counter enforces I.
+  a_bw_toggle and two-bit a_bw_done implement B/W then A. usher_* stage commands.
+- group_size is S+1 bits to include the full-memory size N=2**S.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 06. Clocked state bank and combinational defaults
+// Source: fsm_fft_reader.sv
+"
+        state                  <= state_next;
+        gbi_a                  <= gbi_a_next;
+        gbo_a                  <= gbo_a_next;
+        gbi_b                  <= gbi_b_next;
+        gbo_b                  <= gbo_b_next;
+        tbo_w                  <= tbo_w_next;
+        group_size             <= group_size_next;
+        a_b_gap_size           <= a_b_gap_size_next;
+        no_of_groups           <= no_of_groups_next;
+        pairs_per_group        <= pairs_per_group_next;
+
+        pair_counter           <= pair_counter_next;
+        group_counter          <= group_counter_next;
+        whole_counter          <= whole_counter_next;
+        cycles_counter         <= cycles_counter_next;
+
+        a_bw_toggle            <= a_bw_toggle_next;
+        a_bw_done              <= a_bw_done_next;
+
+        fft_done               <= fft_done_next;
+
+        usher_a                <= usher_a_next;
+        usher_a_addr           <= usher_a_addr_next;
+
+        usher_b                <= usher_b_next;
+        usher_b_addr           <= usher_b_addr_next;
+
+        usher_w                <= usher_w_next;
+        usher_w_addr           <= usher_w_addr_next;
+    end
+"
+// Source: fsm_fft_reader.sv
+"
+    always_comb begin
+        // Hold defaults also cover an unknown/illegal state without inferring latches.
+        state_next             = state;
+        gbi_a_next             = gbi_a;
+        gbo_a_next             = gbo_a;
+        gbi_b_next             = gbi_b;
+        gbo_b_next             = gbo_b;
+        tbo_w_next             = tbo_w;
+        group_size_next        = group_size;
+        a_b_gap_size_next      = a_b_gap_size;
+        no_of_groups_next      = no_of_groups;
+        pairs_per_group_next   = pairs_per_group;
+        pair_counter_next      = pair_counter;
+        group_counter_next     = group_counter;
+        whole_counter_next     = whole_counter;
+        cycles_counter_next    = cycles_counter;
+        a_bw_toggle_next       = a_bw_toggle;
+        a_bw_done_next         = a_bw_done;
+        fft_done_next          = 0;
+        // regardless defaults
+        usher_a_next           = 0;
+        usher_a_addr_next      = gbo_a;
+
+        usher_b_next           = 0;
+        usher_b_addr_next      = gbo_b;
+
+        usher_w_next           = 0;
+        usher_w_addr_next      = tbo_w;
+"
+- All FSM registers update by nonblocking current<=next assignments on clk_i.
+- Complete combinational hold defaults prevent latches in uncovered branches.
+  Command enables and fft_done default low; addresses select current gbo/tbo.
+- Blocking next assignments allow a later group/stage override to replace an
+  earlier tentative increment before clocked capture. Command addresses still
+  capture the current operation when next pointers advance on the same edge.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 07. IDLE_RESET initialization
+// Source: fsm_fft_reader.sv
+"
+            IDLE_RESET: begin
+                // defaults
+                gbi_a_next             = 0;
+                gbo_a_next             = 0;
+                gbi_b_next             = 1; // default of a_b_gap_size.
+                gbo_b_next             = 1;
+                tbo_w_next             = 0;
+
+                no_of_groups_next      = fft_point_size >> 1;
+                pairs_per_group_next   = 1;
+                group_size_next        = 2;
+                a_b_gap_size_next      = 1;
+
+                pair_counter_next      = 0;
+                group_counter_next     = 0;
+                whole_counter_next     = 0;
+                cycles_counter_next    = 0;
+
+                a_bw_toggle_next       = 1; // we start with b and w
+                a_bw_done_next         = 0;
+
+                fft_done_next          = 0;
+
+                state_next             = IDLE_RESET;
+                if(go)  state_next     = RUNNING;
+            end
+"
+- Initialize A=0, B=1, k=0, group_size=2, gap=P=1, G=N/2.
+- Pair/group/whole/interval counters clear; B/W is the first phase. Command
+  defaults keep requests low while idle. All initial/default assignments exist.
+- Initialization reloads continuously in idle. Registered go requests RUNNING;
+  registered reset has final priority. Busy-time go pulses are not queued.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 08. B/W issue, A issue and interval
+// Source: fsm_fft_reader.sv
+"
+            RUNNING: begin
+                // Advance the issue interval; the remaining state holds by default.
+                cycles_counter_next    = cycles_counter + 1;
+                a_bw_done_next         = 0;
+
+                if(a_bw_toggle) begin // toggle starts 1'b1 -> b/w read first
+                    usher_b_next           = 1;
+                    usher_w_next           = 1;
+                    a_bw_toggle_next       = 0;
+                    a_bw_done_next         = 2'b01;
+                end else begin
+                    if(a_bw_done == 2'b01) begin // 2-bit a_bw_done, to separate a usher from idle cycles
+                        usher_a_next           = 1;
+                        a_bw_done_next         = 2'b11;
+                    end
+                    if(cycles_counter >= (II_CYCLES - 1)) begin
+                        cycles_counter_next    = 0; // reset cycle counter
+
+                        a_bw_done_next         = 0; // reset done from 2'b11
+                        a_bw_toggle_next       = 1; // reset toggle back to bw
+"
+- RUNNING increments the interval counter. Toggle=1 asserts B/W, clears the toggle
+  and installs done=01. The next clock issues A once and installs done=11.
+- Subsequent wait clocks do not see done=01, so A cannot repeat. At count I-1,
+  reset the interval and rearm B/W for the next clock.
+- The I clocks include B/W, A and idle clocks. No extra stage delay is inserted.
+- I>=4 makes I-1 nonnegative; the unsigned terminal comparison is safe.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 09. Pair and group progression; corrected twiddle stepping
+// Source: fsm_fft_reader.sv
+"
+                        gbo_a_next             = gbo_a + 1; // increment A offset
+                        gbo_b_next             = gbo_b + 1; // increment B offset
+
+                        pair_counter_next      = pair_counter + 1;
+                        tbo_w_next             = tbo_w + no_of_groups; // advance k by G for each pair
+                        if(pair_counter_next >= pairs_per_group) begin // finished group
+                            pair_counter_next      = 0; // reset pair counter
+                            tbo_w_next             = 0;        // repeat the twiddle sequence for each group
+
+                            gbi_a_next             = gbi_a + group_size;   // increment A base pointer using group size
+                            gbi_b_next             = gbi_b + group_size;   // incrememt B base pointer using group size
+                            gbo_a_next             = gbi_a_next;           // set A offset to A base pointer
+                            gbo_b_next             = gbi_b_next;           // set B offset to B base pointer
+"
+- After a completed pair, increment A/B addresses and pair_counter, and advance k
+  by G. After P pairs, reset the pair counter and k, advance group bases by 2*P,
+  and reload A/B addresses from those new bases.
+- For whole FFT f, group g and pair p: A=f*N+g*(2*P)+p, B=A+P, k=p*G.
+- k resets at each group, not only at a whole-FFT boundary. This preserves the
+  corrected sequence when runtime N is smaller than physical ROM capacity.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 10. Whole-FFT and stage progression; request completion
+// Source: fsm_fft_reader.sv
+"
+                            group_counter_next     = group_counter + 1;
+                            if(group_counter_next >= no_of_groups) begin // finished all groups in N-point FFT
+                                group_counter_next     = 0; // reset group counter
+
+                                tbo_w_next             = 0; // unlike the gbi/o_* variables, which tile over correctly
+                                                        // we need to reset the twiddle base between successive N-point FFTs.
+
+                                whole_counter_next     = whole_counter + 1;
+                                if(whole_counter_next >= fft_whole_iterations) begin // finished all groups across all N-point FFT tiled over the Sample Space
+                                    whole_counter_next     = 0; // reset whole counter
+
+                                    if(no_of_groups == 1) begin
+                                        state_next             = IDLE_RESET;
+                                        fft_done_next          = 1;
+                                    end else begin
+                                        no_of_groups_next      = no_of_groups >> 1;
+                                        group_size_next        = group_size << 1;
+                                        pairs_per_group_next   = pairs_per_group << 1;
+                                        a_b_gap_size_next      = a_b_gap_size << 1;
+                                        gbi_a_next             = 0;
+                                        gbi_b_next             = a_b_gap_size_next;
+                                        gbo_a_next             = gbi_a_next;
+                                        gbo_b_next             = gbi_b_next;
+                                        tbo_w_next             = 0;
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+"
+- After G groups, clear group_counter and k. Sample bases naturally advance by N
+  into the next tiled whole FFT, so they do not reset at that boundary.
+- After M whole FFTs, clear whole_counter. If current G>1, halve G, double group
+  size/P/gap, reset A base to zero and B base to the NEW gap, and continue RUNNING.
+- The already rearmed B/W phase issues the next stage at the next I-clock slot.
+- If current G=1, return idle and pulse fft_done. No nonexistent next-stage doubles
+  are calculated. Completion is based only on finishing the request schedule.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 11. Example N=8 sequence
+Stage  G  P  Sample A/B pairs                  Twiddle k
+  0      4  1  (0,1) (2,3) (4,5) (6,7)          0 0 0 0
+  1      2  2  (0,2) (1,3) (4,6) (5,7)          0 2 0 2
+  2      1  4  (0,4) (1,5) (2,6) (3,7)          0 1 2 3
+
+- For M=2, add eight to sample addresses for the second whole FFT and repeat the
+  same k sequence. Process both whole FFTs before advancing the stage.
+- All B/W commands are I clocks apart, including each row/stage transition.
+- Arithmetic, output storage and sample permutation are outside the sequencer.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 12. Public command outputs and status
+// Source: fsm_fft_reader.sv
+"
+    // One shared sample read port; both A/B command addresses are already registered.
+    assign a_b_rd_addr_o = usher_a ? usher_a_addr : usher_b_addr;
+    assign a_b_rd_en_o = (usher_a || usher_b) && !rst;
+    assign w_rd_addr_o = usher_w_addr;
+    assign w_rd_en_o = usher_w && !rst;
+    assign busy_o = (state != IDLE_RESET) && !rst;
+    assign fft_done_o = fft_done && !rst;
+"
+- The shared sample address selects the registered A address during an A command,
+  otherwise B. The sample enable is the qualified OR of A/B command flags.
+- W address/enable come from the registered twiddle command; W accompanies B.
+- busy_o is high while RUNNING and low on idle/reset. fft_done_o is a one-clock
+  read-schedule completion pulse, masked by reset.
+- busy_o and fft_done_o do not describe downstream processing or returned-data
+  pipeline occupancy. Enable-low addresses are not required to have reset values.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 13. Returned-data valid pipelines
+// Source: fsm_fft_reader.sv
+"
+    logic [READ_LATENCY - 1 : 0] a_valid, b_valid, w_valid;
+    always @(posedge clk_i) begin
+        if(rst) begin
+            a_valid                <= '0;
+            b_valid                <= '0;
+            w_valid                <= '0;
+        end else begin
+            a_valid[0] <= usher_a;
+            b_valid[0] <= usher_b;
+            w_valid[0] <= usher_w;
+            for(int i = 1; i < READ_LATENCY; i++) begin
+                a_valid[i] <= a_valid[i - 1];
+                b_valid[i] <= b_valid[i - 1];
+                w_valid[i] <= w_valid[i - 1];
+            end
+        end
+    end
+    assign a_valid_o = a_valid[READ_LATENCY - 1] && !rst;
+    assign b_valid_o = b_valid[READ_LATENCY - 1] && !rst;
+    assign w_valid_o = w_valid[READ_LATENCY - 1] && !rst;
+"
+- Delay each registered command flag by R clocks. Memory samples the command on
+  a following edge, so R=1 aligns its returned valid with a basic synchronous read.
+- Match R to both memories, including their input/output/data pipeline registers.
+  B/W valids remain concurrent; A valid is one clock later.
+- Completion does not flush these pipelines. If R is longer than the remaining
+  interval, valid flags can correctly return after busy falls and fft_done pulses.
+- Reset flushes all valid stages and masks their public outputs. Data/address
+  registers are not reset.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 14. Reset and parameter checks
+// Source: fsm_fft_reader.sv
+"
+    initial begin
+        if(SAMPLES_ADDR_WIDTH < 1 || SAMPLES_ADDR_WIDTH > 30)
+            $fatal(1, "SAMPLES_ADDR_WIDTH must be 1..30 with the int DATA_DEPTH helper");
+        if(TWIDDLES_ADDR_WIDTH < 1) $fatal(1, "TWIDDLES_ADDR_WIDTH must be positive");
+        if(II_CYCLES < 4) $fatal(1, "II_CYCLES must be at least 4 for the shared FFT cores");
+        if(READ_LATENCY < 1) $fatal(1, "READ_LATENCY must be positive");
+    end
+"
+// Source: fsm_fft_reader.sv
+"
+        if(rst) begin
+            state_next             = IDLE_RESET;
+            usher_a_next           = 0;
+            usher_b_next           = 0;
+            usher_w_next           = 0;
+            fft_done_next          = 0;
+        end
+"
+- Registered rst has final priority over case/go and suppresses pending A/B/W
+  commands and completion. Public commands/status/valids are also masked by rst.
+- Reset can interrupt issue or idle clocks and cancels pending reader-valid tags.
+  It is synchronous through its explicit input register, not asynchronous.
+- The default case recovers an unknown/illegal state to idle. A reset before use
+  establishes known control/valid state; no datapath power-up value is promised.
+- Static checks retain supported address widths, I>=4 and positive R. No backend
+  completion or memory-dependency checks belong to this module.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 15. Cycle timing and completion meaning
+- From initialized idle, if external go_i is sampled at T: state enters RUNNING
+  at T+1, the first B/W command presents at T+2, and A presents at T+3.
+- With first B/W at C, butterfly j commands B/W at C+j*I and A at C+j*I+1.
+  This equation includes pair, group, whole-FFT and stage boundaries.
+- Returned B/W valid is R clocks after its command; A valid follows one clock later.
+- If the final A command presents at A_last, request completion pulses at
+  A_last+I-2. It does not wait for returned data or any subsequent processing.
+- A held-high go can request another run after idle initialization. A reset abort
+  suppresses completion, so busy becoming low during reset is not a success pulse.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 16. Width proof
+- N/group_size need S+1 bits for 2**S. P/G/gap need at most N/2 and fit S bits.
+- Pair/group terminal counts fit their declared S/S+1 bits; whole count is at
+  most floor(2**S/N)<=2**(S-1) and fits S bits.
+- Actual sample addresses are at most M*N-1<=2**S-1. For p<P, k=p*G<N/2<=2**W.
+  Tentative end-of-group increments are overridden before a new command uses them.
+- Interval count 0..I-1 fits max(1,clog2(I)). The two enum states need one bit;
+  a_bw_done needs two bits for 00,01,11. All 23 current/next pairs match.
+- Stage parameters only double if another stage exists, so no terminal-stage
+  double needs to be represented as a live parameter.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 17. Current simulation evidence - 11/12/26
+- WSL Verilator and Questa passed the current request-only RTL. Three concurrent
+  configurations sweep every legal power-of-two N and tiling count M in their
+  sample/twiddle capacity, plus reset offsets across issue and returned-valid tails.
+
+   S  W  I  R  Runs  Commands  Returns  Clocks  Aborts
+   1  1  4  1     1        23       21     222       5
+   3  2  5  7     7       156      107     828      21
+   4  3  4  2    15       333      321     986      14
+
+- Independent nested loops check every public A/B/k request, B/W concurrency,
+  A one clock later, exact I spacing across ALL stage boundaries, startup, busy,
+  request-only completion, R-clock valids, and reset suppression/flushing.
+- The R=7,I=5 case verifies returned-data valid tails after request completion.
+  No arithmetic, memory writeback or dependency model is part of these checks.
+- Evidence: simulate/fsm_fft_reader_requests/verilator.log, result.log, and
+  questa/smoke.log. Previous write-drain test records are historical and do not
+  describe this revision. Temporary checker/runner sources are removed afterward.
+[Marc103 - 11/12/26]
+
+////////////////////////////////////////////////////////////////
+// 18. User sign-off
+- Confirm request-only scope with no downstream waits or dependency tracking.
+- Confirm stage -> whole FFT -> group -> pair traversal, B/W then A, and k=p*G.
+- Confirm unchanged I spacing across stage boundaries and request-only done timing.
+- Confirm registered reset, output wiring and R-clock returned-valid behavior,
+  including pending valid tails after request completion.
+- Confirm capacity/configuration contracts and level-sensitive go behavior.
+- These review tags are signed at Marc103's explicit instruction on 11/12/26.
+  Sign-off covers the request-only scope and the configuration/ROM/timing contracts
+  recorded above; no numerical FFT or downstream-completion verification is claimed.
+[Marc103 - 11/12/26]
