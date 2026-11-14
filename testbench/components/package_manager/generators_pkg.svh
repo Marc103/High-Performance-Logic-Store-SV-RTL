@@ -21,4 +21,5 @@ package generators_pkg;
     `include "FftMultiplierCoreGenerator.sv"
     `include "FftAdderCoreGenerator.sv"
     `include "FsmFftReaderGenerator.sv"
+    `include "FsmFftWriterGenerator.sv"
 endpackage

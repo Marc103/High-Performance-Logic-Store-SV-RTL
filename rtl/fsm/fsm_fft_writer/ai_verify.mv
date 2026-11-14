@@ -1,0 +1,348 @@
+////////////////////////////////////////////////////////////////
+// fsm_fft_writer - AI verification review, signed 11/13/26
+// Review follows manual_verify.mv style; signed at Marc103's explicit request.
+// Sign-off tags applied at Marc103's explicit instruction on 11/13/26.
+// Source excerpts below are verbatim; prose explains behavior and timing.
+// Reviewed: fsm_fft_writer.sv and the fft_adder_core output-update contract.
+// Writer RTL SHA-256:
+// 086e12ad44eecf544313e1e05bb3520992107154f5f3f65a4a08e136bcc629fc
+// T means the rising edge accepting valid_i while IDLE and outside reset.
+// Commands after an edge refer to values after nonblocking assignments settle.
+// A synchronous memory samples the preceding cycle's command at the next edge.
+
+////////////////////////////////////////////////////////////////
+// 01. Scope and interface contract
+- Serialize each completed butterfly into two writes on one sample-memory port:
+  Y1 goes to B first, followed by the saved Y0 going to A one clock later.
+- DATA_WIDTH is the full memory-word width. When a word stores a complex sample,
+  pack its real/imaginary fields consistently on y0_i, y1_i and the memory port.
+- The writer copies bits without arithmetic, rounding, format checks or masking.
+  ABFP signs, zero encodings and NaN/Inf payloads therefore pass through unchanged.
+- One clock domain, no backpressure and no transaction queue. The receiving
+  memory must accept a write on every rising edge for which wr_en_o is high.
+- The caller aligns addresses with the result strobe. This module does not
+  calculate FFT addresses, delay addresses through the arithmetic pipeline,
+  or track downstream completion and read/write memory dependencies.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 02. Parameters, ports and width checks
+// Source: fsm_fft_writer.sv
+"
+module fsm_fft_writer #(
+    parameter DATA_WIDTH,
+    parameter ADDR_WIDTH
+) (
+    input                              clk_i,
+    input                              rst_i,
+
+    input  [ADDR_WIDTH - 1 : 0]         a_wr_addr_i,
+    input  [ADDR_WIDTH - 1 : 0]         b_wr_addr_i,
+    input                              valid_i,
+    input  [DATA_WIDTH - 1 : 0]         y0_i,
+    input  [DATA_WIDTH - 1 : 0]         y1_i,
+
+    output [ADDR_WIDTH - 1 : 0]         wr_addr_o,
+    output [DATA_WIDTH - 1 : 0]         wr_data_o,
+    output                             wr_en_o
+);
+"
+// Source: fsm_fft_writer.sv
+"
+    initial begin
+        if(DATA_WIDTH < 1) $fatal(1, "DATA_WIDTH must be positive");
+        if(ADDR_WIDTH < 1) $fatal(1, "ADDR_WIDTH must be positive");
+    end
+"
+- Both widths must be positive, including the supported one-bit minimum.
+- Every address assignment preserves exactly ADDR_WIDTH bits and every data
+  assignment preserves exactly DATA_WIDTH bits; no resizing or address arithmetic
+  occurs. There are no derived width or latency helpers needed by this FSM.
+- rst_i controls cancellation; wr_data_o supplies the selected result to memory.
+  The clock stays a clock; input addresses/data have no unconditional register bank.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 03. Current values and corresponding next values
+// Source: fsm_fft_writer.sv
+"
+    // Current values.
+    typedef enum logic {IDLE, WRITE_A} state_t;
+    state_t                            state;
+    logic                              valid_previous;
+    logic                              wr_en;
+    logic [ADDR_WIDTH - 1 : 0]          wr_addr;
+    logic [DATA_WIDTH - 1 : 0]          wr_data;
+    logic [DATA_WIDTH - 1 : 0]          y0_saved;
+
+    // Corresponding next values.
+    state_t                            state_next;
+    logic                              valid_previous_next;
+    logic                              wr_en_next;
+    logic [ADDR_WIDTH - 1 : 0]          wr_addr_next;
+    logic [DATA_WIDTH - 1 : 0]          wr_data_next;
+    logic [DATA_WIDTH - 1 : 0]          y0_saved_next;
+"
+- All six current variables have a matching next variable of the same type/width.
+- IDLE accepts a new result. WRITE_A marks the one pending A/Y0 command.
+- valid_previous detects the sampled low-to-high transition of valid_i.
+- wr_addr, wr_data and wr_en hold the registered memory command. y0_saved holds
+  the first edge's Y0 until the second command is issued.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 04. Clocked register bank and output wiring
+// Source: fsm_fft_writer.sv
+"
+    always @(posedge clk_i) begin
+        state          <= state_next;
+        valid_previous <= valid_previous_next;
+        wr_en          <= wr_en_next;
+        wr_addr        <= wr_addr_next;
+        wr_data        <= wr_data_next;
+        y0_saved       <= y0_saved_next;
+    end
+
+    assign wr_addr_o = wr_addr;
+    assign wr_data_o = wr_data;
+    assign wr_en_o = wr_en && !rst_i;
+"
+- All state/command registers update from their next values with nonblocking
+  assignments. Data and address appear together after the same rising edge.
+- The memory samples the command present before its rising edge. A B/Y1 command
+  produced after T is consumed at T+1, before the register changes to A/Y0.
+- wr_en_o is additionally masked directly by rst_i. The FSM resets synchronously,
+  but write-enable suppression does not wait for that state-reset edge.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 05. Defaults, holds and reset
+// Source: fsm_fft_writer.sv
+"
+    always_comb begin
+        state_next          = state;
+        valid_previous_next = valid_i;
+        wr_en_next          = 0;
+        wr_addr_next        = wr_addr;
+        wr_data_next        = wr_data;
+        y0_saved_next       = y0_saved;
+
+        if(rst_i) begin
+            state_next          = IDLE;
+            valid_previous_next = 0;
+        end else begin
+"
+- Defaults assign every next variable on every combinational path; no latches
+  are needed. Address/data hold unless a command is explicitly issued.
+- Enable defaults low each cycle. The two active FSM actions override it high.
+- Reset sets IDLE, clears sampled-valid history and leaves wr_en_next low.
+  wr_addr, wr_data and y0_saved hold; their reset values are not forced to zero.
+- Assert reset across a rising edge before use. Data/address may be unknown
+  before their first qualified captures; consumers must obey wr_en_o.
+- A high valid_i on the first edge after reset can be accepted because reset
+  cleared valid_previous. It must describe a fresh, correctly aligned bundle.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 06. First command: accept the result and capture B/Y1
+// Source: fsm_fft_writer.sv
+"
+                IDLE: begin
+                    if(valid_i && !valid_previous) begin
+                        wr_addr_next  = b_wr_addr_i;
+                        wr_data_next  = y1_i;
+                        wr_en_next    = 1;
+                        y0_saved_next = y0_i;
+                        state_next    = WRITE_A;
+                    end
+                end
+"
+- Outside reset, IDLE accepts when valid_i is high and its previous sampled
+  value was low. This is a sampled rising strobe, not a continuously high request.
+- At T, B and Y1 are captured for the first output command. Y0 is captured at
+  the same edge for later use. a_wr_addr_i is not read by this action.
+- Consequently, B, Y0 and Y1 must all belong to the same butterfly at T.
+  A can still be unavailable at that edge without affecting the first write.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 07. Second command: use the arriving A address and saved Y0
+// Source: fsm_fft_writer.sv
+"
+                WRITE_A: begin
+                    wr_addr_next = a_wr_addr_i;
+                    wr_data_next = y0_saved;
+                    wr_en_next   = 1;
+                    state_next   = IDLE;
+                end
+                default: state_next = IDLE;
+"
+- At T+1, WRITE_A samples the current a_wr_addr_i and uses the Y0 saved at T.
+  The current y0_i, y1_i and b_wr_addr_i do not determine this second command.
+- A must belong to the accepted butterfly at T+1. It may arrive exactly one
+  cycle after B, provided ordinary setup/hold timing is met at that sampling edge.
+- The second command is issued regardless of valid_i; a one-clock result strobe
+  is enough to launch both writes. Reset is the cancellation path.
+- The state returns to IDLE after this edge. The default branch recovers an
+  unknown state toward IDLE with enable low; startup still requires reset.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 08. Address alignment and two-cycle holds
+- Required input sampling windows:
+
+   Edge   b_wr_addr_i     a_wr_addr_i     y0_i / y1_i
+   T      B for bundle j not sampled    both results for bundle j
+   T+1    not sampled    A for bundle j not sampled
+
+- B only needs to be stable around T and may change after its sampling edge.
+  A only needs to be stable around T+1 and may change after that sampling edge.
+- Holding B for two clocks and presenting A the next clock is sufficient when
+  those windows cover T and T+1. Neither address requires an extra hold through
+  the later memory-write edge: the writer has already registered it.
+- B does not have to remain valid until A arrives. A does not have to be valid
+  as early as T. These are separate address inputs with separate sampling times.
+- Hold duration alone does not align transactions. The upstream address pipeline
+  must align B to the accepted result strobe and A to the following clock.
+  This contract applies after all read, multiplier, adder and connection delays.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 09. Command presentation versus memory consumption
+- For one bundle and no reset or immediately following bundle:
+
+   Edge   Inputs used         Command after edge    Memory consumes at edge
+   T      valid, B, Y0, Y1    B / Y1, enable=1       preceding command, if any
+   T+1    A                   A / saved Y0, en=1    B / Y1
+   T+2    none                enable=0              A / saved Y0
+
+- Two consecutive cycles with wr_en_o high represent two memory writes; memory
+  must use the enable level each clock rather than detect only its rising edge.
+- Idle output addresses/data hold the last command. Their values alone are not
+  additional writes. There is no writer done_o or memory-commit acknowledgment.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 10. Why the Y0 holding register is required
+// Source: ../../processing_elements/fft_adder_core/fft_adder_core.sv
+"
+                case(second_result_selector)
+                    2'd0: y0r_o <= second_sum;
+                    2'd1: y1r_o <= second_sum;
+                    2'd2: y0i_o <= second_sum;
+                    2'd3: begin
+                        y1i_o <= second_sum;
+                        valid_o <= 1;
+                    end
+                endcase
+"
+- Let V be the edge after which the adder's complete valid_o asserts. The current
+  bundle's Y0r/Y1r/Y0i/Y1i registers update at V-3, V-2, V-1 and V, respectively.
+- At the minimum input interval of four clocks, the next bundle's Y0r updates
+  after V+1. With direct clocked connectivity, the writer accepts the adder's
+  strobe at T=V+1 and sees the old coherent Y0 before that simultaneous update.
+- The writer's second command is issued at T+1=V+2. Reading live y0_i then could
+  combine the next bundle's real field with the prior bundle's imaginary field.
+- Saving the whole Y0 word at T prevents this corruption. Y1 is captured into
+  wr_data at T and therefore needs no separate holding register for this schedule.
+- If the connection adds stages, align valid, result words and addresses through
+  those stages together. The V-to-T relationship above assumes direct connection.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 11. Throughput, gaps and held valid
+- A new bundle can be accepted at T+2 if valid_i was sampled low at T+1 and is
+  high again at T+2. Its B command can follow the prior A command without a gap.
+- This gives a writer minimum acceptance interval of two clocks. The existing
+  FFT cores' minimum interval of four clocks leaves adequate write-port capacity.
+- With longer or irregular result gaps, IDLE waits, enable stays low and stored
+  data/address values hold. There is no free-running transaction assumption.
+- valid_previous tracks valid_i each non-reset clock, including WRITE_A. Holding
+  valid_i high through the return to IDLE does not launch another copy.
+- No acceptance occurs in WRITE_A and no busy-time request is queued. A new
+  transaction needs its own sampled low-to-high strobe while IDLE.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 12. Reset, cancellation and limits of write atomicity
+- rst_i must span a rising edge to clear state, valid history and registered
+  enable. Its direct mask also suppresses wr_en_o while reset is asserted.
+- Reset between T and T+1 can suppress the uncommitted B command and prevent
+  issuance of the A command. Reset after A is issued can suppress its commitment
+  if asserted before the memory's consuming edge.
+- A write already consumed by memory cannot be undone. Reset after B commits
+  but before A commits can leave only the B location updated. The two writes
+  are not an atomic transaction; reset/restart handling belongs to the caller.
+- Resetting this writer does not flush the arithmetic pipeline. Reset or otherwise
+  invalidate upstream in-flight results consistently to prevent stale relaunches.
+- No data or address clearing is required for correctness when enable is obeyed.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 13. Simulation evidence - 11/13/26
+- The recorded source hash matches the writer revision reviewed in this file.
+- WSL Verilator passed four direct protocol configurations on the user's machine:
+
+   DATA_WIDTH  ADDR_WIDTH  Checked clocks  Presented write commands
+            1           1            1959                       624
+           16           4            1959                       624
+           37           7            1959                       624
+           64          30            1959                       624
+
+- Directed checks cover repeated bundles, minimum two-clock writer spacing,
+  longer gaps, held-high valid, one-clock-later A availability, changing live data
+  after acceptance, reset aborts and data/address holding during idle/reset.
+- Questa passed the same direct cases and two integrations with the actual FFT
+  adder, with all its optional arithmetic registers disabled/enabled. Public
+  adder latencies were 10 and 30 clocks. Each integration checked 49 bundles,
+  98 presented/consumed writes, continuous II=4 traffic and longer input gaps.
+- Each actual-adder integration observed 39 occasions when live Y0 changed before
+  the second writer command. The saved Y0 still supplied the expected data.
+- The combined Verilator adder-integration elaboration stalled and was stopped;
+  it is not a passing integration result. Actual-adder integration evidence is
+  from Questa; WSL Verilator evidence covers the four direct writer cases.
+- Evidence: simulate/fsm_fft_writer_checks/summary.json, contract/result.log,
+  and questa/result.log. Temporary checker sources were removed after testing.
+- This verifies serializer behavior and adder output-window compatibility.
+  It does not verify a complete FFT memory/address-pipeline interconnection,
+  numerical FFT results, read-after-write safety or downstream completion.
+- Completed templated testbench evidence (same RTL revision, 11/13/26):
+  The class-based reference schedules B/Y1 and A/saved-Y0 command deadlines,
+  and separately predicts what memory consumes before each rising-edge update.
+  The monitor samples that pre-edge write port independently of post-edge outputs.
+  Both channels are compared on every clock, including idle/reset and across
+  sequence-object boundaries. Address/data holds are checked after initialization.
+- WSL Verilator passed these eight templated testbench configurations:
+
+   DATA_WIDTH ADDR_WIDTH Random   Clocks   B writes   A writes   Commits
+           32          4    256     1377        319        291       517
+            1          1    256     1420        285        249       465
+           37          7    256     1572        327        302       576
+           64         30    256     1595        377        348       658
+           16         65     64      615        172        163       315
+          128          9     64      849        228        220       431
+           16          4      0      179         47         46        91
+           32          8   4096    21178       4163       3485      6448
+
+- Directed coverage includes walking bits through every data/address bit, late A,
+  saved-Y0 use despite live-data changes, II=2 and II=4, irregular gaps, held valid,
+  reset before either write commits, partial B-only commitment on reset, completed
+  pairs before reset, and a fresh high-valid result immediately after reset release.
+- The Questa smoke test passed the default templated configuration (32/4/256).
+  Its only reported warning was the simulator's +acc optimization warning.
+- New evidence: testbench/fsm_fft_writer_tb/simulate_regression_logs/results.json,
+  default.log, per-configuration result.log files, and questa_smoke.log. These
+  templated Verilator runs completed; the earlier combined arithmetic integration
+  elaboration stall above remains a separate historical test limitation.
+[Marc103 - 11/13/26]
+
+////////////////////////////////////////////////////////////////
+// 14. Review conclusion and user sign-off
+- No sequencing or width error was identified under the stated timing contract.
+- Confirm B/Y1 first, A/saved-Y0 second, and the registered command-to-memory timing.
+- Confirm B and both results are valid at T, with the corresponding A valid at T+1.
+- Confirm Y0 capture is required for direct connection to the existing II=4 adder.
+- Confirm rising-strobe acceptance, no queue/backpressure, control-only reset,
+  and possible partial memory updates if reset interrupts the two-write sequence.
+- Review tags are signed at Marc103's explicit instruction on 11/13/26.
+[Marc103 - 11/13/26]

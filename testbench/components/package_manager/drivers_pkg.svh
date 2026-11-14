@@ -21,4 +21,5 @@ package drivers_pkg;
     `include "FftMultiplierCoreDriver.sv"
     `include "FftAdderCoreDriver.sv"
     `include "FsmFftReaderDriver.sv"
+    `include "FsmFftWriterDriver.sv"
 endpackage

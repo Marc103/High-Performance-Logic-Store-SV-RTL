@@ -21,4 +21,5 @@ package monitors_pkg;
     `include "FftMultiplierCoreMonitor.sv"
     `include "FftAdderCoreMonitor.sv"
     `include "FsmFftReaderMonitor.sv"
+    `include "FsmFftWriterMonitor.sv"
 endpackage

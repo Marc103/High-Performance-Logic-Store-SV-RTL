@@ -21,4 +21,5 @@ package scoreboards_pkg;
     `include "FftMultiplierCoreScoreboard.sv"
     `include "FftAdderCoreScoreboard.sv"
     `include "FsmFftReaderScoreboard.sv"
+    `include "FsmFftWriterScoreboard.sv"
 endpackage

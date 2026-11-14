@@ -230,6 +230,25 @@ package constant_functions_pkg;
     } fsm_fft_reader_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // fsm_fft_writer behavioral transactions
+    `define FSM_FFT_WRITER_IO_IN_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic [ADDR_WIDTH - 1 : 0] a_wr_addr_i; \
+        logic [ADDR_WIDTH - 1 : 0] b_wr_addr_i; \
+        logic valid_i; \
+        logic [DATA_WIDTH - 1 : 0] y0_i; \
+        logic [DATA_WIDTH - 1 : 0] y1_i; \
+    } fsm_fft_writer_io_in_t;
+
+    `define FSM_FFT_WRITER_IO_OUT_STRUCT(DATA_WIDTH, ADDR_WIDTH) \
+    typedef struct packed { \
+        logic [ADDR_WIDTH - 1 : 0] wr_addr_o; \
+        logic [DATA_WIDTH - 1 : 0] wr_data_o; \
+        logic wr_en_o; \
+    } fsm_fft_writer_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;
