@@ -249,6 +249,22 @@ package constant_functions_pkg;
     } fsm_fft_writer_io_out_t;
 
     ////////////////////////////////////////////////////////////////
+    // fft_accelerator testbench control snapshots (memory traffic uses event traces)
+    `define FFT_ACCELERATOR_IO_IN_STRUCT(SAMPLES_ADDR_WIDTH) \
+    typedef struct packed { \
+        logic rst_i; \
+        logic go_i; \
+        logic [SAMPLES_ADDR_WIDTH : 0] fft_point_size_i; \
+        logic [SAMPLES_ADDR_WIDTH - 1 : 0] fft_whole_iterations_i; \
+    } fft_accelerator_io_in_t;
+
+    `define FFT_ACCELERATOR_IO_OUT_STRUCT \
+    typedef struct packed { \
+        logic busy_o; \
+        logic fft_done_o; \
+    } fft_accelerator_io_out_t;
+
+    ////////////////////////////////////////////////////////////////
     // bram_single_port
     typedef struct packed {
         int ADDR_WIDTH;
@@ -499,6 +515,179 @@ package constant_functions_pkg;
     ////////////////////////////////////////////////////////////////
     // alternate base fp
 
+
+    ////////////////////////////////////////////////////////////////
+    // fft_accelerator
+    function automatic int fft_accelerator_COMPLEX_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return 2 * (1 + EXPONENT_WIDTH + MANTISSA_WIDTH);
+    endfunction
+
+    function automatic int fft_accelerator_RESET_HOLD_CYCLES(int RESET_PIPELINE_DEPTH, int WRITE_LATENCY);
+        return max(RESET_PIPELINE_DEPTH + 2, WRITE_LATENCY);
+    endfunction
+
+    function automatic int fft_accelerator_ADDRESS_PIPE_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGSITERED_MULTIPLIER,
+        int REGISTERED_NORMALIZE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+        int READ_LATENCY
+    );
+        return READ_LATENCY + fft_multiplier_core_LATENCY(MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE) +
+        fft_adder_core_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 2;
+    endfunction
+
+    function automatic int fft_accelerator_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGSITERED_MULTIPLIER,
+        int REGISTERED_NORMALIZE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+        int READ_LATENCY
+    );
+        return READ_LATENCY + fft_multiplier_core_LATENCY(MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE) +
+        fft_adder_core_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 3;
+    endfunction
+
+    function automatic int fft_accelerator_WRITE_COMMIT_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGSITERED_MULTIPLIER,
+        int REGISTERED_NORMALIZE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+        int READ_LATENCY,
+        int WRITE_LATENCY
+    );
+        return READ_LATENCY + fft_multiplier_core_LATENCY(MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE) +
+        fft_adder_core_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 4 + WRITE_LATENCY;
+    endfunction
+
+    function automatic int fft_accelerator_DRAIN_LATENCY(
+        int BASE,
+        int MANTISSA_WIDTH,
+        int LUTX,
+        int GRADE,
+        int REGSITERED_MULTIPLIER,
+        int REGISTERED_NORMALIZE,
+        int REGISTERED_SWAP_IN,
+        int REGISTERED_SWAP_MUX,
+        int REGISTERED_ALIGN_STICKY_IN,
+        int REGISTERED_ALIGN_EXPONENT_MUX,
+        int REGISTERED_ALIGN_MUX,
+        int REGISTERED_ADD_CONVERT,
+        int REGISTERED_ADD_CONVERT_CONVERT,
+        int REGISTERED_PRIORITY_ENCODE,
+        int REGISTERED_PRIORITY_ENCODE_ENCODER,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+        int REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND,
+        int READ_LATENCY,
+        int WRITE_LATENCY,
+        int II_CYCLES
+    );
+        return max(0, READ_LATENCY + fft_multiplier_core_LATENCY(MANTISSA_WIDTH, REGSITERED_MULTIPLIER, REGISTERED_NORMALIZE, LUTX, GRADE) +
+        fft_adder_core_LATENCY(
+            BASE,
+            MANTISSA_WIDTH,
+            LUTX,
+            GRADE,
+            REGISTERED_SWAP_IN,
+            REGISTERED_SWAP_MUX,
+            REGISTERED_ALIGN_STICKY_IN,
+            REGISTERED_ALIGN_EXPONENT_MUX,
+            REGISTERED_ALIGN_MUX,
+            REGISTERED_ADD_CONVERT,
+            REGISTERED_ADD_CONVERT_CONVERT,
+            REGISTERED_PRIORITY_ENCODE,
+            REGISTERED_PRIORITY_ENCODE_ENCODER,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE,
+            REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND
+        ) + 5 + WRITE_LATENCY - II_CYCLES);
+    endfunction
 
     ////////////////////////////////////////////////////////////////
     // max

@@ -1,0 +1,402 @@
+////////////////////////////////////////////////////////////////
+// fft_accelerator - AI verification, prepared 11/15/26
+// Following manual_verify.mv style; signed at Marc103's explicit request.
+// Sign-off tags applied at Marc103's explicit instruction on 11/15/26.
+// Reviewed current fft_accelerator.sv, its package helpers, the reader/writer,
+// both FFT arithmetic cores and the file-driven accelerator testbench.
+// Source excerpts are verbatim. Rising-edge descriptions refer to values after
+// nonblocking assignments settle unless input sampling is stated explicitly.
+// Current RTL SHA-256: d843d30c5fc0aee67e12d12e05411ec8e7206a897732acbf6d39a4696fc11afc
+
+////////////////////////////////////////////////////////////////
+// 01. Scope and data representation
+- This wrapper connects fsm_fft_reader -> fft_multiplier_core -> fft_adder_core
+  -> fsm_fft_writer. Sample and twiddle memories remain external.
+- Each component is a 1+EXPONENT_WIDTH+MANTISSA_WIDTH-bit ABFP word; complex
+  memory words are {real, imaginary}. Sign/exponent/mantissa bits are preserved.
+- ABFP32 here means 6 exponent bits and 25 explicit mantissa bits, not IEEE32.
+  BASE remains independent of these field widths; the supplied files use BASE=16.
+- Exponent-zero values must have zero mantissa. Finite nonzero values have a
+  nonzero leading radix digit. Exponent all ones plus mantissa MSB one is the
+  existing combined NaN/Inf class. The wrapper does not reinterpret these rules.
+- Arithmetic remains separate rounded ABFP operations, not a fused butterfly.
+- Iterative radix-2 DIT needs bit-reversed inputs for natural-order FFT outputs.
+  There is no permutation stage, output normalization or 1/N scaling here.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 02. Public parameters and widths
+// Source: fft_accelerator.sv
+"
+module fft_accelerator #(
+    parameter BASE,
+    parameter EXPONENT_WIDTH,
+    parameter MANTISSA_WIDTH,
+    parameter SAMPLES_ADDR_WIDTH,
+    parameter TWIDDLES_ADDR_WIDTH,
+    parameter II_CYCLES = 4,
+    parameter READ_LATENCY = 1,
+    parameter WRITE_LATENCY = 1,
+    parameter RESET_PIPELINE_DEPTH = 1,
+    parameter LUTX = 6,
+    parameter GRADE = 1,
+    parameter REGSITERED_MULTIPLIER = 1,
+    parameter REGISTERED_NORMALIZE = 1,
+    parameter REGISTERED_SWAP_IN = 1,
+    parameter REGISTERED_SWAP_MUX = 1,
+    parameter REGISTERED_ALIGN_STICKY_IN = 1,
+    parameter REGISTERED_ALIGN_EXPONENT_MUX = 1,
+    parameter REGISTERED_ALIGN_MUX = 1,
+    parameter REGISTERED_ADD_CONVERT = 1,
+    parameter REGISTERED_ADD_CONVERT_CONVERT = 1,
+    parameter REGISTERED_PRIORITY_ENCODE = 1,
+    parameter REGISTERED_PRIORITY_ENCODE_ENCODER = 1,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE = 1,
+    parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND = 1,
+"
+- Required format/address parameters are BASE, EXPONENT_WIDTH, MANTISSA_WIDTH,
+  SAMPLES_ADDR_WIDTH and TWIDDLES_ADDR_WIDTH. Register flags retain child meanings.
+- REGSITERED_MULTIPLIER preserves the spelling of the established child option.
+- DATA_WIDTH derives from the arithmetic format. COMPLEX_DATA_WIDTH is twice
+  that width, so sample and twiddle interfaces have identical complex layouts.
+- Width/latency localparams call globally defined helpers using public parameters;
+  changing a register flag changes the arithmetic and companion delays together.
+- Reader contracts require SAMPLES_ADDR_WIDTH=1..30, TWIDDLES_ADDR_WIDTH>=1,
+  II_CYCLES>=4 and READ_LATENCY>=1. WRITE_LATENCY>=1 and reset depth>=0.
+- The scaffold TB deliberately limits address widths to <=15/14 for its fixed
+  32768-sample/16384-twiddle memories. This is a TB limit, not a new RTL limit.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 03. Derived complex width and reset hold
+// Source: ../../rtl_utilities_pkg.sv
+"
+    function automatic int fft_accelerator_COMPLEX_DATA_WIDTH(int EXPONENT_WIDTH, int MANTISSA_WIDTH);
+        return 2 * (1 + EXPONENT_WIDTH + MANTISSA_WIDTH);
+    endfunction
+
+    function automatic int fft_accelerator_RESET_HOLD_CYCLES(int RESET_PIPELINE_DEPTH, int WRITE_LATENCY);
+        return max(RESET_PIPELINE_DEPTH + 2, WRITE_LATENCY);
+    endfunction
+"
+- A complex word has two complete ABFP fields; neither sign bit is discarded.
+- RESET_HOLD_CYCLES covers reset propagation into the reader's extra input
+  register and outstanding fixed-latency external write stages.
+- These helpers use ordinary int values; actual buses are sized in the modules.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 04. Dedicated reset distribution
+// Source: fft_accelerator.sv
+"
+    // Dedicated equal-depth reset pipelines for each child and wrapper controls.
+    logic reader_rst_p, multiplier_rst_p, adder_rst_p, writer_rst_p;
+    logic control_rst_p, reset_active;
+    pipe #(.DATA_WIDTH(1), .LATENCY(RESET_PIPELINE_DEPTH)) reader_reset_pipe (
+        .clk_i(clk_i), .data_i(rst_i), .data_o(reader_rst_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(RESET_PIPELINE_DEPTH)) multiplier_reset_pipe (
+        .clk_i(clk_i), .data_i(rst_i), .data_o(multiplier_rst_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(RESET_PIPELINE_DEPTH)) adder_reset_pipe (
+        .clk_i(clk_i), .data_i(rst_i), .data_o(adder_rst_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(RESET_PIPELINE_DEPTH)) writer_reset_pipe (
+        .clk_i(clk_i), .data_i(rst_i), .data_o(writer_rst_p)
+    );
+    pipe #(.DATA_WIDTH(1), .LATENCY(RESET_PIPELINE_DEPTH)) control_reset_pipe (
+        .clk_i(clk_i), .data_i(rst_i), .data_o(control_rst_p)
+    );
+    assign reset_active = rst_i || control_rst_p;
+"
+- Reader, multiplier, adder and writer each receive their own reset pipe output.
+  A fifth pipe supplies wrapper control reset. All start directly from rst_i and
+  have the same RESET_PIPELINE_DEPTH; delays are not cascaded between modules.
+- At depth zero each pipe bypasses combinationally. Positive depth uses the
+  existing unreset pipe registers, so startup requires the documented reset hold.
+- reset_active combines raw reset with the wrapper-control delayed reset. Raw
+  assertion suppresses external traffic immediately; delayed reset holds masking
+  through propagation. Each child still resets its synchronous controls locally.
+- No data or address register is cleared by these distribution pipes.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 05. Reader connection and launch gating
+// Source: fft_accelerator.sv
+"
+    assign reader_go = go_i && !busy_o && !reset_active;
+    assign samples_rd_addr_o = read_addr;
+    assign samples_rd_en_o = sample_read_enable && !reset_active;
+    assign twiddles_rd_en_o = twiddle_read_enable && !reset_active;
+    fsm_fft_reader #(
+        .DATA_WIDTH(COMPLEX_DATA_WIDTH), .SAMPLES_ADDR_WIDTH(SAMPLES_ADDR_WIDTH),
+        .TWIDDLES_ADDR_WIDTH(TWIDDLES_ADDR_WIDTH), .II_CYCLES(II_CYCLES), .READ_LATENCY(READ_LATENCY)
+    ) reader (
+        .clk_i(clk_i), .rst_i(reader_rst_p), .go_i(reader_go),
+        .fft_point_size_i(fft_point_size_i), .fft_whole_iterations_i(fft_whole_iterations_i),
+        .a_b_rd_addr_o(read_addr), .a_b_rd_en_o(sample_read_enable),
+        .a_valid_o(a_valid), .b_valid_o(b_valid),
+        .w_rd_addr_o(twiddles_rd_addr_o), .w_rd_en_o(twiddle_read_enable), .w_valid_o(w_valid),
+        .busy_o(reader_busy), .fft_done_o(reader_done)
+    );
+"
+- Runtime N and whole-FFT count M pass to the reader, which registers its inputs.
+  Require power-of-two N>=2 and positive M with M*N within sample capacity.
+- The reader generates B and W together, followed by A one clock later. Its
+  request interval remains II_CYCLES across pair/group/whole/stage boundaries.
+- go_i is gated while top-level busy/reset is active. Busy-time pulses are not
+  queued. A level held high through completion can start a subsequent run after
+  the reader reaccepts it; lower go_i unless repetition is intended.
+- Hold runtime configuration stable before go and through the complete busy tail.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 06. Shared read data and multiplier sampling
+// Source: fft_accelerator.sv
+"
+    assign {sample_real, sample_imag} = samples_rd_data_i;
+    assign {twiddle_real, twiddle_imag} = twiddles_rd_data_i;
+    fft_multiplier_core #(
+        .BASE(BASE),
+        .EXPONENT_WIDTH(EXPONENT_WIDTH),
+        .MANTISSA_WIDTH(MANTISSA_WIDTH),
+        .REGSITERED_MULTIPLIER(REGSITERED_MULTIPLIER),
+        .REGISTERED_NORMALIZE(REGISTERED_NORMALIZE),
+        .LUTX(LUTX),
+        .GRADE(GRADE)
+    ) multiplier (
+        .clk_i(clk_i), .rst_i(multiplier_rst_p),
+        .wr_i(twiddle_real), .wi_i(twiddle_imag),
+        .br_i(sample_real), .bi_i(sample_imag), .ar_i(sample_real), .ai_i(sample_imag),
+        .w_b_valid_i(b_valid && w_valid && !reset_active),
+        .wrbr_o(wrbr), .wibi_o(wibi), .wrbi_o(wrbi), .wibr_o(wibr),
+        .ar_o(ar), .ai_o(ai), .valid_o(multiplier_valid)
+    );
+"
+- Real components occupy the upper DATA_WIDTH bits; imaginary components occupy
+  the lower bits. Both A and B ports use the same returned sample bus.
+- Matching sample/twiddle READ_LATENCY makes B and W arrive together. The
+  multiplier captures them on b_valid&&w_valid, and internally samples A on the
+  following clock. The reader's a_valid is retained as an alignment observation.
+- No extra wrapper data register is inserted into these connections.
+- A synchronous memory captures the presented B command on the next edge; its
+  data/valid return R clocks after presentation. The multiplier samples them
+  one further clock later because validity itself is registered.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 07. Early multiplier valid into the adder
+// Source: fft_accelerator.sv
+"
+    ) adder (
+        .clk_i(clk_i), .rst_i(adder_rst_p), .valid_i(multiplier_valid && !reset_active),
+        .wrbr_i(wrbr), .wibi_i(wibi), .wrbi_i(wrbi), .wibr_i(wibr), .ar_i(ar), .ai_i(ai),
+        .y0r_o(y0r), .y0i_o(y0i), .y1r_o(y1r), .y1i_o(y1i), .valid_o(adder_valid)
+    );
+"
+- The multiplier issues WrBr, WiBi, WrBi and WiBr on consecutive clocks.
+- Its valid_o is the early WiBi/A strobe. The adder accepts WrBr/WiBi/Ar/Ai then,
+  waits two clocks to issue Ti=WrBi+WiBr, and preserves the existing four-clock
+  throughput. It does not require all multiplier outputs coherent at the early strobe.
+- The adder computes Tr=WrBr-WiBi, Ti=WrBi+WiBr, then Y0=A+T and Y1=A-T.
+- Reset qualification suppresses new adder input tokens during reset propagation.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 08. Address delay and output writer
+// Source: fft_accelerator.sv
+"
+    // Delay the whole address stream: writer samples B then A on adjacent edges.
+    logic write_enable;
+    pipe #(.DATA_WIDTH(SAMPLES_ADDR_WIDTH), .LATENCY(ADDRESS_PIPE_LATENCY)) address_pipe (
+        .clk_i(clk_i), .data_i(read_addr), .data_o(write_addr_p)
+    );
+    fsm_fft_writer #(.DATA_WIDTH(COMPLEX_DATA_WIDTH), .ADDR_WIDTH(SAMPLES_ADDR_WIDTH)) writer (
+        .clk_i(clk_i), .rst_i(writer_rst_p), .valid_i(adder_valid && !reset_active),
+        .a_wr_addr_i(write_addr_p), .b_wr_addr_i(write_addr_p),
+        .y0_i({y0r, y0i}), .y1_i({y1r, y1i}),
+        .wr_addr_o(samples_wr_addr_o), .wr_data_o(samples_wr_data_o), .wr_en_o(write_enable)
+    );
+    assign samples_wr_en_o = write_enable && !reset_active;
+"
+- One delayed copy of the complete shared sample-address stream supplies both
+  writer address inputs. B appears first and A appears one clock later.
+- The writer samples B with the completed adder bundle, then samples A on the
+  next edge. It captures Y0 early, preventing the next bundle's Y0r update from
+  corrupting the second write at minimum core throughput.
+- Y1 writes back to B and Y0 writes back to A. Both complex fields use the same
+  memory-word packing as input. Consecutive high write enables mean two writes.
+- Invalid/gap addresses may flow through the unreset address pipe; only valid
+  writer commands enable memory, so those addresses are not consumed as writes.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 09. Clock-by-clock latency derivation
+- Define C as the edge after which a B/W read command is presented, R as common
+  READ_LATENCY, Lm as fft_multiplier_core LATENCY and La as fft_adder_core LATENCY.
+
+   Event                              Edge
+   B/W command presented              C
+   A command presented                C+1
+   Returned B/W data and reader valid  C+R
+   Multiplier accepts B/W             C+R+1
+   Adder accepts early product strobe  C+R+Lm+2
+   Writer accepts completed result    C+R+Lm+La+3
+   B/Y1 write command presented        C+R+Lm+La+3
+   A/Y0 write command presented        C+R+Lm+La+4
+   A/Y0 committed by external memory   C+R+Lm+La+4+WRITE_LATENCY
+
+- ADDRESS_PIPE_LATENCY=R+Lm+La+2 puts B at the writer input before acceptance,
+  and A before the next edge. LATENCY is the B-read to B-write presentation delay.
+- WRITE_COMMIT_LATENCY reaches the final A write's commitment. These formulas
+  include the one-clock handoffs between independently registered child modules.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 10. Busy tail and completion
+// Source: fft_accelerator.sv
+"
+    generate
+        if(DRAIN_LATENCY == 0) begin : gen_completion_bypass
+            assign busy_o = reader_busy && !reset_active;
+            assign fft_done_o = reader_done && !reset_active;
+        end else begin : gen_completion_pipe
+            logic [DRAIN_LATENCY - 1 : 0] busy_tail, done_tail;
+            always @(posedge clk_i) begin
+                if(control_rst_p) begin
+                    busy_tail <= '0;
+                    done_tail <= '0;
+                end else begin
+                    busy_tail[0] <= reader_busy;
+                    done_tail[0] <= reader_done;
+                    for(int i = 1; i < DRAIN_LATENCY; i++) begin
+                        busy_tail[i] <= busy_tail[i - 1];
+                        done_tail[i] <= done_tail[i - 1];
+                    end
+                end
+            end
+            assign busy_o = (reader_busy || (|busy_tail)) && !reset_active;
+            assign fft_done_o = done_tail[DRAIN_LATENCY - 1] && !reset_active;
+        end
+    endgenerate
+"
+- Reader busy/done describe request generation. Top-level busy/done additionally
+  account for the final memory-write commitment.
+- Reader done is II_CYCLES-1 clocks after its last B request. DRAIN_LATENCY is
+  max(0,WRITE_COMMIT_LATENCY-(II_CYCLES-1)). The delayed done therefore cannot
+  precede the final write, including external write-input pipeline stages.
+- Busy remains high while reader busy or any busy-tail token is high. Tail inputs
+  come from reader_busy, not top-level busy, so there is no self-sustaining loop.
+- When no drain is needed, the generated bypass forwards reader busy/done.
+- All busy/done tokens reset synchronously from the dedicated control reset;
+  data pipelines need not be flushed for a whole arithmetic latency after reset.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 11. External memory and twiddle contract
+- Provide a sample read port and an independently accepting sample write port.
+  Fixed READ_LATENCY is common to samples and twiddles; WRITE_LATENCY describes
+  when a presented write actually commits. There is no ready/backpressure input.
+- Twiddle address k means W_N**k for the runtime N. A stored table for larger L
+  must be externally rescaled to index k*(L/N), or repopulated for N.
+- Only sample data is bit-reversed. Twiddle coefficients remain in natural k order.
+- A memory read/write collision has no defined forwarding behavior. Loading or
+  changing memory contents/configuration while busy violates the intended contract.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 12. In-place stage dependencies and reset limits
+- The reader is intentionally request-only. This wrapper adds no stage barrier,
+  dependency interlock or forwarding. Address/result alignment alone does not make
+  arbitrary multi-stage in-place transforms safe at II_CYCLES=4.
+- A conservative sufficient interval is II_CYCLES>=WRITE_COMMIT_LATENCY. Every
+  butterfly then commits before the next butterfly's read is sampled. Smaller
+  intervals require an independently demonstrated dependency-safe schedule/memory.
+- The file TB rejects unsafe intervals for multi-stage in-place tests rather than
+  silently comparing a stale-data FFT. Independent two-point blocks may use II=4.
+- Hold raw reset high at least RESET_HOLD_CYCLES edges, then allow delayed reset
+  and the reader input register to observe release before starting new work.
+- Reset aborts pending work, but cannot undo writes already committed. A partial
+  B-only update can remain in external memory; the caller must reload/restart as needed.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 13. File-driven scaffold and display workflow
+- testbench/fft_accelerator_tb/test_files contains fixed-depth hexadecimal complex
+  memories: 32768 samples, 16384 twiddles. Names encode exponent/mantissa widths.
+- Supplied 6_25_samples_0/1 files contain two real MLII ECG windows from public
+  MIT-BIH record 100, at 360 Hz, calibrated to mV with zero imaginary component.
+  Source/license/calibration/order/hash metadata is recorded in JSON sidecars.
+- Samples are bit-reversed over 32768 entries. The loader reconstructs natural
+  indices and reorders each selected runtime block; it rescales the source twiddle
+  table for smaller N. It verifies exact file depths and hexadecimal word widths.
+- +SAMPLES_FILE, +TWIDDLES_FILE and +RESULT_FILE select filenames at run time;
+  +FFT_POINTS/+FFT_COUNT select transforms without recompiling. Other plusargs
+  document source ordering, source twiddle size, output directory and sampling rate.
+- The reference uses the existing exact ABFP adder/multiplier golden models and
+  independent mathematical DIT loops. Event traces avoid storing every idle clock.
+- The scoreboard compares read addresses/deadlines, output words/addresses,
+  commitment times, completion and the full final memory image bit-for-bit.
+- result_files holds complete result memories and JSON run metadata. The Python
+  utility in components/utilities restores natural input order, displays waveform,
+  spectrum and floating-point FFT error, and can regenerate the fixtures.
+- NumPy error plots are supplementary. Exact ABFP model comparison is the SV
+  pass/fail criterion; IEEE/host-float arithmetic is not substituted for ABFP.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 14. Verification evidence
+- Prior wrapper integration evidence: simulate/fft_accelerator_checks/summary.json
+  records eight WSL configurations, 40 complete runs and 24 reset aborts. That
+  revision used a shared reset pipe; arithmetic/address wiring is otherwise unchanged.
+- Current dedicated-reset evidence: simulate/fft_accelerator_reset_checks/summary.json
+  records WSL depths 0/3 and Questa depths 1/3, checking distinct reset connections,
+  latency and reset-abort recovery with the existing arithmetic models.
+- Current file-driven ABFP32 Questa smoke: N=128, count=1, BASE=16, E=6, M=25,
+  R=1, W=1, II=47. All 896 reads, writes and commitments matched; done was at
+  relative clock 21058, and all final 32K memory words matched the golden result.
+- Evidence: simulate/fft_accelerator_scaffolds/questa.log and the selected result
+  memory/JSON. The viewer also read this result and generated a headless plot.
+- WSL Verilator file-driven ABFP32 N=32768,count=1 passed using real ECG file 0:
+  245760 butterflies; 491520 reads, writes and commitments each; completion at
+  clock 11550722. Every event and all 32768 final memory words matched bit-for-bit.
+  Evidence: simulate/fft_accelerator_scaffolds/full32768.log and
+  result_files/6_25_result_0.txt with its JSON sidecar. Wall time was about 42 s.
+- The optimized TB keeps memory arrays in the top-level memory model. Queued
+  loading/snapshots avoid full-array virtual-interface trigger scans each clock;
+  filenames stay in class metadata, avoiding unsupported virtual-interface strings.
+- WSL smaller/batched cases passed at N=128,count=1 and N=64,count=4; the second
+  ECG window was also exercised. N=256,count=1 passed with read latency 3,
+  write latency 2 and reset depth 3, checking 2048 reads/writes/commits each.
+- A dense N=2,count=32 case passed at II=4 and reset depth 0, with 64 reads,
+  writes and commitments and completion at clock 173. Memory-pipeline, dense,
+  small, batch and full-size cases all passed after the memory-model optimization.
+  Consolidated evidence: testbench/fft_accelerator_tb/simulate_regression_logs/results.json.
+- Oversized FFT requests and incorrectly sized memory files were rejected as
+  intended. Python checks verified all 65536 encoded ECG samples against raw
+  ADC calibration, all 16384 twiddles, ordering, SHA-256s, RNE ties and zero rules.
+- The full-size result viewer produced result_files/ecg_32768.png. Its comparison
+  against NumPy FFT of the stored input gave relative L2 error 2.17560649e-7 and
+  maximum absolute error 0.00070409663. These are supplementary floating-point
+  metrics; the SV pass above uses exact ABFP models.
+- The eight-block N=128,count=8 run processed 1024 ECG samples and passed:
+  3584 butterflies, 7168 reads/writes/commitments each, completion at clock 168450.
+  Evidence: testbench/fft_accelerator_tb/simulate_regression_logs/fft128_1024.log
+  and result_files/6_25_result_fft128_1024.txt with its JSON sidecar.
+- The viewer's --all-blocks option displays all processed samples, separate block
+  spectra and complex-bin errors. --exclude-dc hides bin zero without changing
+  result data or normalizing magnitudes; ecg_fft128_1024_no_dc.png shows this run.
+[Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 15. User review checklist
+- Confirm complex packing, bit-reversed input requirement and natural twiddle order.
+- Confirm all five reset pipelines are independent instances with equal depth.
+- Confirm the B/W -> A sampling schedule and the two arithmetic handoff clocks.
+- Confirm delayed shared addresses, B/Y1 then A/saved-Y0 writes and final commitment.
+- Confirm busy/drain/go semantics, memory latency assumptions and reset hold.
+- Confirm request-only scope and the in-place dependency restriction.
+- Confirm selectable fixed-depth files, provenance, exact-model verification and
+  result/viewer workflow. Review tags are signed at Marc103's explicit instruction
+  on 11/15/26.
+[Marc103 - 11/15/26]

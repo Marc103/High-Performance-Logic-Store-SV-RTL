@@ -22,4 +22,5 @@ package golden_models_pkg;
     `include "FftAdderCoreModel.sv"
     `include "FsmFftReaderModel.sv"
     `include "FsmFftWriterModel.sv"
+    `include "FftAcceleratorModel.sv"
 endpackage

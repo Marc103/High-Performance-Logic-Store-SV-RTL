@@ -1,0 +1,30 @@
+{
+  "kind": "real ECG",
+  "dataset": "MIT-BIH Arrhythmia Database v1.0.0",
+  "record": "100",
+  "channel": "MLII",
+  "units": "mV",
+  "adc_gain": 200,
+  "adc_zero": 1024,
+  "dataset_url": "https://physionet.org/content/mitdb/1.0.0/",
+  "source_urls": [
+    "https://physionet.org/files/mitdb/1.0.0/100.hea",
+    "https://physionet.org/files/mitdb/1.0.0/100.dat"
+  ],
+  "license": "Open Data Commons Attribution License v1.0",
+  "license_url": "https://opendatacommons.org/licenses/by/1-0/",
+  "citation": "Moody G, Mark R. MIT-BIH Arrhythmia Database (version 1.0.0). PhysioNet, 2005. doi:10.13026/C2F305",
+  "raw_sha256": "b2ea3c250e56e48f4b7b90697832b8ecd1afa1e0bb31f2dcfea4ed6e1075a639",
+  "header": "100 2 360 650000\r\n100.dat 212 200 11 1024 995 -22131 0 MLII\r\n100.dat 212 200 11 1024 1011 20052 0 V5\r\n# 69 M 1085 1629 x1\r\n# Aldomet, Inderal\r\n",
+  "processing": "First channel; subtract ADC zero and divide by gain. No filtering, detrending, or amplitude normalization.",
+  "base": 16,
+  "exponent_width": 6,
+  "mantissa_width": 25,
+  "depth": 32768,
+  "sample_order": "bit_reversed",
+  "sample_order_points": 32768,
+  "sample_rate_hz": 360.0,
+  "start_sample": 0,
+  "imaginary_component": 0,
+  "sha256": "9dc9d042b2928654d0edeb7a2800aa911168bcdbff2f68abac31dafd3c14d9e3"
+}

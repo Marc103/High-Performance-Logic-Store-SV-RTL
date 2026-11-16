@@ -21,4 +21,5 @@ package io_pkg;
     `include "FftAdderCoreIO.sv"
     `include "FsmFftReaderIO.sv"
     `include "FsmFftWriterIO.sv"
+    `include "FftAcceleratorIO.sv"
 endpackage

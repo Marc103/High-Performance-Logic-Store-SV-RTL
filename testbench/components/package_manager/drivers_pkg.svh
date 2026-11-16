@@ -22,4 +22,5 @@ package drivers_pkg;
     `include "FftAdderCoreDriver.sv"
     `include "FsmFftReaderDriver.sv"
     `include "FsmFftWriterDriver.sv"
+    `include "FftAcceleratorDriver.sv"
 endpackage

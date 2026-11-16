@@ -1,0 +1,10 @@
+{
+  "base": 16,
+  "exponent_width": 6,
+  "mantissa_width": 25,
+  "depth": 16384,
+  "twiddle_points": 32768,
+  "sample_order": "natural k",
+  "definition": "exp(-j*2*pi*k/32768)",
+  "sha256": "89989b47ada6af27609d1b43346a39464f108b8ca529c34187640becadc70099"
+}
