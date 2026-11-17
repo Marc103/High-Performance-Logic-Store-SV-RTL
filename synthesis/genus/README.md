@@ -151,7 +151,7 @@ Under `synthesis/genus/runs/abfp32_500mhz/` by default:
 | `outputs/fft_accelerator.mapped.v` | One structural cell netlist, top `fft_accelerator` |
 | `outputs/fft_accelerator.<corner>.sdf` | Five corner-specific pre-layout timing files |
 | `outputs/fft_accelerator.constraints.sdc` | Standalone resolved input constraints |
-| `outputs/fft_accelerator.mapped.sdc` | Constraints exported after synthesis |
+| `outputs/fft_accelerator.mapped.sdc` | Shared functional constraints exported with explicit `view_typical` |
 | `outputs/fft_accelerator.mmmc.tcl` | Resolved library/view definitions |
 | `reports/<corner>.setup.rpt` / `.hold.rpt` | Worst 20 late/early paths for each view |
 | `reports/timing_intent_pre.rpt` / `_post.rpt` | Timing-constraint coverage checks |

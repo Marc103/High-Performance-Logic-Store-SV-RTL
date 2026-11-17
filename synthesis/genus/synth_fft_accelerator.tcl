@@ -158,7 +158,9 @@ namespace eval ::fft_syn {
 
         # The SAME final mapped netlist is used with each corner SDF.
         write_hdl > [file join $out outputs fft_accelerator.mapped.v]
-        write_sdc > [file join $out outputs fft_accelerator.mapped.sdc]
+        # Genus requires an explicit view for MMMC SDC export. Every view
+        # references the same functional mode, so one representative suffices.
+        write_sdc -view view_typical > [file join $out outputs fft_accelerator.mapped.sdc]
         dict for {corner pvt} $corners {
             report_timing -views view_$corner -max_paths 20 \
                 > [file join $out reports ${corner}.setup.rpt]
