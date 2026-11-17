@@ -1,0 +1,30 @@
+
+ 	 Check Design Report
+	 -------------------- 
+
+  Unresolved References & Empty Modules
+  ------------------------------------- 
+No unresolved references in design 'fft_accelerator'
+
+design 'fft_accelerator' has the following empty module(s)
+pipe
+pipe_0
+pipe_1
+pipe_12
+pipe_13
+pipe_14
+pipe_15
+pipe_16
+pipe_19
+pipe_22
+pipe_23
+pipe_25
+pipe_26
+pipe_35
+pipe_4
+pipe_5
+pipe_6
+pipe_7
+pipe_8
+priority_encoder
+Total number of empty modules in design 'fft_accelerator' : 20
