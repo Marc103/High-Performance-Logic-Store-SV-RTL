@@ -1,6 +1,6 @@
 # Nangate45 Genus synthesis
 
-This flow synthesizes `fft_accelerator` with a **3.333333 ns clock (300 MHz)** using
+This flow synthesizes `fft_accelerator` with a **3.448276 ns clock (290 MHz)** using
 Genus **2018 Stylus/Common UI** and all five supplied Nangate45 **NLDM** PVT corners.
 It creates one common mapped implementation, not five independently synthesized
 designs. All five views receive setup reports and SDF for later gate-level
@@ -23,7 +23,7 @@ python3 synthesis/genus/fetch_nangate.py
 
 mkdir -p synthesis/genus/runs
 genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl \
-  -log synthesis/genus/runs/abfp32_300mhz.log
+  -log synthesis/genus/runs/abfp32_290mhz.log
 ```
 
 Launch a fresh Common UI process; do not add `-legacy_ui`. The script resolves
@@ -33,7 +33,7 @@ An existing output directory is rejected to preserve prior netlists/reports.
 Choose another run directory to repeat:
 
 ```bash
-FFT_GENUS_OUT="$PWD/synthesis/genus/runs/abfp32_300mhz_run2" \
+FFT_GENUS_OUT="$PWD/synthesis/genus/runs/abfp32_290mhz_run2" \
   genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
 ```
 
@@ -41,7 +41,7 @@ For **csh/tcsh** (the shell reporting `Illegal variable name` for a Bash-style
 assignment), set the environment variable separately before launching Genus:
 
 ```csh
-setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/ii4_300mhz_`date +%Y%m%d_%H%M%S`"
+setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/ii4_290mhz_`date +%Y%m%d_%H%M%S`"
 genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
 ```
 
@@ -73,16 +73,17 @@ regenerate reports/exports without repeating RTL synthesis. In csh/tcsh:
 ```csh
 # Replace OLD_RUN with the directory of the completed synthesis.
 setenv FFT_GENUS_NETLIST "$cwd/synthesis/genus/runs/OLD_RUN/outputs/fft_accelerator.mapped.v"
-setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/export_300mhz_`date +%Y%m%d_%H%M%S`"
+setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/export_290mhz_`date +%Y%m%d_%H%M%S`"
 genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
 ```
 
-Use a 300 MHz source run if assessing the implementation synthesized at 300 MHz.
-Keep the configuration, libraries and timing/interface budgets consistent with
-that run. The netlist has fixed parameters: current RTL parameter settings are
-not reapplied to it. Re-reading a netlist reconstructs timing with the selected
-constraints and wire-load models; this is not restoration of the original
-complete Genus database or an incremental optimization pass.
+Export-only mode uses the clock period from the current configuration, so it can
+recheck an existing mapped design at 290 MHz without resynthesizing it. Keep the
+libraries, format/pipeline parameters and other interface budgets consistent
+with the source run. The netlist has fixed parameters: current RTL parameter
+settings are not reapplied to it. Re-reading a netlist reconstructs timing with
+the selected constraints and wire-load models; this is not restoration of the
+original complete Genus database or an incremental optimization pass.
 
 To return to normal RTL synthesis, clear the variable:
 
@@ -125,7 +126,7 @@ Edit [config.tcl](config.tcl), or set `FFT_GENUS_CONFIG` to an extra Tcl file th
 changes entries in `::fft_syn::cfg` / `::fft_syn::parameters`. For example:
 
 ```tcl
-set ::fft_syn::cfg(clock_period_ns) [expr {1000.0 / 300.0}]
+set ::fft_syn::cfg(clock_period_ns) [expr {1000.0 / 290.0}]
 set ::fft_syn::cfg(output_load_ff) 5.0
 set ::fft_syn::parameters(SAMPLES_ADDR_WIDTH) 15
 set ::fft_syn::parameters(TWIDDLES_ADDR_WIDTH) 14
@@ -155,7 +156,7 @@ delay, 0.30 ns maximum / -0.05 ns minimum output delay (a 0.05 ns external hold
 requirement), 0.05 ns input/clock transition, 0.10 ns setup uncertainty, 0.05 ns
 hold uncertainty, 5 fF output load, and a 0.20 ns maximum transition constraint.
 These are editable initial budgets, not measured external-memory characteristics.
-The external controller and memories must meet them at the 300 MHz interface.
+The external controller and memories must meet them at the 290 MHz interface.
 
 `rst_i` is synchronous and also gates output enables. It remains timed, as do
 all runtime configuration and memory ports. There are no false paths, tied
@@ -172,7 +173,7 @@ implementation flow.
 
 ## Outputs and timing review
 
-Under `synthesis/genus/runs/abfp32_300mhz/` by default:
+Under `synthesis/genus/runs/abfp32_290mhz/` by default:
 
 | File | Purpose |
 | --- | --- |
@@ -193,7 +194,7 @@ Successful script completion means outputs were generated. Review the Genus log
 for errors/warnings, verify that the design has no unresolved/black-box logic or
 unintended latches, check timing coverage and design rules, and inspect setup
 slack at **every** corner. Perform hold STA separately in a timing-capable flow;
-absence of a Genus hold report is not a hold pass. A 300 MHz constraint is a
+absence of a Genus hold report is not a hold pass. A 290 MHz constraint is a
 target; this script does not assert that the existing RTL will meet it.
 
 ## Handoff for the next gate-level tests
@@ -211,7 +212,7 @@ are not the selected PVT timing; timing GLS needs its SDF and active specify/
 timing checks. Verilator remains useful for functional regression, but is not
 the timing-check/SDF sign-off simulator.
 
-At 300 MHz the testbench must drive an approximately 3.333333 ns clock and use fine time precision
+At 290 MHz the testbench must drive an approximately 3.448276 ns clock and use fine time precision
 (for example, `1ns/1ps`); the current RTL scaffold's `1ns/1ns` precision and
 10 ns clock are not suitable for this timing test. Respect min/max interface
 delays, sample after propagation settles, and hold reset for the RTL's documented
