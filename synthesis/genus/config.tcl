@@ -8,8 +8,8 @@ namespace eval ::fft_syn {
     variable cfg
     array set cfg [list \
         library_root [file join $script_dir libraries NangateOpenCellLibrary] \
-        output_dir [file join $script_dir runs abfp32_500mhz] \
-        clock_period_ns 2.0 \
+        output_dir [file join $script_dir runs abfp32_300mhz] \
+        clock_period_ns [expr {1000.0 / 300.0}] \
         clock_transition_ns 0.05 \
         setup_uncertainty_ns 0.10 \
         hold_uncertainty_ns 0.05 \

@@ -1,5 +1,5 @@
 # The driver prepends the FFT_* values from config.tcl to a standalone copy of
-# this file. Explicit units prevent a 2 ns clock being interpreted as 2 ps.
+# this file. Explicit units keep clock periods in ns rather than ps.
 set_units -time ns -capacitance fF
 
 create_clock -name core_clk -period $FFT_CLOCK_PERIOD_NS \

@@ -121,7 +121,8 @@ namespace eval ::fft_syn {
 
         write_text [file join $out run_config.tcl] \
             "# Resolved settings and named elaboration parameters.\n[list set configuration [array get cfg]]\n[list set rtl_parameters $parameter_pairs]\n[list set rtl_sources $sources]\n[list set nldm_libraries $libraries]"
-        puts "FFT synthesis: 500 MHz default; requested period = $cfg(clock_period_ns) ns"
+        puts [format "FFT synthesis: requested period = %.6f ns (%.3f MHz)" \
+            $cfg(clock_period_ns) [expr {1000.0 / $cfg(clock_period_ns)}]]
         puts "RTL parameters: $parameter_pairs"
         puts "Active setup/hold views: $views"
         puts "Output directory: $out"
