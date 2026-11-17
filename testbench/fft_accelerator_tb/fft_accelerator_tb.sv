@@ -1,4 +1,4 @@
-`timescale 1ns/1ns
+`timescale 1ns/1ps
 `include "rtl_utilities_pkg.sv"
 import constant_functions_pkg::*;
 `include "fft_accelerator_inf.svh"
@@ -16,6 +16,7 @@ import generators_pkg::*;
 import golden_models_pkg::*;
 import monitors_pkg::*;
 import scoreboards_pkg::*;
+`ifndef FFT_GATE_LEVEL
 `include "io_circuits/pipe/pipe.sv"
 `include "processing_elements/reduction_tree/reduction_tree.sv"
 `include "processing_elements/max/max.sv"
@@ -28,6 +29,7 @@ import scoreboards_pkg::*;
 `include "fsm/fsm_fft_reader/fsm_fft_reader.sv"
 `include "fsm/fsm_fft_writer/fsm_fft_writer.sv"
 `include "processing_elements/fft_accelerator/fft_accelerator.sv"
+`endif
 // File-driven FFT regression. Supply +SAMPLES_FILE, +TWIDDLES_FILE and
 // +RESULT_FILE at run time; +FFT_POINTS/+FFT_COUNT select smaller transforms.
 // The fixed fixture capacities are 32768 samples and 16384 twiddles.
@@ -56,13 +58,20 @@ module fft_accelerator_tb #(
     parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE = 1,
     parameter REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND = 1,
     parameter II_CYCLES = 4,
+`ifdef FFT_GATE_LEVEL
+    parameter real CLK_PERIOD_NS = 1000.0 / 290.0,
+    parameter PORT_SAMPLE_AT_POSEDGE = 1,
+`else
+    parameter real CLK_PERIOD_NS = 10.0,
+    parameter PORT_SAMPLE_AT_POSEDGE = 0,
+`endif
     parameter FFT_POINTS = 32768,
     parameter FFT_COUNT = 1,
     parameter string SAMPLES_FILE = "6_25_samples_0.txt",
     parameter string TWIDDLES_FILE = "6_25_twiddles_0.txt",
     parameter string RESULT_FILE = "6_25_result_0.txt"
 ) ();
-    localparam real CLK_PERIOD=10;
+    localparam real CLK_PERIOD=CLK_PERIOD_NS;
     localparam type T=FftAcceleratorIO #(
         .BASE(BASE),
         .EXPONENT_WIDTH(EXPONENT_WIDTH),
@@ -88,6 +97,11 @@ module fft_accelerator_tb #(
         .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE),
         .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND),
         .II_CYCLES(II_CYCLES),
+        .CLOCK_PERIOD_NS(CLK_PERIOD_NS),
+        .PORT_SAMPLE_AT_POSEDGE(PORT_SAMPLE_AT_POSEDGE),
+`ifdef FFT_GATE_LEVEL
+        .GATE_LEVEL_SIM(1),
+`endif
         .FFT_POINTS(FFT_POINTS),
         .FFT_COUNT(FFT_COUNT),
         .SAMPLES_FILE(SAMPLES_FILE),
@@ -148,6 +162,11 @@ module fft_accelerator_tb #(
         .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND),
         .II_CYCLES(II_CYCLES)
     ) bfm(.clk_i(clk));
+`ifdef FFT_GATE_LEVEL
+    // Fixed specialization from Genus. The gate launcher reads run_config.tcl
+    // and configures this TB/model to match; the mapped DUT has no parameters.
+    fft_accelerator dut(
+`else
     fft_accelerator #(
         .BASE(BASE),
         .EXPONENT_WIDTH(EXPONENT_WIDTH),
@@ -174,6 +193,7 @@ module fft_accelerator_tb #(
         .REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND(REGISTERED_NORMALIZE_ROUND_POST_NORMALIZE_ROUND),
         .II_CYCLES(II_CYCLES)
     ) dut(
+`endif
         .clk_i(clk), .rst_i(bfm.rst_i), .go_i(bfm.go_i),
         .fft_point_size_i(bfm.fft_point_size_i), .fft_whole_iterations_i(bfm.fft_whole_iterations_i),
         .busy_o(bfm.busy_o), .fft_done_o(bfm.fft_done_o),
@@ -240,6 +260,7 @@ module fft_accelerator_tb #(
         if(SAMPLES_ADDR_WIDTH<1 || SAMPLES_ADDR_WIDTH>15 || TWIDDLES_ADDR_WIDTH<1 || TWIDDLES_ADDR_WIDTH>14)
             $fatal(1,"This TB supports sample/twiddle address widths up to 15/14 (32K/16K)");
         if(READ_LATENCY<1 || WRITE_LATENCY<1 || RESET_PIPELINE_DEPTH<0) $fatal(1,"Invalid memory/reset latency");
+        if(CLK_PERIOD_NS <= 0.01) $fatal(1,"Clock period must exceed 0.01 ns");
         dut_generator_out_broadcast.add_queue(driver_in_queue);
         model_generator_out_broadcast.add_queue(golden_in_queue);
         monitor_out_broadcast.add_queue(scoreboard_in_queue_dut);
@@ -249,6 +270,7 @@ module fft_accelerator_tb #(
         end
         $display("FFT file TB: BASE=%0d EXPONENT_WIDTH=%0d MANTISSA_WIDTH=%0d II=%0d R=%0d W=%0d",
                  BASE,EXPONENT_WIDTH,MANTISSA_WIDTH,II_CYCLES,READ_LATENCY,WRITE_LATENCY);
+        $display("FFT simulation: gate_level=%0d clock_period_ns=%0.12g",T::GATE_LEVEL_SIM,CLK_PERIOD_NS);
         bfm.rst_i=1; bfm.go_i=0; bfm.loading=1;
         repeat(2) @(posedge clk);
         fork

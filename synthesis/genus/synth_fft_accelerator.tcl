@@ -18,6 +18,19 @@ namespace eval ::fft_syn {
         close $stream
     }
 
+    proc check_structure {path} {
+        check_design -unresolved > $path
+        set stream [open $path r]
+        set report [read $stream]
+        close $stream
+        # Genus 18 can report "No unresolved references" while also listing
+        # empty HDL modules. For this accelerator, review those before mapping:
+        # an empty reset pipe leaves its output undriven in the exported netlist.
+        if {[regexp -nocase {Total number of empty modules[^\n]*:\s*([0-9]+)} $report match count] && $count > 0} {
+            error "Design contains $count empty modules; inspect $path before synthesis/export."
+        }
+    }
+
     proc main {} {
         variable cfg
         variable parameters
@@ -160,7 +173,7 @@ namespace eval ::fft_syn {
             elaborate fft_accelerator -parameters $parameter_pairs
         }
         init_design
-        check_design -unresolved > [file join $out reports elaboration.rpt]
+        check_structure [file join $out reports elaboration.rpt]
         check_timing_intent > [file join $out reports timing_intent_pre.rpt]
 
         if {!$export_only} {
@@ -169,7 +182,7 @@ namespace eval ::fft_syn {
             syn_opt
         }
 
-        check_design -unresolved > [file join $out reports mapped_design.rpt]
+        check_structure [file join $out reports mapped_design.rpt]
         check_timing_intent > [file join $out reports timing_intent_post.rpt]
         report_area > [file join $out reports area.rpt]
         report_gates > [file join $out reports gates.rpt]

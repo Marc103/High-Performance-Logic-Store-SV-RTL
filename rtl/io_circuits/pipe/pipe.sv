@@ -23,10 +23,10 @@ module pipe #(
 );
 
     generate
-        for(genvar cond = (LATENCY == 0); cond == 1; cond = 0) begin
+        if(LATENCY == 0) begin : gen_bypass
             assign data_o = data_i;
         end
-        for(genvar cond = (LATENCY != 0); cond == 1; cond = 0) begin
+        else begin : gen_pipeline
             logic [LATENCY : 1][DATA_WIDTH - 1 : 0] data;
 
             always@(posedge clk_i) begin

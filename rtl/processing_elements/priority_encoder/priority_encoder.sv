@@ -100,12 +100,8 @@ module priority_encoder #(
 
         for(genvar row = 1; row <= ENCODE_DEPTH; row++) begin
             for(genvar col = 0; col < ENCODE_GROUPS; col++) begin
-                for(genvar check_bound = (((col * 2) + 0) < ENCODE_GROUPS); 
-                           check_bound == 1; 
-                           check_bound = 0) begin
-                    for(genvar left_right = (ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]);
-                               left_right == 1;
-                               left_right = 0)  begin // both 1s
+                if(((col * 2) + 0) < ENCODE_GROUPS) begin : gen_active_pair
+                    if((ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]) == 1) begin : gen_both
                         if(row == 1) // first layer? we register inputs.
                             max #(
                                 .DATA_WIDTH(OUTPUT_DATA_WIDTH),
@@ -136,9 +132,7 @@ module priority_encoder #(
                             );
                         end
                     end 
-                    for(genvar left_only = (ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & (!ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1]));
-                               left_only == 1;
-                               left_only = 0) begin
+                    if((ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 0] & (!ENCODE_MAX_TREE_MAP[row - 1][(col * 2) + 1])) == 1) begin : gen_left_only
                         if(row == 1) // first layer? we use ENCODE_FIRST_LAYER_LATENCY
                             pipe #(
                                 .DATA_WIDTH(OUTPUT_DATA_WIDTH),

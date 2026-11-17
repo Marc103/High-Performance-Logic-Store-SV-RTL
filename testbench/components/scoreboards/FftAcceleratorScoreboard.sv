@@ -24,6 +24,7 @@ class FftAcceleratorScoreboard #(type T);
         if(!fd) $fatal(1,"Cannot create result metadata");
         $fdisplay(fd,"{");
         $fdisplay(fd,"  \"status\": \"%s\",",passed?"passed":"failed");
+        $fdisplay(fd,"  \"gate_level\": %s, \"clock_period_ns\": %0.12g,",T::GATE_LEVEL_SIM?"true":"false",T::CLOCK_PERIOD_NS);
         $fdisplay(fd,"  \"base\": %0d, \"exponent_width\": %0d, \"mantissa_width\": %0d,",T::BASE,T::EXPONENT_WIDTH,T::MANTISSA_WIDTH);
         $fdisplay(fd,"  \"fft_points\": %0d, \"fft_count\": %0d,",obj.points,obj.count);
         $fdisplay(fd,"  \"depth\": 32768, \"sample_order_points\": %0d, \"twiddle_points\": %0d,",obj.sample_order_points,obj.twiddle_points);

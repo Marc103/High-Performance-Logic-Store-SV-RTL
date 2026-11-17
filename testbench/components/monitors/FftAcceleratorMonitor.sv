@@ -22,10 +22,14 @@ class FftAcceleratorMonitor #(type T, type I);
         read_event_t read_event;
         longint unsigned start_clock, elapsed;
         forever begin
-            @(negedge inf.clk_i);
+            // Gate-level outputs are observed at the external memory sampling
+            // edge, before NBA/clock-to-Q updates for the following cycle.
+            if(T::PORT_SAMPLE_AT_POSEDGE) @(posedge inf.clk_i);
+            else @(negedge inf.clk_i);
             if(inf.start_sequence) begin
                 if(active) $fatal(1,"Overlapping FFT jobs");
-                obj=new(); active=1; seen_busy=0; start_clock=inf.clock_count;
+                obj=new(); active=1; seen_busy=0;
+                start_clock=inf.clock_count+(T::PORT_SAMPLE_AT_POSEDGE ? 1 : 0);
                 monitor_metadata.pop(metadata);
                 obj.points=int'(inf.fft_point_size_i); obj.count=int'(inf.fft_whole_iterations_i);
                 obj.samples_file=metadata.samples_file; obj.twiddles_file=metadata.twiddles_file; obj.result_file=metadata.result_file;
