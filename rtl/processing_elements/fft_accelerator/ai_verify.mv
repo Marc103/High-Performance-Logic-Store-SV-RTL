@@ -2,12 +2,12 @@
 // fft_accelerator - AI verification, prepared 11/15/26
 // Following manual_verify.mv style; signed at Marc103's explicit request.
 // Sign-off tags applied at Marc103's explicit instruction on 11/15/26.
-// Section 16 is a new unsigned addendum dated 11/16/26.
+// Sections 16 and 17 are unsigned addenda dated 11/16/26.
 // Reviewed current fft_accelerator.sv, its package helpers, the reader/writer,
 // both FFT arithmetic cores and the file-driven accelerator testbench.
 // Source excerpts are verbatim. Rising-edge descriptions refer to values after
 // nonblocking assignments settle unless input sampling is stated explicitly.
-// Current RTL SHA-256: d843d30c5fc0aee67e12d12e05411ec8e7206a897732acbf6d39a4696fc11afc
+// RTL SHA-256 at the 11/15/26 sign-off: d843d30c5fc0aee67e12d12e05411ec8e7206a897732acbf6d39a4696fc11afc
 
 ////////////////////////////////////////////////////////////////
 // 01. Scope and data representation
@@ -447,4 +447,22 @@ module fft_accelerator #(
   ii4_summary.json, ii4_dependency_schedule.json, ii4_questa_smoke.log and the
   individual ii4 logs. Result files carry distinct *_ii4.txt names and metadata,
   preserving the original II=47 evidence.
+[ ]
+
+////////////////////////////////////////////////////////////////
+// 17. Genus parsing cleanup and initial-block removal - 11/16/26
+- Removed all five initial blocks from the RTL sources at the user's request:
+  the ABFP adder, ABFP multiplier, FFT reader, FFT writer and accelerator.
+  They only checked parameter legality; datapath/control/reset logic is unchanged.
+- Required widths, memory latencies and minimum II remain part of the module
+  contracts. The RTL no longer performs those time-zero parameter checks.
+- Removed the extra semicolon after queue_async_READ_LATENCY's endfunction in
+  rtl_utilities_pkg.sv. Genus reported VLOGPT-1 at that semicolon on line 1743.
+- Questa compilation and the N=128,count=1,II=4 smoke passed after the cleanup:
+  896 reads, writes and commitments each, completion at clock 1837. Evidence:
+  testbench/fft_accelerator_tb/simulate_regression_logs/no_initial_questa_smoke.log.
+  Genus execution remains on the separate licensed device.
+- Updated the corresponding verification excerpts and parameter-check descriptions.
+  Earlier dated sign-off tags describe the original reviews, not new approval
+  of these cleanup edits. The original source hashes remain labeled historical.
 [ ]

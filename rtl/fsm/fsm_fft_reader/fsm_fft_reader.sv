@@ -228,14 +228,6 @@ module fsm_fft_reader #(
     assign b_valid_o = b_valid[READ_LATENCY - 1] && !rst;
     assign w_valid_o = w_valid[READ_LATENCY - 1] && !rst;
 
-    initial begin
-        if(SAMPLES_ADDR_WIDTH < 1 || SAMPLES_ADDR_WIDTH > 30)
-            $fatal(1, "SAMPLES_ADDR_WIDTH must be 1..30 with the int DATA_DEPTH helper");
-        if(TWIDDLES_ADDR_WIDTH < 1) $fatal(1, "TWIDDLES_ADDR_WIDTH must be positive");
-        if(II_CYCLES < 4) $fatal(1, "II_CYCLES must be at least 4 for the shared FFT cores");
-        if(READ_LATENCY < 1) $fatal(1, "READ_LATENCY must be positive");
-    end
-
     always_comb begin
         // Hold defaults also cover an unknown/illegal state without inferring latches.
         state_next             = state;

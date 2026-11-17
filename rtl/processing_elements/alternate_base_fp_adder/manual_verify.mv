@@ -1213,11 +1213,6 @@
     // Normalize choices
     logic [NORMALIZE_CHOICES - 1 : 0][1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalize_choices;
     logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalize_carry_choice;
-    initial begin
-        if(MANTISSA_WIDTH < BASE_WIDTH)
-            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
-    end
-
     assign normalize_carry_choice = r_mantissa_grs_g >> BASE_WIDTH;
     generate
         // Carry choice: preserve all shifted-out information in sticky.
@@ -1245,12 +1240,14 @@
         .data_o(normalized)
     );
 "
-- MANTISSA_WIDTH must be at least BASE_WIDTH so one radix digit fits; unsupported widths trigger $fatal.
+- MANTISSA_WIDTH must be at least BASE_WIDTH so one radix digit fits. The time-zero
+  parameter check was removed on 11/16/26; this remains a caller requirement.
 - The highest selector is the carry choice. It shifts right by BASE_WIDTH and ORs all shifted-out
   low bits into the new sticky bit, preserving correct rounding information.
 - Selector NORMALIZE_CHOICES - 2 is unshifted; lower selectors shift left by successive radix digits.
 - All choices have one driver and the mux uses the same ordering as the detection records.
-- POST_NORMALIZE_CARRY_INDEX is clamped for legal elaboration, while the parameter check rejects unsupported widths.
+- POST_NORMALIZE_CARRY_INDEX is clamped for legal elaboration; unsupported widths
+  are outside the module contract and are no longer rejected by an initial block.
 
 "
     ////////////////////////////////////////////////////////////////

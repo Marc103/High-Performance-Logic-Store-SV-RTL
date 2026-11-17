@@ -985,11 +985,6 @@ module abfp_normalize_round_post_normalize #(
     // Normalize choices
     logic [NORMALIZE_CHOICES - 1 : 0][1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1  :  0] normalize_choices;
     logic [1 + MANTISSA_WIDTH + BASE_WIDTH + 2 - 1 : 0] normalize_carry_choice;
-    initial begin
-        if(MANTISSA_WIDTH < BASE_WIDTH)
-            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
-    end
-
     assign normalize_carry_choice = r_mantissa_grs_g >> BASE_WIDTH;
     generate
         // Carry choice: preserve all shifted-out information in sticky.

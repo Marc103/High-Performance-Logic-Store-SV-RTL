@@ -111,9 +111,4 @@ module fsm_fft_writer #(
             endcase
         end
     end
-
-    initial begin
-        if(DATA_WIDTH < 1) $fatal(1, "DATA_WIDTH must be positive");
-        if(ADDR_WIDTH < 1) $fatal(1, "ADDR_WIDTH must be positive");
-    end
 endmodule

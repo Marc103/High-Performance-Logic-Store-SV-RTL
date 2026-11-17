@@ -353,9 +353,4 @@ module fft_accelerator #(
             assign fft_done_o = done_tail[DRAIN_LATENCY - 1] && !reset_active;
         end
     endgenerate
-
-    initial begin
-        if(READ_LATENCY < 1 || WRITE_LATENCY < 1) $fatal(1, "Memory latencies must be positive");
-        if(RESET_PIPELINE_DEPTH < 0) $fatal(1, "RESET_PIPELINE_DEPTH must be nonnegative");
-    end
 endmodule

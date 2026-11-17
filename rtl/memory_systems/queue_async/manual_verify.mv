@@ -19,7 +19,7 @@
     function automatic int queue_async_READ_LATENCY(int REGISTERED_OUT_BRAM);
         if(REGISTERED_OUT_BRAM) return 2;
         return 1;
-    endfunction;
+    endfunction
 "
 - correct arguments passed in
 - from read side domain, takes 2 if registered else 1 cycles for data to be fetched

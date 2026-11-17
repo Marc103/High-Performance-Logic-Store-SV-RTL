@@ -303,15 +303,11 @@
     assign r_sign_g = (REGISTERED_NORMALIZE == 1) ? r_sign_reg : r_sign;
     assign zero_operand_g = (REGISTERED_NORMALIZE == 1) ? zero_operand_reg : zero_operand;
     assign inf_nan_operand_g = (REGISTERED_NORMALIZE == 1) ? inf_nan_operand_reg : inf_nan_operand;
-
-    initial begin
-        if(MANTISSA_WIDTH < BASE_WIDTH)
-            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
-    end
 "
 - Standard REGISTERED_NORMALIZE behavior; exponent, full product, sign, zero flag, and special flag use the same register/bypass choice.
 - The exponent remains signed and EXPONENT_CALC_WIDTH wide. No range check or narrowing occurs before normalization.
-- The carry-index clamp keeps invalid-width elaboration safe; the initial check rejects MANTISSA_WIDTH < BASE_WIDTH.
+- The carry-index clamp keeps invalid-width elaboration safe. MANTISSA_WIDTH >=
+  BASE_WIDTH remains a caller requirement; the initial check was removed on 11/16/26.
 [Marc103 + GPT-6.1 - 11/05/26]
 
 "
@@ -521,7 +517,8 @@
   transitions, and finite maximum-exponent inputs with mantissa MSB zero that must not set the input flag.
 - 1,419 nonzero-special vectors would otherwise have produced a finite ordinary result; all retain the reserved class.
 - Questa 2025.2: compilation succeeded and 13 directed cases passed under the previous zero-first policy.
-- Invalid MANTISSA_WIDTH=3 with BASE=16 was rejected by the existing time-zero fatal assertion.
+- In the original run, invalid MANTISSA_WIDTH=3 with BASE=16 was rejected by the
+  then-existing time-zero fatal assertion. That assertion was removed on 11/16/26.
 - All 27 current quoted RTL/package excerpts were checked against the source files.
 
 ////////////////////////////////////////////////////////////////

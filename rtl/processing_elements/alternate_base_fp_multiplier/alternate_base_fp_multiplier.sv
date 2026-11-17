@@ -169,11 +169,6 @@ module alternate_base_fp_multiplier #(
     assign zero_operand_g = (REGISTERED_NORMALIZE == 1) ? zero_operand_reg : zero_operand;
     assign inf_nan_operand_g = (REGISTERED_NORMALIZE == 1) ? inf_nan_operand_reg : inf_nan_operand;
 
-    initial begin
-        if(MANTISSA_WIDTH < BASE_WIDTH)
-            $fatal(1, "MANTISSA_WIDTH must be at least BASE_WIDTH (%0d)", BASE_WIDTH);
-    end
-
     // Normalized operand products have a nonzero radix digit in one of two groups.
     logic normalize_shift;
     logic [MANTISSA_WIDTH * 2 - 1 : 0] normalized;

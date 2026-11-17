@@ -1740,7 +1740,7 @@ package constant_functions_pkg;
     function automatic int queue_async_READ_LATENCY(int REGISTERED_OUT_BRAM);
         if(REGISTERED_OUT_BRAM == 1) return 2;
         return 1;
-    endfunction;
+    endfunction
 
     ////////////////////////////////////////////////////////////////
     // queue push coupler

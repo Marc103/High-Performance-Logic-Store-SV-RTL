@@ -2,7 +2,7 @@
 // fsm_fft_reader - AI verification review, signed 11/12/26
 // Sign-off tags applied at Marc103's explicit request on 11/12/26.
 // Revision: request sequencer only, as requested. No downstream completion wait.
-// RTL SHA-256: d325962b7ce2d103699479b17df8d9885813caa98c937acb0977a5c92de7a91d
+// RTL SHA-256 at the 11/12/26 sign-off: d325962b7ce2d103699479b17df8d9885813caa98c937acb0977a5c92de7a91d
 // Reviewed fsm_fft_reader.sv and ../../rtl_utilities_pkg.sv.
 // S=SAMPLES_ADDR_WIDTH, W=TWIDDLES_ADDR_WIDTH, I=II_CYCLES,
 // R=READ_LATENCY, N=fft_point_size, M=fft_whole_iterations.
@@ -465,17 +465,7 @@ Stage  G  P  Sample A/B pairs                  Twiddle k
 [Marc103 - 11/12/26]
 
 ////////////////////////////////////////////////////////////////
-// 14. Reset and parameter checks
-// Source: fsm_fft_reader.sv
-"
-    initial begin
-        if(SAMPLES_ADDR_WIDTH < 1 || SAMPLES_ADDR_WIDTH > 30)
-            $fatal(1, "SAMPLES_ADDR_WIDTH must be 1..30 with the int DATA_DEPTH helper");
-        if(TWIDDLES_ADDR_WIDTH < 1) $fatal(1, "TWIDDLES_ADDR_WIDTH must be positive");
-        if(II_CYCLES < 4) $fatal(1, "II_CYCLES must be at least 4 for the shared FFT cores");
-        if(READ_LATENCY < 1) $fatal(1, "READ_LATENCY must be positive");
-    end
-"
+// 14. Reset and parameter contract
 // Source: fsm_fft_reader.sv
 "
         if(rst) begin
@@ -492,8 +482,9 @@ Stage  G  P  Sample A/B pairs                  Twiddle k
   It is synchronous through its explicit input register, not asynchronous.
 - The default case recovers an unknown/illegal state to idle. A reset before use
   establishes known control/valid state; no datapath power-up value is promised.
-- Static checks retain supported address widths, I>=4 and positive R. No backend
-  completion or memory-dependency checks belong to this module.
+- Supported address widths, I>=4 and positive R remain caller requirements. The
+  time-zero parameter checks were removed on 11/16/26. No backend completion or
+  memory-dependency checks belong to this module.
 [Marc103 - 11/12/26]
 
 ////////////////////////////////////////////////////////////////

@@ -4,7 +4,7 @@
 // Sign-off tags applied at Marc103's explicit instruction on 11/13/26.
 // Source excerpts below are verbatim; prose explains behavior and timing.
 // Reviewed: fsm_fft_writer.sv and the fft_adder_core output-update contract.
-// Writer RTL SHA-256:
+// Writer RTL SHA-256 at the 11/13/26 sign-off:
 // 086e12ad44eecf544313e1e05bb3520992107154f5f3f65a4a08e136bcc629fc
 // T means the rising edge accepting valid_i while IDLE and outside reset.
 // Commands after an edge refer to values after nonblocking assignments settle.
@@ -47,14 +47,8 @@ module fsm_fft_writer #(
     output                             wr_en_o
 );
 "
-// Source: fsm_fft_writer.sv
-"
-    initial begin
-        if(DATA_WIDTH < 1) $fatal(1, "DATA_WIDTH must be positive");
-        if(ADDR_WIDTH < 1) $fatal(1, "ADDR_WIDTH must be positive");
-    end
-"
 - Both widths must be positive, including the supported one-bit minimum.
+  The time-zero checks were removed on 11/16/26; these are caller requirements.
 - Every address assignment preserves exactly ADDR_WIDTH bits and every data
   assignment preserves exactly DATA_WIDTH bits; no resizing or address arithmetic
   occurs. There are no derived width or latency helpers needed by this FSM.
