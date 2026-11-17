@@ -1,0 +1,3 @@
+NOT PERFORMED: this flow does not run hold STA in Genus 2018.
+The report_timing -early option is unsupported by that command.
+Hold constraints and MMMC hold views are retained. Perform hold STA in a compatible timing tool (for example, Tempus/Innovus).
