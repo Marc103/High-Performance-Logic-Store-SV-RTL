@@ -9,6 +9,7 @@ namespace eval ::fft_syn {
     array set cfg [list \
         library_root [file join $script_dir libraries NangateOpenCellLibrary] \
         output_dir [file join $script_dir runs abfp32_300mhz] \
+        mapped_netlist "" \
         clock_period_ns [expr {1000.0 / 300.0}] \
         clock_transition_ns 0.05 \
         setup_uncertainty_ns 0.10 \
@@ -89,6 +90,9 @@ if {[info exists ::env(NANGATE_ROOT)] && $::env(NANGATE_ROOT) ne ""} {
 }
 if {[info exists ::env(FFT_GENUS_OUT)] && $::env(FFT_GENUS_OUT) ne ""} {
     set ::fft_syn::cfg(output_dir) [file normalize $::env(FFT_GENUS_OUT)]
+}
+if {[info exists ::env(FFT_GENUS_NETLIST)] && $::env(FFT_GENUS_NETLIST) ne ""} {
+    set ::fft_syn::cfg(mapped_netlist) [file normalize $::env(FFT_GENUS_NETLIST)]
 }
 if {[info exists ::env(FFT_GENUS_CONFIG)] && $::env(FFT_GENUS_CONFIG) ne ""} {
     source [file normalize $::env(FFT_GENUS_CONFIG)]

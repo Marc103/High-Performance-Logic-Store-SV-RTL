@@ -1,10 +1,11 @@
 # Nangate45 Genus synthesis
 
 This flow synthesizes `fft_accelerator` with a **3.333333 ns clock (300 MHz)** using
-Genus **Stylus/Common UI** and all five supplied Nangate45 **NLDM** PVT corners.
+Genus **2018 Stylus/Common UI** and all five supplied Nangate45 **NLDM** PVT corners.
 It creates one common mapped implementation, not five independently synthesized
-designs. All five views are active for setup and hold; each receives its own
-timing reports and SDF for later gate-level simulation.
+designs. All five views receive setup reports and SDF for later gate-level
+simulation. MMMC hold views and constraints are retained, but this Genus flow
+does not perform hold STA: the installed 2018 `report_timing` rejects `-early`.
 
 The top remains `fft_accelerator`, with external sample and twiddle memory ports.
 The source list includes only its 13 RTL dependencies, package first. It excludes
@@ -61,6 +62,33 @@ the same `genus` command on the following line.
 For an offline synthesis device, run the downloader elsewhere and copy its entire
 `NangateOpenCellLibrary` directory, including `LICENSE` and `source_manifest.json`.
 Downloaded libraries and run products are ignored by Git.
+
+## Resume export after a reporting failure
+
+The mapped netlist is written before the report/SDF loop. If the run failed at
+the unsupported `report_timing -early` call, that run already contains
+`outputs/fft_accelerator.mapped.v`. With the updated scripts, read that file and
+regenerate reports/exports without repeating RTL synthesis. In csh/tcsh:
+
+```csh
+# Replace OLD_RUN with the directory of the completed synthesis.
+setenv FFT_GENUS_NETLIST "$cwd/synthesis/genus/runs/OLD_RUN/outputs/fft_accelerator.mapped.v"
+setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/export_300mhz_`date +%Y%m%d_%H%M%S`"
+genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
+```
+
+Use a 300 MHz source run if assessing the implementation synthesized at 300 MHz.
+Keep the configuration, libraries and timing/interface budgets consistent with
+that run. The netlist has fixed parameters: current RTL parameter settings are
+not reapplied to it. Re-reading a netlist reconstructs timing with the selected
+constraints and wire-load models; this is not restoration of the original
+complete Genus database or an incremental optimization pass.
+
+To return to normal RTL synthesis, clear the variable:
+
+```csh
+unsetenv FFT_GENUS_NETLIST
+```
 
 ## Library inputs
 
@@ -153,7 +181,8 @@ Under `synthesis/genus/runs/abfp32_300mhz/` by default:
 | `outputs/fft_accelerator.constraints.sdc` | Standalone resolved input constraints |
 | `outputs/fft_accelerator.mapped.sdc` | Shared functional constraints exported with explicit `view_typical` |
 | `outputs/fft_accelerator.mmmc.tcl` | Resolved library/view definitions |
-| `reports/<corner>.setup.rpt` / `.hold.rpt` | Worst 20 late/early paths for each view |
+| `reports/<corner>.setup.rpt` | Worst 20 setup paths for each view |
+| `reports/hold_analysis.txt` | Explicit notice that hold STA was not performed |
 | `reports/timing_intent_pre.rpt` / `_post.rpt` | Timing-constraint coverage checks |
 | `reports/elaboration.rpt` / `mapped_design.rpt` | Unresolved-reference checks |
 | `reports/area.rpt`, `gates.rpt`, `qor.rpt` | Mapping, cell count/area and timing summary |
@@ -162,9 +191,10 @@ Under `synthesis/genus/runs/abfp32_300mhz/` by default:
 
 Successful script completion means outputs were generated. Review the Genus log
 for errors/warnings, verify that the design has no unresolved/black-box logic or
-unintended latches, check timing coverage and design rules, and inspect setup and
-hold slack at **every** corner. A 300 MHz constraint is a target; this script does
-not assert that the existing RTL will meet it.
+unintended latches, check timing coverage and design rules, and inspect setup
+slack at **every** corner. Perform hold STA separately in a timing-capable flow;
+absence of a Genus hold report is not a hold pass. A 300 MHz constraint is a
+target; this script does not assert that the existing RTL will meet it.
 
 ## Handoff for the next gate-level tests
 

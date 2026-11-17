@@ -1,6 +1,8 @@
 # Run from any directory in a fresh Genus Stylus/Common UI process:
 #   genus -no_gui -batch -files /path/to/synthesis/genus/synth_fft_accelerator.tcl
 # Synthesis only: wire-load interconnect, no placement/CTS/routing or DFT.
+# Set FFT_GENUS_NETLIST to a prior mapped .v to regenerate reports/exports
+# without running syn_generic/syn_map/syn_opt again.
 source [file join [file dirname [file normalize [info script]]] config.tcl]
 
 namespace eval ::fft_syn {
@@ -55,10 +57,16 @@ namespace eval ::fft_syn {
         }
 
         set sources {}
-        foreach relative $relative_sources {
-            set absolute [file normalize [file join $repo_root $relative]]
-            require_file $absolute
-            lappend sources $absolute
+        set export_only [expr {$cfg(mapped_netlist) ne ""}]
+        if {$export_only} {
+            set sources [list [file normalize $cfg(mapped_netlist)]]
+            require_file [lindex $sources 0]
+        } else {
+            foreach relative $relative_sources {
+                set absolute [file normalize [file join $repo_root $relative]]
+                require_file $absolute
+                lappend sources $absolute
+            }
         }
         set libdir [file normalize [file join $cfg(library_root) Front_End Liberty NLDM]]
         set libraries {}
@@ -120,12 +128,15 @@ namespace eval ::fft_syn {
         write_text $mmmc_path $mmmc
 
         write_text [file join $out run_config.tcl] \
-            "# Resolved settings and named elaboration parameters.\n[list set configuration [array get cfg]]\n[list set rtl_parameters $parameter_pairs]\n[list set rtl_sources $sources]\n[list set nldm_libraries $libraries]"
+            "# Resolved settings; parameters apply only when synthesizing RTL.\n[list set configuration [array get cfg]]\n[list set export_only $export_only]\n[list set rtl_parameters $parameter_pairs]\n[list set design_sources $sources]\n[list set nldm_libraries $libraries]"
         puts [format "FFT synthesis: requested period = %.6f ns (%.3f MHz)" \
             $cfg(clock_period_ns) [expr {1000.0 / $cfg(clock_period_ns)}]]
         puts "RTL parameters: $parameter_pairs"
         puts "Active setup/hold views: $views"
         puts "Output directory: $out"
+        if {$export_only} {
+            puts "Export-only: reading mapped netlist [lindex $sources 0]; synthesis is skipped."
+        }
 
         set_db init_hdl_search_path [list [file join $repo_root rtl]]
         set_db init_lib_search_path [list $libdir]
@@ -141,14 +152,22 @@ namespace eval ::fft_syn {
 
         read_mmmc $mmmc_path
         read_hdl -sv $sources
-        elaborate fft_accelerator -parameters $parameter_pairs
+        if {$export_only} {
+            # The cell netlist has fixed widths/parameters. Library references
+            # are linked during elaboration; no RTL parameter overrides apply.
+            elaborate fft_accelerator
+        } else {
+            elaborate fft_accelerator -parameters $parameter_pairs
+        }
         init_design
         check_design -unresolved > [file join $out reports elaboration.rpt]
         check_timing_intent > [file join $out reports timing_intent_pre.rpt]
 
-        syn_generic
-        syn_map
-        syn_opt
+        if {!$export_only} {
+            syn_generic
+            syn_map
+            syn_opt
+        }
 
         check_design -unresolved > [file join $out reports mapped_design.rpt]
         check_timing_intent > [file join $out reports timing_intent_post.rpt]
@@ -162,18 +181,21 @@ namespace eval ::fft_syn {
         # Genus requires an explicit view for MMMC SDC export. Every view
         # references the same functional mode, so one representative suffices.
         write_sdc -view view_typical > [file join $out outputs fft_accelerator.mapped.sdc]
+        # The user's Genus 2018 report_timing rejects -early. Do not replace it
+        # with another unverified option or label a setup report as hold timing.
+        write_text [file join $out reports hold_analysis.txt] \
+            "NOT PERFORMED: this flow does not run hold STA in Genus 2018.\nThe report_timing -early option is unsupported by that command.\nHold constraints and MMMC hold views are retained. Perform hold STA in a compatible timing tool (for example, Tempus/Innovus)."
         dict for {corner pvt} $corners {
             report_timing -views view_$corner -max_paths 20 \
                 > [file join $out reports ${corner}.setup.rpt]
-            report_timing -views view_$corner -early -max_paths 20 \
-                > [file join $out reports ${corner}.hold.rpt]
             # Keep timing checks and their signs for timing GLS. No
             # -nonegchecks option, and no output renaming after SDF export.
             write_sdf -view view_$corner -timescale ns \
                 > [file join $out outputs fft_accelerator.${corner}.sdf]
         }
         puts "Mapped netlist and five corner SDFs written to [file join $out outputs]"
-        puts "Inspect timing intent, mapped-design and all setup/hold reports."
+        puts "Inspect timing intent, mapped-design and all corner setup reports."
+        puts "Hold STA was not performed; see reports/hold_analysis.txt."
         puts "Completion means files were generated; it does not certify timing closure."
     }
 }
