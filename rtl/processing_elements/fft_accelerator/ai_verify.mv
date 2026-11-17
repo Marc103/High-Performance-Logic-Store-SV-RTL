@@ -2,6 +2,7 @@
 // fft_accelerator - AI verification, prepared 11/15/26
 // Following manual_verify.mv style; signed at Marc103's explicit request.
 // Sign-off tags applied at Marc103's explicit instruction on 11/15/26.
+// Section 16 is a new unsigned addendum dated 11/16/26.
 // Reviewed current fft_accelerator.sv, its package helpers, the reader/writer,
 // both FFT arithmetic cores and the file-driven accelerator testbench.
 // Source excerpts are verbatim. Rising-edge descriptions refer to values after
@@ -312,8 +313,9 @@ module fft_accelerator #(
 - A conservative sufficient interval is II_CYCLES>=WRITE_COMMIT_LATENCY. Every
   butterfly then commits before the next butterfly's read is sampled. Smaller
   intervals require an independently demonstrated dependency-safe schedule/memory.
-- The file TB rejects unsafe intervals for multi-stage in-place tests rather than
-  silently comparing a stale-data FFT. Independent two-point blocks may use II=4.
+- At the 11/15/26 sign-off the file TB rejected intervals below that conservative
+  bound for multi-stage tests. Section 16 records removal of this restriction
+  and actual minimum-interval FFT verification, including dependency failures.
 - Hold raw reset high at least RESET_HOLD_CYCLES edges, then allow delayed reset
   and the reader input register to observe release before starting new work.
 - Reset aborts pending work, but cannot undo writes already committed. A partial
@@ -345,7 +347,7 @@ module fft_accelerator #(
 [Marc103 - 11/15/26]
 
 ////////////////////////////////////////////////////////////////
-// 14. Verification evidence
+// 14. Verification evidence at the 11/15/26 sign-off (see section 16 for new II=4 runs)
 - Prior wrapper integration evidence: simulate/fft_accelerator_checks/summary.json
   records eight WSL configurations, 40 complete runs and 24 reset aborts. That
   revision used a shared reset pipe; arithmetic/address wiring is otherwise unchanged.
@@ -400,3 +402,49 @@ module fft_accelerator #(
   result/viewer workflow. Review tags are signed at Marc103's explicit instruction
   on 11/15/26.
 [Marc103 - 11/15/26]
+
+////////////////////////////////////////////////////////////////
+// 16. Minimum-interval correction and verification - 11/16/26
+- The original file-driven FFT runs used II_CYCLES=47, the conservative
+  WRITE_COMMIT_LATENCY bound for this ABFP32 configuration. Only the original
+  dense two-point test used II=4. That did not cover multi-stage FFTs at II=4.
+- The TB and FftAcceleratorIO now default to II_CYCLES=4, matching the RTL.
+  The generator no longer rejects an interval solely because it is below the
+  conservative bound. The independent exact mathematical FFT model and every
+  read/write/commit/final-memory comparison are unchanged; failures remain fatal.
+- The Genus configuration also defaults to II_CYCLES=4. This is distinct from
+  its 2 ns clock target: neither II=4 nor II=47 implies a timing multicycle path.
+- New WSL Verilator ABFP32 runs at II=4, READ_LATENCY=WRITE_LATENCY=1,
+  RESET_PIPELINE_DEPTH=1, all arithmetic register flags enabled, passed:
+
+    N       count   reads/writes/commits each   completion clock
+    32768     1              491520                  983085
+      128     8                7168                   14381
+      128     1                 896                    1837
+       64     4                1536                    3117
+       64     1                 384                     813
+        2    32                  64                     173
+
+- The 128-point eight-block run processes the requested 1024 ECG samples.
+  The second ECG fixture was exercised by N=64,count=4. All final 32768 memory
+  words and all qualified events matched the exact existing ABFP models.
+- Questa compatibility smoke at II=4, N=128,count=1 also passed: 896 reads,
+  writes and commitments each, completion at clock 1837, zero simulator errors.
+- Dependency probes N=32,count=1 and N=4,count=1 failed at II=4, with 48 and 9
+  scoreboard mismatches respectively. They are actual incorrect in-place FFT
+  results under those schedules, not generator rejections or passing transforms.
+- The request-only reader does not wait at stage boundaries. For N=4 the first
+  next-stage B read samples address 2 at relative clock 11, while that address's
+  previous-stage A result commits at clock 53. For N=32, the final stage first
+  samples address 16 at clock 259; its prior result commits at clock 273.
+  Neither minimum arithmetic launch spacing nor a large total transform capacity
+  guarantees correct dependencies for every small runtime transform.
+- Accelerator/arithmetic RTL is unchanged. No stage wait, forwarding or hidden
+  interval increase was introduced. The passing sizes above demonstrate II=4
+  operation; applications must still establish dependency safety for their own
+  runtime size/count, memory latency and arithmetic pipeline configuration.
+- Evidence: testbench/fft_accelerator_tb/simulate_regression_logs/ii4_results.json,
+  ii4_summary.json, ii4_dependency_schedule.json, ii4_questa_smoke.log and the
+  individual ii4 logs. Result files carry distinct *_ii4.txt names and metadata,
+  preserving the original II=47 evidence.
+[ ]

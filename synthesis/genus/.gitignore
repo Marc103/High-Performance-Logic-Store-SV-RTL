@@ -1,0 +1,6 @@
+/libraries/
+/runs/
+/genus.log*
+/genus.cmd*
+/genus.*.log*
+__pycache__/

@@ -1,0 +1,4 @@
+*.tcl text eol=lf
+*.sdc text eol=lf
+*.py text eol=lf
+*.md text eol=lf

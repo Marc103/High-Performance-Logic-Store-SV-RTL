@@ -45,8 +45,19 @@ bash simulate_verilator.sh +SAMPLES_FILE=6_25_samples_0.txt \
 
 Compilation parameters use Verilator `-GNAME=value`. Runtime plusargs beginning
 with `+` go to the simulation. The default arithmetic format is ABFP32 and the
-default interval is the RTL's conservative `WRITE_COMMIT_LATENCY`, so in-place
-multi-stage transforms do not read stale results. An unsafe interval is rejected.
+default interval is the RTL's minimum `II_CYCLES=4`. The testbench exercises that
+interval and compares every result against the independent exact model. In-place
+stage dependencies still depend on FFT size and memory latency; a small transform
+can read stale results before a prior stage writes back. `WRITE_COMMIT_LATENCY`
+is a conservative sufficient interval, not the minimum supported launch interval.
+Use `-GII_CYCLES=47` to reproduce the original conservative ABFP32 runs.
+
+The 11/16/26 minimum-interval regression passed at N=32768,count=1;
+N=128,count=1/8; N=64,count=1/4; and N=2,count=32, using the default pipelines
+and memory latencies. Questa's N=128 smoke also passed at II=4. Single N=4 and
+N=32 probes failed because next-stage reads precede previous-stage writeback;
+those are actual incorrect in-place results for that schedule. See
+`../simulate_regression_logs/ii4_results.json` for the passing and failing cases.
 
 After compilation, run another size/file without rebuilding:
 

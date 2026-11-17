@@ -52,8 +52,9 @@ class FftAcceleratorGenerator #(type T);
         if(!T::is_power_of_two(obj.sample_order_points) || obj.sample_order_points>32768 ||
            !T::is_power_of_two(obj.twiddle_points) || obj.twiddle_points<obj.points || obj.twiddle_points>32768)
             $fatal(1,"Invalid source-file ordering/twiddle size");
-        if(obj.points>2 && T::II_CYCLES<T::WRITE_COMMIT_LATENCY)
-            $fatal(1,"In-place multi-stage test requires II_CYCLES >= %0d; configured %0d",T::WRITE_COMMIT_LATENCY,T::II_CYCLES);
+        // Exercise the configured interval, including the minimum II=4.
+        // The exact model/scoreboard must expose any in-place dependency failure;
+        // WRITE_COMMIT_LATENCY is a sufficient bound, not a minimum legal II.
         obj.samples_file=T::resolve_path(test_dir,obj.samples_file);
         obj.twiddles_file=T::resolve_path(test_dir,obj.twiddles_file);
         obj.result_file=T::resolve_path(result_dir,obj.result_file);
