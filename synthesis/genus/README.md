@@ -17,7 +17,7 @@ to the Linux device with Genus installed and its license environment configured.
 From the repository root:
 
 ```bash
-# Python 3.9+; downloads only the selected libraries, cell model and notices.
+# Python 3.6+; downloads only the selected libraries, cell model and notices.
 python3 synthesis/genus/fetch_nangate.py
 
 mkdir -p synthesis/genus/runs
@@ -36,12 +36,26 @@ FFT_GENUS_OUT="$PWD/synthesis/genus/runs/abfp32_500mhz_run2" \
   genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
 ```
 
+For **csh/tcsh** (the shell reporting `Illegal variable name` for a Bash-style
+assignment), set the environment variable separately before launching Genus:
+
+```csh
+setenv FFT_GENUS_OUT "$cwd/synthesis/genus/runs/ii4_`date +%Y%m%d_%H%M%S`"
+genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
+```
+
+Use the shell syntax appropriate to your session; RHEL itself does not require
+changing the synthesis flow.
+
 To use an existing copy of the requested library instead of downloading:
 
 ```bash
 NANGATE_ROOT=/path/to/NangateOpenCellLibrary \
   genus -no_gui -batch -files synthesis/genus/synth_fft_accelerator.tcl
 ```
+
+In csh/tcsh, use `setenv NANGATE_ROOT /path/to/NangateOpenCellLibrary`, then run
+the same `genus` command on the following line.
 
 `NANGATE_ROOT` is the directory **containing `Front_End`**, not the NLDM directory.
 For an offline synthesis device, run the downloader elsewhere and copy its entire

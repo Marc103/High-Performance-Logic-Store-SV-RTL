@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch the requested Nangate NLDM corners and the matching GLS cell model.
 
-Python standard library only. Files retain their original bytes and notices.
+Python 3.6+ standard library only. Files retain their original bytes and notices.
 The repository revision is pinned so different devices use identical inputs.
 """
 
@@ -65,7 +65,7 @@ def main() -> None:
         with urllib.request.urlopen(request, timeout=120) as response:
             data = response.read()
         if relative.endswith(".lib"):
-            corner = relative.rsplit("/", 1)[-1].removeprefix("NangateOpenCellLibrary_").removesuffix(".lib")
+            corner = relative.rsplit("/", 1)[-1][len("NangateOpenCellLibrary_"):-len(".lib")]
             check_library(data, corner)
         if not data:
             raise ValueError(f"Empty download: {relative}")
